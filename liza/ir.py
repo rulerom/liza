@@ -13,6 +13,7 @@ class Operation:
     type: str = 'u32'
     overflow: str = 'none'
     callee: str = ''
+    may_trap: bool = False
 
 
 @dataclass
@@ -35,6 +36,7 @@ class FunctionIR:
     blocks: list
     result_type: str
     effect_contract: str = 'pure'
+    may_trap: bool = False
 
 
 class Lowerer:
@@ -59,7 +61,8 @@ class Lowerer:
     def emit(self, op, args, type='u32', **kwargs):
         name = f'v{self.counter}'
         self.counter += 1
-        self.current.operations.append(Operation(name, op, args, type, **kwargs))
+        self.current.operations.append(Operation(
+            name, op, args, type, may_trap=kwargs.get('overflow') == 'trap', **kwargs))
         self.types[name] = type
         return name
 
@@ -165,8 +168,37 @@ def lower(functions):
         raise CompileError(signatures['main'].name, 'main must have no parameters')
     if signatures['main'].result_type != 'u32':
         raise CompileError(signatures['main'].name, 'main must return u32')
-    return [Lowerer(fn, signatures).lower() for fn in functions]
+    module = [Lowerer(fn, signatures).lower() for fn in functions]
+    annotate_traps(module)
+    return module
+
+
+def annotate_traps(module):
+    """Conservative, transitive trap summaries, including recursive call graphs.
+
+    This is not a termination proof. False only excludes language-level traps
+    from the operations currently in the function, not stack exhaustion.
+    Recompute after any future IR transformation that changes operations/calls.
+    """
+    functions = {fn.name: fn for fn in module}
+    operations = {fn.name: [op for block in fn.blocks for op in block.operations]
+                  for fn in module}
+    for fn in module:
+        for op in operations[fn.name]:
+            op.may_trap = op.overflow == 'trap'
+        fn.may_trap = any(op.may_trap for op in operations[fn.name])
+    changed = True
+    while changed:
+        changed = False
+        for fn in module:
+            for op in operations[fn.name]:
+                if op.op == 'call':
+                    op.may_trap = functions[op.callee].may_trap
+            summary = any(op.may_trap for op in operations[fn.name])
+            if summary != fn.may_trap:
+                fn.may_trap = summary
+                changed = True
 
 
 def dump(module):
-    return json.dumps({'version': 2, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
+    return json.dumps({'version': 3, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'

@@ -4,9 +4,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import json
 
 from liza.frontend import Parser, CompileError
-from liza.ir import lower
+from liza.ir import lower, dump
 from liza.backend import llvm
 
 
@@ -86,6 +87,38 @@ class FrontendTests(unittest.TestCase):
         self.assertEqual(blocks[0].operations[-1].type, 'bool')
         self.assertTrue(all(block.terminator is not None for block in blocks))
 
+    def test_ir_transitive_trap_summary(self):
+        source = '''fn main()->u32{return first(1)}
+        fn first(x:u32)->u32{return second(x)}
+        fn second(x:u32)->u32{if x == 0 {return first(x)} return x + 1}
+        fn wrapping(x:u32)->u32{return x +% 1}
+        fn safe()->u32{return wrapping(1)}
+        fn recursive()->u32{return recursive()}
+        fn dead()->u32{if false {unused=0-1} return 0}'''
+        module = {fn.name: fn for fn in compile_source(source)}
+        for name in ('main', 'first', 'second', 'dead'):
+            self.assertTrue(module[name].may_trap, name)
+        for name in ('wrapping', 'safe', 'recursive'):
+            self.assertFalse(module[name].may_trap, name)
+        for fn in module.values():
+            for block in fn.blocks:
+                for op in block.operations:
+                    if op.op == 'call':
+                        self.assertEqual(op.may_trap, module[op.callee].may_trap)
+                    else:
+                        self.assertEqual(op.may_trap, op.overflow == 'trap')
+        serialized = json.loads(dump(list(module.values())))
+        self.assertEqual(serialized['version'], 3)
+        self.assertTrue(serialized['functions'][0]['may_trap'])
+
+    def test_arithmetic_lowering_has_no_unproven_flags(self):
+        source = '''fn check(x:u32)->u32{return (x + 1) - 1}
+        fn wrap(x:u32)->u32{return (x +% 1) -% 1}
+        fn main()->u32{return check(wrap(1))}'''
+        generated = llvm(compile_source(source))
+        self.assertNotRegex(generated, r'\b(nsw|nuw|inbounds|exact)\b')
+        self.assertIn('@llvm.uadd.with.overflow.i32', generated)
+
 
 @unittest.skipUnless(shutil.which('clang'), 'native tests require clang')
 class NativeTests(unittest.TestCase):
@@ -160,6 +193,50 @@ class NativeTests(unittest.TestCase):
         for optimization in ('-O0', '-O2'):
             source = 'fn main()->u32{if true {unused=0-1} return 0}'
             self.assertLess(self.run_source(source, optimization), 0)
+
+    def test_checked_reassociation_and_dead_branch(self):
+        function = 'fn test(x:u32)->u32{return (x + 1) - 1}\n'
+        cases = [
+            ('return test(0xffffffff)', True),
+            ('unused=test(0xffffffff); return 0', True),
+            ('x:u32=0xffffffff; y=x+1-1; return 0', True),
+            ('if test(0xfffffffe) == 0xfffffffe {return 0} return 1', False),
+            ('if false {x:u32=0xffffffff; y=x+1} return 0', False),
+            ('if false {unused=test(0xffffffff)} return 0', False),
+        ]
+        for optimization in ('-O0', '-O2'):
+            for body, traps in cases:
+                with self.subTest(body=body, optimization=optimization):
+                    code = self.run_source(function + 'fn main()->u32{' + body + '}', optimization)
+                    if traps:
+                        self.assertLess(code, 0)
+                    else:
+                        self.assertEqual(code, 0)
+
+    def test_checked_reassociation_with_runtime_input(self):
+        # Separate translation units and no LTO keep the input unknown to codegen.
+        source = 'fn test(x:u32)->u32{return (x+1)-1} fn main()->u32{return 0}'
+        harness = '''#include <stdint.h>
+        #include <stdlib.h>
+        extern uint32_t liza_test(uint32_t);
+        int main(int argc, char **argv) {
+            if (argc != 2) return 2;
+            uint32_t x = (uint32_t)strtoul(argv[1], 0, 10);
+            return liza_test(x) == x ? 0 : 1;
+        }'''
+        for optimization in ('-O0', '-O2'):
+            with self.subTest(optimization=optimization), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory)
+                ir, c, exe = path / 'module.ll', path / 'harness.c', path / 'program'
+                ir.write_text(llvm(compile_source(source)).replace('define i32 @main()', 'define i32 @test_entry()'))
+                c.write_text(harness)
+                result = subprocess.run(['clang', '-Wno-override-module', optimization, str(ir), str(c), '-o', str(exe)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for value in ('0', '1', '4294967294'):
+                    result = subprocess.run([str(exe), value], capture_output=True, timeout=5)
+                    self.assertEqual(result.returncode, 0)
+                result = subprocess.run([str(exe), '4294967295'], capture_output=True, timeout=5)
+                self.assertLess(result.returncode, 0)
 
     def test_recursive_boolean_function(self):
         source = '''fn even(n:u32)->bool {
