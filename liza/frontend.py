@@ -17,7 +17,7 @@ class CompileError(Exception):
 
 def lex(source):
     tokens = []
-    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|->|[+*\-]%|[{}(),:=;+*\-]")
+    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|->|==|!=|<=|>=|[+*\-]%|[{}(),:=;+*\-!<>]")
     pos, line, column = 0, 1, 1
     while pos < len(source):
         match = pattern.match(source, pos)
@@ -47,6 +47,15 @@ class Statement:
     token: Token
     expr: Expr
     is_return: bool
+    annotation: str = ''
+
+
+@dataclass
+class Conditional:
+    token: Token
+    condition: Expr
+    then_body: list
+    else_body: list
 
 
 @dataclass
@@ -54,6 +63,7 @@ class Function:
     name: Token
     params: list
     body: list
+    result_type: str
 
 
 class Parser:
@@ -76,13 +86,57 @@ class Parser:
 
     def identifier(self):
         token = self.current
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in {'fn', 'return', 'pure', 'u32'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in {'fn', 'return', 'pure', 'u32', 'bool', 'true', 'false', 'if', 'else'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
     def separators(self):
         while self.current.text in ('\n', ';'):
             self.take()
+
+    def type_name(self):
+        if self.current.text not in ('u32', 'bool'):
+            raise CompileError(self.current, "expected 'u32' or 'bool'")
+        return self.take().text
+
+    def block(self):
+        self.take('{')
+        self.separators()
+        body = []
+        while self.current.text != '}':
+            if self.current.text == 'if':
+                body.append(self.conditional())
+            else:
+                is_return = self.current.text == 'return'
+                token = self.take('return') if is_return else self.identifier()
+                annotation = ''
+                if not is_return:
+                    if self.current.text == ':':
+                        self.take(':')
+                        annotation = self.type_name()
+                    self.take('=')
+                body.append(Statement(token, self.expression(), is_return, annotation))
+                if self.current.text not in ('\n', ';', '}'):
+                    raise CompileError(self.current, 'expected newline, semicolon, or closing brace')
+            self.separators()
+        self.take('}')
+        return body
+
+    def conditional(self):
+        token = self.take('if')
+        condition = self.expression()
+        then_body = self.block()
+        # Permit else on the next line, without consuming a statement separator.
+        saved = self.index
+        while self.current.text == '\n':
+            self.take()
+        else_body = []
+        if self.current.text == 'else':
+            self.take()
+            else_body = [self.conditional()] if self.current.text == 'if' else self.block()
+        else:
+            self.index = saved
+        return Conditional(token, condition, then_body, else_body)
 
     def parse(self):
         functions = []
@@ -94,41 +148,30 @@ class Parser:
             params = []
             if self.current.text != ')':
                 while True:
-                    params.append(self.identifier())
+                    param = self.identifier()
                     self.take(':')
-                    self.take('u32')
+                    params.append((param, self.type_name()))
                     if self.current.text != ',':
                         break
                     self.take(',')
             self.take(')')
             self.take('->')
-            self.take('u32')
+            result_type = self.type_name()
             if self.current.text == ':':
                 self.take(':')
                 self.take('pure')
-            self.take('{')
-            self.separators()
-            body = []
-            while self.current.text != '}':
-                is_return = self.current.text == 'return'
-                name_or_return = self.take('return') if is_return else self.identifier()
-                if not is_return:
-                    if self.current.text == ':':
-                        self.take(':')
-                        self.take('u32')
-                    self.take('=')
-                body.append(Statement(name_or_return, self.expression(), is_return))
-                if self.current.text not in ('\n', ';', '}'):
-                    raise CompileError(self.current, 'expected newline, semicolon, or closing brace')
-                self.separators()
-            self.take('}')
-            functions.append(Function(name, params, body))
+            body = self.block()
+            functions.append(Function(name, params, body, result_type))
             self.separators()
         return functions
 
     def expression(self, minimum=0):
         token = self.current
-        if token.text == '(':
+        if token.text == '!':
+            left = Expr(self.take(), 'not', [self.expression(5)])
+        elif token.text in ('true', 'false'):
+            left = Expr(self.take(), 'bool', [])
+        elif token.text == '(':
             self.take('(')
             left = self.expression()
             self.take(')')
@@ -149,7 +192,8 @@ class Parser:
                 left = Expr(name, 'call', args)
             else:
                 left = Expr(name, 'name', [])
-        precedence = {'+': 1, '-': 1, '+%': 1, '-%': 1, '*': 2, '*%': 2}
+        precedence = {'==': 1, '!=': 1, '<': 2, '<=': 2, '>': 2, '>=': 2,
+                      '+': 3, '-': 3, '+%': 3, '-%': 3, '*': 4, '*%': 4}
         while self.current.text in precedence and precedence[self.current.text] >= minimum:
             op = self.take()
             right = self.expression(precedence[op.text] + 1)

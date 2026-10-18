@@ -1,7 +1,8 @@
-"""Typed value graph; arithmetic policy is preserved until backend lowering."""
-from dataclasses import dataclass, asdict
+"""Typed value graph with explicit control flow and arithmetic policy."""
+from dataclasses import dataclass, asdict, field
 import json
-from .frontend import CompileError, Token
+from typing import Optional
+from .frontend import CompileError, Token, Conditional
 
 
 @dataclass
@@ -15,13 +16,141 @@ class Operation:
 
 
 @dataclass
+class Terminator:
+    op: str
+    args: list
+
+
+@dataclass
+class Block:
+    name: str
+    operations: list = field(default_factory=list)
+    terminator: Optional[Terminator] = None
+
+
+@dataclass
 class FunctionIR:
     name: str
     params: list
-    operations: list
-    returns: str
-    result_type: str = 'u32'
+    blocks: list
+    result_type: str
     effect_contract: str = 'pure'
+
+
+class Lowerer:
+    def __init__(self, fn, signatures):
+        self.fn = fn
+        self.signatures = signatures
+        self.blocks = []
+        self.current = self.new_block()
+        self.types = {}
+        self.counter = 0
+
+    def new_block(self):
+        block = Block(f'b{len(self.blocks)}')
+        self.blocks.append(block)
+        return block
+
+    def expect(self, value, expected, token):
+        actual = self.types[value]
+        if actual != expected:
+            raise CompileError(token, f'expected {expected}, got {actual}')
+
+    def emit(self, op, args, type='u32', **kwargs):
+        name = f'v{self.counter}'
+        self.counter += 1
+        self.current.operations.append(Operation(name, op, args, type, **kwargs))
+        self.types[name] = type
+        return name
+
+    def expression(self, expr, names):
+        text = expr.token.text
+        if expr.kind == 'bool':
+            return self.emit('constant', [text == 'true'], type='bool')
+        if expr.kind == 'literal':
+            try:
+                value = int(text, 16 if text.startswith('0x') else 10)
+            except ValueError:
+                raise CompileError(expr.token, 'invalid u32 literal') from None
+            if value > 0xffffffff:
+                raise CompileError(expr.token, 'literal is outside u32 range')
+            return self.emit('constant', [value])
+        if expr.kind == 'name':
+            if text not in names:
+                raise CompileError(expr.token, f'unknown value {text!r}')
+            return names[text]
+        if expr.kind == 'call':
+            if text not in self.signatures:
+                raise CompileError(expr.token, f'unknown function {text!r}')
+            signature = self.signatures[text]
+            if len(expr.args) != len(signature.params):
+                raise CompileError(expr.token, f'wrong number of arguments for {text!r}')
+            args = []
+            for arg, (_, param_type) in zip(expr.args, signature.params):
+                value = self.expression(arg, names)
+                self.expect(value, param_type, arg.token)
+                args.append(value)
+            return self.emit('call', args, type=signature.result_type, callee=text)
+        args = [self.expression(arg, names) for arg in expr.args]
+        if expr.kind == 'not':
+            self.expect(args[0], 'bool', expr.token)
+            return self.emit('not', args, type='bool')
+        comparisons = {'==': 'eq', '!=': 'ne', '<': 'ult', '<=': 'ule', '>': 'ugt', '>=': 'uge'}
+        if text in comparisons:
+            expected = self.types[args[0]] if text in ('==', '!=') else 'u32'
+            for arg in args:
+                self.expect(arg, expected, expr.token)
+            return self.emit(comparisons[text], args, type='bool')
+        for arg in args:
+            self.expect(arg, 'u32', expr.token)
+        return self.emit({'+': 'add', '-': 'sub', '*': 'mul'}[text[0]], args,
+                         overflow='wrap' if text.endswith('%') else 'trap')
+
+    def statements(self, statements, names):
+        for stmt in statements:
+            if self.current is None:
+                raise CompileError(stmt.token, 'unreachable statement after return')
+            if isinstance(stmt, Conditional):
+                condition = self.expression(stmt.condition, names)
+                self.expect(condition, 'bool', stmt.condition.token)
+                then_block, else_block = self.new_block(), self.new_block()
+                self.current.terminator = Terminator('branch', [condition, then_block.name, else_block.name])
+                self.current = then_block
+                self.statements(stmt.then_body, names.copy())
+                then_end = self.current
+                self.current = else_block
+                self.statements(stmt.else_body, names.copy())
+                else_end = self.current
+                ends = [block for block in (then_end, else_end) if block is not None]
+                self.current = self.new_block() if ends else None
+                for block in ends:
+                    block.terminator = Terminator('jump', [self.current.name])
+            elif stmt.is_return:
+                value = self.expression(stmt.expr, names)
+                self.expect(value, self.fn.result_type, stmt.expr.token)
+                self.current.terminator = Terminator('return', [value])
+                self.current = None
+            else:
+                if stmt.token.text in names:
+                    raise CompileError(stmt.token, 'values are immutable; duplicate binding')
+                value = self.expression(stmt.expr, names)
+                if stmt.annotation:
+                    self.expect(value, stmt.annotation, stmt.token)
+                names[stmt.token.text] = value
+
+    def lower(self):
+        names, params = {}, []
+        for i, (param, type_name) in enumerate(self.fn.params):
+            if param.text in names:
+                raise CompileError(param, 'duplicate parameter')
+            name = f'p{i}'
+            names[param.text] = name
+            self.types[name] = type_name
+            params.append({'name': name, 'type': type_name})
+        self.statements(self.fn.body, names)
+        if self.current is not None:
+            raise CompileError(self.fn.name, f'function must return a {self.fn.result_type} value on every path')
+        return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type)
 
 
 def lower(functions):
@@ -34,59 +163,10 @@ def lower(functions):
         raise CompileError(Token('', 1, 1), 'missing fn main() -> u32')
     if signatures['main'].params:
         raise CompileError(signatures['main'].name, 'main must have no parameters')
-    result = []
-    for fn in functions:
-        names, ops, params = {}, [], []
-        for i, param in enumerate(fn.params):
-            if param.text in names:
-                raise CompileError(param, 'duplicate parameter')
-            names[param.text] = f'p{i}'
-            params.append(f'p{i}')
-
-        def emit(op, args, **kwargs):
-            name = f'v{len(ops)}'
-            ops.append(Operation(name, op, args, **kwargs))
-            return name
-
-        def expression(expr):
-            text = expr.token.text
-            if expr.kind == 'literal':
-                try:
-                    value = int(text, 16 if text.startswith('0x') else 10)
-                except ValueError:
-                    raise CompileError(expr.token, 'invalid u32 literal') from None
-                if value > 0xffffffff:
-                    raise CompileError(expr.token, 'literal is outside u32 range')
-                return emit('constant', [value])
-            if expr.kind == 'name':
-                if text not in names:
-                    raise CompileError(expr.token, f'unknown value {text!r}')
-                return names[text]
-            if expr.kind == 'call':
-                if text not in signatures:
-                    raise CompileError(expr.token, f'unknown function {text!r}')
-                if len(expr.args) != len(signatures[text].params):
-                    raise CompileError(expr.token, f'wrong number of arguments for {text!r}')
-                return emit('call', [expression(arg) for arg in expr.args], callee=text)
-            args = [expression(arg) for arg in expr.args]
-            return emit({'+': 'add', '-': 'sub', '*': 'mul'}[text[0]], args,
-                        overflow='wrap' if text.endswith('%') else 'trap')
-
-        returned = None
-        for stmt in fn.body:
-            if returned is not None:
-                raise CompileError(stmt.token, 'unreachable statement after return')
-            if stmt.is_return:
-                returned = expression(stmt.expr)
-            else:
-                if stmt.token.text in names:
-                    raise CompileError(stmt.token, 'values are immutable; duplicate binding')
-                names[stmt.token.text] = expression(stmt.expr)
-        if returned is None:
-            raise CompileError(fn.name, 'function must return a u32 value')
-        result.append(FunctionIR(fn.name.text, params, ops, returned))
-    return result
+    if signatures['main'].result_type != 'u32':
+        raise CompileError(signatures['main'].name, 'main must return u32')
+    return [Lowerer(fn, signatures).lower() for fn in functions]
 
 
 def dump(module):
-    return json.dumps({'version': 1, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
+    return json.dumps({'version': 2, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'

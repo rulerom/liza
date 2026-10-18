@@ -17,7 +17,7 @@ def compile_source(source):
 class FrontendTests(unittest.TestCase):
     def test_value_graph(self):
         module = compile_source('fn main() -> u32 { a = 2; b = a; return b +% 3 * 4 }')
-        operations = module[0].operations
+        operations = module[0].blocks[0].operations
         self.assertEqual([o.op for o in operations], ['constant', 'constant', 'constant', 'mul', 'add'])
         self.assertEqual(operations[-1].overflow, 'wrap')
         self.assertEqual(operations[-2].overflow, 'trap')
@@ -52,7 +52,39 @@ class FrontendTests(unittest.TestCase):
 
     def test_comments_and_hex(self):
         module = compile_source('// heading\nfn main()->u32 {\nreturn 0xff // value\n}\n')
-        self.assertEqual(module[0].operations[0].args, [255])
+        self.assertEqual(module[0].blocks[0].operations[0].args, [255])
+
+    def test_type_and_branch_errors(self):
+        cases = [
+            ('fn main()->bool{return true}', 'main must return u32'),
+            ('fn main()->u32{return false}', 'expected u32, got bool'),
+            ('fn main()->u32{x:bool=1; return 0}', 'expected bool, got u32'),
+            ('fn main()->u32{x:u32=true; return 0}', 'expected u32, got bool'),
+            ('fn main()->u32{if 1 {return 0} return 1}', 'expected bool, got u32'),
+            ('fn main()->u32{if true {return 0}}', 'every path'),
+            ('fn main()->u32{if true {x=1} return x}', 'unknown value'),
+            ('fn main()->u32{if true {x=1} else {return x} return 0}', 'unknown value'),
+            ('fn main()->u32{x=1; if true {x=2} return x}', 'immutable'),
+            ('fn main()->u32{if true {return 1} else {return 2} return 3}', 'unreachable'),
+            ('fn main()->u32{if false {return true} return 0}', 'expected u32, got bool'),
+            ('fn main()->u32{x=true + false; return 0}', 'expected u32, got bool'),
+            ('fn main()->u32{x=true < false; return 0}', 'expected u32, got bool'),
+            ('fn main()->u32{x=true == 1; return 0}', 'expected bool, got u32'),
+            ('fn main()->u32{x=!1; return 0}', 'expected bool, got u32'),
+            ('fn f(x:bool)->u32{return 0} fn main()->u32{return f(1)}', 'expected bool, got u32'),
+            ('fn main()->u32{true=1; return 0}', 'identifier'),
+            ('fn main()->u32{if true {return 0} else}', "expected"),
+        ]
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(CompileError, message):
+                compile_source(source)
+
+    def test_ir_control_flow(self):
+        module = compile_source('fn main()->u32{if 1 < 2 {return 3} else {return 4}}')
+        blocks = module[0].blocks
+        self.assertEqual(blocks[0].terminator.op, 'branch')
+        self.assertEqual(blocks[0].operations[-1].type, 'bool')
+        self.assertTrue(all(block.terminator is not None for block in blocks))
 
 
 @unittest.skipUnless(shutil.which('clang'), 'native tests require clang')
@@ -88,6 +120,55 @@ class NativeTests(unittest.TestCase):
                 with self.subTest(expression=expression, optimization=optimization):
                     source = f'fn main()->u32{{ unused = {expression}; return 0 }}'
                     self.assertLess(self.run_source(source, optimization), 0)
+
+    def test_native_branches(self):
+        cases = [
+            ('fn main()->u32{if true {return 42} else {return 7}}', 42),
+            ('fn main()->u32{if false {return 42} else {return 7}}', 7),
+            ('fn main()->u32{if false {return 0 - 1} return 42}', 42),
+            ('fn main()->u32{if true {return 42} else {return 0 - 1}}', 42),
+            ('fn main()->u32{x=40; if false {a=x+1} else {b=x+2} return x}', 40),
+            ('fn main()->u32{if false {return 1}\nelse if true {if false {return 2} return 42}\nelse{return 3}}', 42),
+            ('fn main()->u32{if true {x=1} x=42; return x}', 42),
+            ('fn main()->u32{if true {} return 42}', 42),
+            ('fn decide(x:bool)->bool{return !x} fn main()->u32{if decide(false)==true {return 42} return 0}', 42),
+            ('fn main()->u32{if 2 + 3 * 4 == 14 {return 42} return 0}', 42),
+        ]
+        for optimization in ('-O0', '-O2'):
+            for source, expected in cases:
+                with self.subTest(source=source, optimization=optimization):
+                    self.assertEqual(self.run_source(source, optimization), expected)
+
+    def test_unsigned_comparisons(self):
+        # Exercise both outcomes, especially across the signed i32 boundary.
+        pairs = [(0, 0), (0, 1), (1, 0), (0xffffffff, 1), (1, 0xffffffff)]
+        operators = {'==': lambda a,b:a==b, '!=': lambda a,b:a!=b,
+                     '<': lambda a,b:a<b, '<=': lambda a,b:a<=b,
+                     '>': lambda a,b:a>b, '>=': lambda a,b:a>=b}
+        # One native program per optimization level, so all comparisons execute.
+        functions, calls = [], []
+        for i, (op, compare) in enumerate(operators.items()):
+            functions.append(f'fn c{i}(a:u32,b:u32)->bool{{return a {op} b}}')
+            for a, b in pairs:
+                expected = 'true' if compare(a, b) else 'false'
+                calls.append(f'if c{i}({a},{b}) != {expected} {{return 1}}')
+        source = '\n'.join(functions) + '\nfn main()->u32{\n' + '\n'.join(calls) + '\nreturn 0\n}'
+        for optimization in ('-O0', '-O2'):
+            self.assertEqual(self.run_source(source, optimization), 0)
+
+    def test_taken_branch_preserves_trap(self):
+        for optimization in ('-O0', '-O2'):
+            source = 'fn main()->u32{if true {unused=0-1} return 0}'
+            self.assertLess(self.run_source(source, optimization), 0)
+
+    def test_recursive_boolean_function(self):
+        source = '''fn even(n:u32)->bool {
+            if n == 0 {return true}
+            return !even(n - 1)
+        }
+        fn main()->u32 {if even(10) {return 42} return 1}'''
+        for optimization in ('-O0', '-O2'):
+            self.assertEqual(self.run_source(source, optimization), 42)
 
     def test_cli_workflow(self):
         with tempfile.TemporaryDirectory() as directory:

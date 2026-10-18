@@ -1,0 +1,21 @@
+fn in_range(value: u32, minimum: u32, maximum: u32) -> bool {
+    if value < minimum {
+        return false
+    }
+    return value <= maximum
+}
+
+fn classify(value: u32) -> u32 {
+    accepted: bool = in_range(value, 10, 100)
+    if !accepted {
+        return 1
+    } else if value == 42 {
+        return 42
+    } else {
+        return 0
+    }
+}
+
+fn main() -> u32 {
+    return classify(42)
+}
