@@ -1,5 +1,5 @@
 site_name: Liza
-site_description: 'Liza — экспериментальный системный язык: переносимые вычисления, определённая арифметика и нативное исполнение.'
+site_description: 'Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций.'
 site_url: https://liza.rulerom.com/
 repo_url: https://github.com/rulerom/liza
 repo_name: rulerom/liza
@@ -32,8 +32,8 @@ theme:
   font: false
 
 extra:
-  social_image: assets/images/liza-social-v1.png
-  social_image_alt: 'Liza — системный язык. Переносимые вычисления. Предсказуемое поведение.'
+  social_image: assets/images/liza-social-v2.png
+  social_image_alt: 'Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций. Контролируемая стоимость — проектная цель.'
 
 plugins:
   - search:

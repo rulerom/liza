@@ -48,11 +48,13 @@ def main():
     text(78, 64, 'ЯЗЫК СИСТЕМНОГО ПРОГРАММИРОВАНИЯ', 22, '#a7b2d3', True)
     text(70, 139, 'Liza', 160, '#f3f6ff', True)
     rect((80, 329, 166, 335), '#58ddc2')
-    text(78, 376, 'Переносимые вычисления.', 40, '#f3f6ff')
-    text(78, 434, 'Предсказуемое поведение.', 40, '#f3f6ff')
-    text(80, 555, 'liza.rulerom.com', 25, '#58ddc2')
+    text(78, 365, 'Переносимые вычисления.', 35, '#f3f6ff')
+    text(78, 420, 'Определённая семантика.', 35, '#f3f6ff')
+    text(78, 475, 'Контролируемая стоимость операций.', 35, '#f3f6ff')
+    text(80, 565, 'liza.rulerom.com', 25, '#58ddc2')
+    text(685, 570, 'ЭКСПЕРИМЕНТАЛЬНЫЙ ПРОЕКТ', 16, '#a7b2d3')
 
-    output = Path(__file__).resolve().parents[1] / 'docs/assets/images/liza-social-v1.png'
+    output = Path(__file__).resolve().parents[1] / 'docs/assets/images/liza-social-v2.png'
     output.parent.mkdir(parents=True, exist_ok=True)
     image.resize((1200, 630), Image.Resampling.LANCZOS).save(output, optimize=True)
     print(output)

@@ -83,7 +83,7 @@ workflow не изменяет. Все страницы имеют прямые 
 `social_title` необязательно переопределяет заголовок карточки.
 Изменения `overrides/` также запускают workflow документации.
 
-Общая картинка — `docs/assets/images/liza-social-v1.png` (1200 × 630).
+Общая картинка — `docs/assets/images/liza-social-v2.png` (1200 × 630).
 Её исходный генератор — `tools/render_social_card.py`; для ручной генерации
 нужны Pillow и шрифты с кириллицей. CI использует готовый PNG без этих зависимостей.
 При замене изображения меняем имя файла и `extra.social_image` в `mkdocs.yml`,
