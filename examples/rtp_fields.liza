@@ -1,0 +1,22 @@
+// Decode fields from two already supplied header octets.
+// This is not yet a parser of a packet buffer.
+fn version(first: u8) -> u8 {
+    return first >> 6
+}
+
+fn has_marker(second: u8) -> bool {
+    return (second & 0x80) != 0
+}
+
+fn payload_type(second: u8) -> u8 {
+    return second & 0x7f
+}
+
+fn main() -> u32 {
+    first: u8 = 0x80
+    second: u8 = 0xe0
+    if version(first) == 2 && has_marker(second) && payload_type(second) == 96 {
+        return 0
+    }
+    return 1
+}

@@ -41,7 +41,7 @@ class FrontendTests(unittest.TestCase):
             ('fn main()->u32{return 1', 'expected newline'),
             ('fn main()->u32{return 1 2}', 'expected newline'),
             ('fn main()->u32:realtime{return 0}', "expected 'pure'"),
-            ('fn main()->i32{return 0}', "expected 'u32'"),
+            ('fn main()->i128{return 0}', 'expected a fixed-width integer type or bool'),
         ]
         for source, message in cases:
             with self.subTest(source=source), self.assertRaisesRegex(CompileError, message):
@@ -59,20 +59,20 @@ class FrontendTests(unittest.TestCase):
         cases = [
             ('fn main()->bool{return true}', 'main must return u32'),
             ('fn main()->u32{return false}', 'expected u32, got bool'),
-            ('fn main()->u32{x:bool=1; return 0}', 'expected bool, got u32'),
+            ('fn main()->u32{x:bool=1; return 0}', 'expected integer, got bool'),
             ('fn main()->u32{x:u32=true; return 0}', 'expected u32, got bool'),
-            ('fn main()->u32{if 1 {return 0} return 1}', 'expected bool, got u32'),
+            ('fn main()->u32{if 1 {return 0} return 1}', 'expected integer, got bool'),
             ('fn main()->u32{if true {return 0}}', 'every path'),
             ('fn main()->u32{if true {x=1} return x}', 'unknown value'),
             ('fn main()->u32{if true {x=1} else {return x} return 0}', 'unknown value'),
             ('fn main()->u32{x=1; if true {x=2} return x}', 'immutable'),
             ('fn main()->u32{if true {return 1} else {return 2} return 3}', 'unreachable'),
             ('fn main()->u32{if false {return true} return 0}', 'expected u32, got bool'),
-            ('fn main()->u32{x=true + false; return 0}', 'expected u32, got bool'),
-            ('fn main()->u32{x=true < false; return 0}', 'expected u32, got bool'),
-            ('fn main()->u32{x=true == 1; return 0}', 'expected bool, got u32'),
-            ('fn main()->u32{x=!1; return 0}', 'expected bool, got u32'),
-            ('fn f(x:bool)->u32{return 0} fn main()->u32{return f(1)}', 'expected bool, got u32'),
+            ('fn main()->u32{x=true + false; return 0}', 'expected integer, got bool'),
+            ('fn main()->u32{x=true < false; return 0}', 'expected integer, got bool'),
+            ('fn main()->u32{x=true == 1; return 0}', 'expected integer, got bool'),
+            ('fn main()->u32{x=!1; return 0}', 'expected integer, got bool'),
+            ('fn f(x:bool)->u32{return 0} fn main()->u32{return f(1)}', 'expected integer, got bool'),
             ('fn main()->u32{true=1; return 0}', 'identifier'),
             ('fn main()->u32{if true {return 0} else}', "expected"),
         ]
@@ -108,7 +108,7 @@ class FrontendTests(unittest.TestCase):
                     else:
                         self.assertEqual(op.may_trap, op.overflow == 'trap')
         serialized = json.loads(dump(list(module.values())))
-        self.assertEqual(serialized['version'], 3)
+        self.assertEqual(serialized['version'], 4)
         self.assertTrue(serialized['functions'][0]['may_trap'])
 
     def test_arithmetic_lowering_has_no_unproven_flags(self):

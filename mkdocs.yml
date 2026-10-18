@@ -51,6 +51,6 @@ nav:
   - Язык:
       - Модель и открытые решения: design.md
       - Исполняемое ядро: core.md
-      - Числовая модель (проект): numeric-model.md
+      - Числовая модель: numeric-model.md
   - Эталонные программы: reference-programs.md
   - План разработки: roadmap.md

@@ -3,6 +3,8 @@ from dataclasses import dataclass, asdict, field
 import json
 from typing import Optional
 from .frontend import CompileError, Token, Conditional
+from .typecheck import infer_expression
+from .types import signed
 
 
 @dataclass
@@ -14,6 +16,8 @@ class Operation:
     overflow: str = 'none'
     callee: str = ''
     may_trap: bool = False
+    shift_policy: str = 'none'
+    incoming_blocks: list = field(default_factory=list)
 
 
 @dataclass
@@ -62,59 +66,68 @@ class Lowerer:
         name = f'v{self.counter}'
         self.counter += 1
         self.current.operations.append(Operation(
-            name, op, args, type, may_trap=kwargs.get('overflow') == 'trap', **kwargs))
+            name, op, args, type, may_trap=kwargs.get('overflow') == 'trap' or kwargs.get('shift_policy') == 'trap', **kwargs))
         self.types[name] = type
         return name
 
-    def expression(self, expr, names):
-        text = expr.token.text
+    def expression(self, expr, names, expected=None):
+        inferred = infer_expression(expr, names, self.types, self.signatures, expected)
+        return self.emit_expression(expr, names, inferred)
+
+    def emit_expression(self, expr, names, inferred):
+        text, type_name = expr.token.text, inferred[id(expr)]
         if expr.kind == 'bool':
             return self.emit('constant', [text == 'true'], type='bool')
         if expr.kind == 'literal':
-            try:
-                value = int(text, 16 if text.startswith('0x') else 10)
-            except ValueError:
-                raise CompileError(expr.token, 'invalid u32 literal') from None
-            if value > 0xffffffff:
-                raise CompileError(expr.token, 'literal is outside u32 range')
-            return self.emit('constant', [value])
+            value = int(text, 16 if text.lstrip('-').startswith('0x') else 10)
+            return self.emit('constant', [value], type=type_name)
         if expr.kind == 'name':
-            if text not in names:
-                raise CompileError(expr.token, f'unknown value {text!r}')
             return names[text]
         if expr.kind == 'call':
-            if text not in self.signatures:
-                raise CompileError(expr.token, f'unknown function {text!r}')
-            signature = self.signatures[text]
-            if len(expr.args) != len(signature.params):
-                raise CompileError(expr.token, f'wrong number of arguments for {text!r}')
-            args = []
-            for arg, (_, param_type) in zip(expr.args, signature.params):
-                value = self.expression(arg, names)
-                self.expect(value, param_type, arg.token)
-                args.append(value)
-            return self.emit('call', args, type=signature.result_type, callee=text)
-        args = [self.expression(arg, names) for arg in expr.args]
-        if expr.kind == 'not':
-            self.expect(args[0], 'bool', expr.token)
-            return self.emit('not', args, type='bool')
-        comparisons = {'==': 'eq', '!=': 'ne', '<': 'ult', '<=': 'ule', '>': 'ugt', '>=': 'uge'}
+            args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
+            return self.emit('call', args, type=type_name, callee=text)
+        if text in ('&&', '||'):
+            left = self.emit_expression(expr.args[0], names, inferred)
+            rhs, short = self.new_block(), self.new_block()
+            targets = [rhs.name, short.name] if text == '&&' else [short.name, rhs.name]
+            self.current.terminator = Terminator('branch', [left] + targets)
+            self.current = short
+            short_value = self.emit('constant', [text == '||'], type='bool')
+            self.current = rhs
+            right = self.emit_expression(expr.args[1], names, inferred)
+            right_end = self.current
+            join = self.new_block()
+            short.terminator = Terminator('jump', [join.name])
+            right_end.terminator = Terminator('jump', [join.name])
+            self.current = join
+            return self.emit('phi', [short_value, right], type='bool',
+                             incoming_blocks=[short.name, right_end.name])
+        args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
+        if expr.kind in ('not', 'bit_not'):
+            return self.emit(expr.kind, args, type=type_name)
+        if expr.kind == 'neg':
+            zero = self.emit('constant', [0], type=type_name)
+            return self.emit('sub', [zero, args[0]], type=type_name, overflow='trap')
+        comparisons = {'==': 'eq', '!=': 'ne', '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge'}
         if text in comparisons:
-            expected = self.types[args[0]] if text in ('==', '!=') else 'u32'
-            for arg in args:
-                self.expect(arg, expected, expr.token)
-            return self.emit(comparisons[text], args, type='bool')
-        for arg in args:
-            self.expect(arg, 'u32', expr.token)
+            op = comparisons[text]
+            if op not in ('eq', 'ne'):
+                op = ('s' if signed(self.types[args[0]]) else 'u') + op
+            return self.emit(op, args, type='bool')
+        if text in ('<<', '>>'):
+            return self.emit('shl' if text == '<<' else 'shr', args,
+                             type=type_name, shift_policy='trap')
+        if text in ('&', '|', '^'):
+            return self.emit({'&': 'and', '|': 'or', '^': 'xor'}[text], args, type=type_name)
         return self.emit({'+': 'add', '-': 'sub', '*': 'mul'}[text[0]], args,
-                         overflow='wrap' if text.endswith('%') else 'trap')
+                         type=type_name, overflow='wrap' if text.endswith('%') else 'trap')
 
     def statements(self, statements, names):
         for stmt in statements:
             if self.current is None:
                 raise CompileError(stmt.token, 'unreachable statement after return')
             if isinstance(stmt, Conditional):
-                condition = self.expression(stmt.condition, names)
+                condition = self.expression(stmt.condition, names, 'bool')
                 self.expect(condition, 'bool', stmt.condition.token)
                 then_block, else_block = self.new_block(), self.new_block()
                 self.current.terminator = Terminator('branch', [condition, then_block.name, else_block.name])
@@ -129,14 +142,14 @@ class Lowerer:
                 for block in ends:
                     block.terminator = Terminator('jump', [self.current.name])
             elif stmt.is_return:
-                value = self.expression(stmt.expr, names)
+                value = self.expression(stmt.expr, names, self.fn.result_type)
                 self.expect(value, self.fn.result_type, stmt.expr.token)
                 self.current.terminator = Terminator('return', [value])
                 self.current = None
             else:
                 if stmt.token.text in names:
                     raise CompileError(stmt.token, 'values are immutable; duplicate binding')
-                value = self.expression(stmt.expr, names)
+                value = self.expression(stmt.expr, names, stmt.annotation or None)
                 if stmt.annotation:
                     self.expect(value, stmt.annotation, stmt.token)
                 names[stmt.token.text] = value
@@ -185,7 +198,7 @@ def annotate_traps(module):
                   for fn in module}
     for fn in module:
         for op in operations[fn.name]:
-            op.may_trap = op.overflow == 'trap'
+            op.may_trap = op.overflow == 'trap' or op.shift_policy == 'trap'
         fn.may_trap = any(op.may_trap for op in operations[fn.name])
     changed = True
     while changed:
@@ -201,4 +214,4 @@ def annotate_traps(module):
 
 
 def dump(module):
-    return json.dumps({'version': 3, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
+    return json.dumps({'version': 4, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
