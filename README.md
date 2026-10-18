@@ -1,5 +1,7 @@
 # Liza
 
+[Документация](http://liza.rulerom.com/) · [Быстрый старт](http://liza.rulerom.com/getting-started.html)
+
 Экспериментальный системный язык: программа описывает значения, зависимости
 вычислений, права на изменение состояния и эффекты. Физическое размещение данных
 и машинные инструкции выбирает реализация в пределах этих контрактов.
@@ -63,3 +65,17 @@ freestanding-сборка ещё не реализована.
 - [Этапы и критерии готовности](docs/roadmap.md)
 
 Исходная постановка: [диалог о Liza](https://chatgpt.com/share/6ad4aa33-5ae0-83ed-8684-69472e7c8ce5).
+
+## Документация
+
+Ведём документацию в `docs/` на MkDocs Material. GitHub Actions проверяет сборку
+в pull request и публикует изменения из `main` в Yandex Object Storage.
+
+```sh
+python3.12 -m venv .venv-docs
+source .venv-docs/bin/activate
+python -m pip install -r requirements-docs.txt
+python -m mkdocs serve
+```
+
+Подробности: [работа с документацией и публикация](docs/documentation.md).

@@ -1,0 +1,89 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'requirements-docs.txt'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'requirements-docs.txt'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-docs.txt
+      - name: Install documentation dependencies
+        run: python -m pip install -r requirements-docs.txt
+      - name: Build documentation
+        run: python -m mkdocs build --strict
+      - uses: actions/upload-artifact@v4
+        with:
+          name: documentation-site
+          path: site/
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: documentation-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: documentation-site
+          path: site/
+      - name: Publish to Yandex Object Storage
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.YC_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_ACCESS_KEY }}
+          YC_BUCKET_NAME: ${{ secrets.YC_BUCKET_NAME }}
+          AWS_DEFAULT_REGION: ru-central1
+          AWS_EC2_METADATA_DISABLED: 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_ACCESS_KEY_ID:?Missing YC_ACCESS_KEY_ID}"
+          : "${AWS_SECRET_ACCESS_KEY:?Missing YC_SECRET_ACCESS_KEY}"
+          : "${YC_BUCKET_NAME:?Missing YC_BUCKET_NAME}"
+          aws --version
+          aws --endpoint-url=https://storage.yandexcloud.net s3 sync site/ "s3://${YC_BUCKET_NAME}/" \
+            --exclude 'index.html' \
+            --cache-control 'public, max-age=300' \
+            --only-show-errors
+          aws --endpoint-url=https://storage.yandexcloud.net s3 cp site/index.html "s3://${YC_BUCKET_NAME}/index.html" \
+            --content-type 'text/html; charset=utf-8' \
+            --cache-control 'no-cache' \
+            --only-show-errors
+      - name: Check published pages
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
+            --max-time 30 http://liza.rulerom.com/ -o /dev/null
+          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
+            --max-time 30 http://liza.rulerom.com/core.html -o /dev/null
+          echo 'Documentation: http://liza.rulerom.com/' >> "$GITHUB_STEP_SUMMARY"

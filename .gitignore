@@ -1,4 +1,6 @@
 __pycache__/
 *.pyc
 /build/
+/site/
+/.venv-docs/
 .DS_Store

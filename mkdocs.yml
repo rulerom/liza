@@ -1,0 +1,50 @@
+site_name: Liza
+site_description: Экспериментальный системный язык с архитектурно-независимой семантикой
+site_url: http://liza.rulerom.com/
+repo_url: https://github.com/rulerom/liza
+repo_name: rulerom/liza
+edit_uri: edit/main/docs/
+strict: true
+# Direct object URLs also work without directory-index rewrites in S3.
+use_directory_urls: false
+
+theme:
+  name: material
+  language: ru
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Тёмная тема
+    - scheme: slate
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Светлая тема
+  features:
+    - navigation.sections
+    - navigation.footer
+    - content.code.copy
+  font: false
+
+plugins:
+  - search:
+      lang: ru
+
+markdown_extensions:
+  - admonition
+  - tables
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - О Liza: index.md
+  - Быстрый старт: getting-started.md
+  - Язык:
+      - Модель и открытые решения: design.md
+      - Исполняемое ядро: core.md
+  - План разработки: roadmap.md
+  - Работа с документацией: documentation.md

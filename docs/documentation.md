@@ -1,0 +1,70 @@
+# Работа с документацией
+
+Документация хранится в `docs/` и собирается MkDocs с темой Material.
+Опубликованный сайт: [liza.rulerom.com](http://liza.rulerom.com/).
+Навигация и настройки сайта находятся в `mkdocs.yml`, версии зависимостей —
+в `requirements-docs.txt`.
+
+## Локальная работа
+
+Для документации используем Python 3.12; зависимости компилятора не меняются.
+
+```sh
+python3.12 -m venv .venv-docs
+source .venv-docs/bin/activate
+python -m pip install -r requirements-docs.txt
+python -m mkdocs serve
+```
+
+Предпросмотр доступен по адресу `http://127.0.0.1:8000/`, изменения применяются
+автоматически. Проверка перед отправкой:
+
+```sh
+python -m mkdocs build --strict
+```
+
+Результат записывается в `site/`, который не коммитится.
+Добавляя страницу, внеси её в `nav` в `mkdocs.yml`. Ссылки между исходниками
+пиши как Markdown-ссылки на `.md`: MkDocs преобразует их в ссылки сайта.
+Для примеров Liza пока используй блоки `text`: отдельного lexer подсветки ещё нет.
+
+## GitHub Actions
+
+Workflow [Documentation](https://github.com/rulerom/liza/actions/workflows/docs.yml):
+
+1. На pull request проверяет строгую сборку и сохраняет сайт как artifact.
+2. На push в `main` после изменений `docs/`, `mkdocs.yml`, зависимостей или самого
+   workflow собирает и публикует сайт в Yandex Object Storage.
+3. Поддерживает ручной запуск через **Run workflow**. Публикация разрешена
+   только для ветки `main`.
+
+Build не использует S3 credentials. Они передаются только шагу публикации.
+Параллельные публикации сериализуются; работающая публикация не прерывается.
+
+| Repository secret | Назначение |
+| --- | --- |
+| `YC_ACCESS_KEY_ID` | Идентификатор статического ключа сервисного аккаунта |
+| `YC_SECRET_ACCESS_KEY` | Секретная часть ключа |
+| `YC_BUCKET_NAME` | Имя бакета сайта, без `s3://` и пути |
+
+Публикация использует AWS CLI, S3 endpoint `https://storage.yandexcloud.net`
+и регион `ru-central1`, согласно
+[документации Yandex Cloud](https://yandex.cloud/en/docs/storage/tools/aws-cli).
+AWS CLI уже установлен на GitHub-hosted runner `ubuntu-latest`;
+workflow проверяет его наличие перед загрузкой.
+
+Бакет должен разрешать публичное чтение сайта, а домен — вести на его website
+endpoint. Стартовый документ — `index.html`. DNS, права бакета и website hosting
+workflow не изменяет. Все страницы имеют прямые `.html` URL, поэтому для
+внутренних ссылок не требуются directory-index redirects.
+
+Загрузка обновляет объекты в корне бакета. `index.html` публикуется последним,
+после остальных страниц и ресурсов. Объекты, отсутствующие в новой сборке,
+автоматически не удаляются; удалённая из навигации страница может оставаться
+доступной по старому URL до отдельного удаления. Загрузка нескольких объектов
+не является атомарным переключением версии сайта.
+
+Для объектов установлен `Cache-Control: public, max-age=300`, для главной
+страницы — `no-cache`. В конце workflow проверяет HTTP-доступность главной
+и страницы ядра. При проблемах открой лог run на вкладке Actions;
+готовый сайт можно скачать как artifact `documentation-site`.
