@@ -18,7 +18,7 @@ class CompileError(Exception):
 
 def lex(source):
     tokens = []
-    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-]%|[{}(),:=;+*\-!<>~&|^]")
+    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-]%|[{}(),:=;+*\-!<>~&|^/%]")
     pos, line, column = 0, 1, 1
     while pos < len(source):
         match = pattern.match(source, pos)
@@ -200,7 +200,7 @@ class Parser:
         precedence = {'||': 1, '&&': 2, '|': 3, '^': 4, '&': 5,
                       '==': 6, '!=': 6, '<': 7, '<=': 7, '>': 7, '>=': 7,
                       '<<': 8, '>>': 8, '+': 9, '-': 9, '+%': 9, '-%': 9,
-                      '*': 10, '*%': 10}
+                      '*': 10, '*%': 10, '/': 10, '%': 10}
         while self.current.text in precedence and precedence[self.current.text] >= minimum:
             op = self.take()
             right = self.expression(precedence[op.text] + 1)

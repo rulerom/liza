@@ -1,5 +1,5 @@
 """Liza IR -> textual LLVM IR. The host toolchain supplies ABI and linking."""
-from .types import INTEGER_TYPES, width, signed
+from .types import INTEGER_TYPES, width, signed, bounds
 
 
 def llvm(module):
@@ -30,7 +30,7 @@ def llvm(module):
             for op in block.operations:
                 refs[op.result] = str(int(op.args[0])) if op.op == 'constant' else f'%{op.result}'
                 value_types[op.result] = types[op.type]
-                if op.overflow == 'trap' or op.shift_policy == 'trap':
+                if op.overflow == 'trap' or op.shift_policy == 'trap' or op.division_policy == 'trap':
                     exits[block.name] = f'{op.result}_ok'
         for block in fn.blocks:
             lines.append(f'{block.name}:')
@@ -62,6 +62,29 @@ def llvm(module):
                         count = f'%{name}_count'
                     instruction = 'shl' if op.op == 'shl' else ('ashr' if signed(op.type) else 'lshr')
                     lines.append(f'  %{name} = {instruction} {ty} {args[0]}, {count}')
+                elif op.op in ('div', 'rem'):
+                    lines.append(f'  %{name}_zero = icmp eq {ty} {args[1]}, 0')
+                    invalid = f'%{name}_zero'
+                    if signed(op.type) and op.op == 'div':
+                        lines.extend([
+                            f'  %{name}_min = icmp eq {ty} {args[0]}, {bounds(op.type)[0]}',
+                            f'  %{name}_minus_one = icmp eq {ty} {args[1]}, -1',
+                            f'  %{name}_overflow = and i1 %{name}_min, %{name}_minus_one',
+                            f'  %{name}_invalid = or i1 %{name}_zero, %{name}_overflow',
+                        ])
+                        invalid = f'%{name}_invalid'
+                    guard(name, invalid)
+                    divisor = args[1]
+                    if signed(op.type) and op.op == 'rem':
+                        # x % -1 is always zero. Substitute +1 before srem so
+                        # MIN % -1 never executes LLVM's undefined operation.
+                        lines.extend([
+                            f'  %{name}_minus_one = icmp eq {ty} {divisor}, -1',
+                            f'  %{name}_divisor = select i1 %{name}_minus_one, {ty} 1, {ty} {divisor}',
+                        ])
+                        divisor = f'%{name}_divisor'
+                    instruction = ('s' if signed(op.type) else 'u') + op.op
+                    lines.append(f'  %{name} = {instruction} {ty} {args[0]}, {divisor}')
                 elif op.op in ('and', 'or', 'xor') or op.overflow == 'wrap':
                     lines.append(f'  %{name} = {op.op} {ty} {args[0]}, {args[1]}')
                 elif op.overflow == 'trap':

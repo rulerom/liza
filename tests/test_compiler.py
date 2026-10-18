@@ -37,7 +37,7 @@ class FrontendTests(unittest.TestCase):
             ('fn f()->u32{return 1}', 'missing fn main'),
             ('fn main()->u32{return 1} fn main()->u32{return 2}', 'duplicate function'),
             ('fn f(a:u32,a:u32)->u32{return a} fn main()->u32{return 0}', 'duplicate parameter'),
-            ('fn main()->u32{return 1 / 0}', 'unexpected character'),
+            ('fn main()->u32{return 1 @ 0}', 'unexpected character'),
             ('fn main()->u32{return 1', 'expected newline'),
             ('fn main()->u32{return 1 2}', 'expected newline'),
             ('fn main()->u32:realtime{return 0}', "expected 'pure'"),
@@ -108,7 +108,7 @@ class FrontendTests(unittest.TestCase):
                     else:
                         self.assertEqual(op.may_trap, op.overflow == 'trap')
         serialized = json.loads(dump(list(module.values())))
-        self.assertEqual(serialized['version'], 4)
+        self.assertEqual(serialized['version'], 5)
         self.assertTrue(serialized['functions'][0]['may_trap'])
 
     def test_arithmetic_lowering_has_no_unproven_flags(self):

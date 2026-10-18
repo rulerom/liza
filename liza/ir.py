@@ -17,6 +17,7 @@ class Operation:
     callee: str = ''
     may_trap: bool = False
     shift_policy: str = 'none'
+    division_policy: str = 'none'
     incoming_blocks: list = field(default_factory=list)
 
 
@@ -65,8 +66,10 @@ class Lowerer:
     def emit(self, op, args, type='u32', **kwargs):
         name = f'v{self.counter}'
         self.counter += 1
+        may_trap = any(kwargs.get(policy) == 'trap'
+                       for policy in ('overflow', 'shift_policy', 'division_policy'))
         self.current.operations.append(Operation(
-            name, op, args, type, may_trap=kwargs.get('overflow') == 'trap' or kwargs.get('shift_policy') == 'trap', **kwargs))
+            name, op, args, type, may_trap=may_trap, **kwargs))
         self.types[name] = type
         return name
 
@@ -117,6 +120,9 @@ class Lowerer:
         if text in ('<<', '>>'):
             return self.emit('shl' if text == '<<' else 'shr', args,
                              type=type_name, shift_policy='trap')
+        if text in ('/', '%'):
+            return self.emit('div' if text == '/' else 'rem', args,
+                             type=type_name, division_policy='trap')
         if text in ('&', '|', '^'):
             return self.emit({'&': 'and', '|': 'or', '^': 'xor'}[text], args, type=type_name)
         return self.emit({'+': 'add', '-': 'sub', '*': 'mul'}[text[0]], args,
@@ -198,7 +204,7 @@ def annotate_traps(module):
                   for fn in module}
     for fn in module:
         for op in operations[fn.name]:
-            op.may_trap = op.overflow == 'trap' or op.shift_policy == 'trap'
+            op.may_trap = op.overflow == 'trap' or op.shift_policy == 'trap' or op.division_policy == 'trap'
         fn.may_trap = any(op.may_trap for op in operations[fn.name])
     changed = True
     while changed:
@@ -214,4 +220,4 @@ def annotate_traps(module):
 
 
 def dump(module):
-    return json.dumps({'version': 4, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
+    return json.dumps({'version': 5, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
