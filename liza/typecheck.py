@@ -53,6 +53,8 @@ def infer_expression(expr, names, value_types, signatures, expected=None):
                     raise CompileError(arg.token, str(error)) from None
             else:
                 integers.append((visit(arg), arg.token))
+        elif node.kind in ('copy', 'move'):
+            unify(var, visit(node.args[0]), token)
         elif node.kind == 'bool':
             bind(var, 'bool', token)
         elif node.kind == 'name':

@@ -1,0 +1,18 @@
+fn advance(value: u32) -> u32 {
+    return (move value) + 1
+}
+
+fn main() -> u32 {
+    var current: u32 = 10
+    snapshot = copy current
+    var steps = 0
+    while steps < 3 {
+        previous = move current
+        current = advance(move previous)
+        steps = steps + 1
+    }
+    result = move current
+    current = 0
+    if snapshot == 10 && result == 13 && current == 0 { return 0 }
+    return 1
+}

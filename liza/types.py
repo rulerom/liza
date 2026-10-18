@@ -30,3 +30,10 @@ def convert_integer(value, target, mode):
     if not low <= value <= high:
         raise ValueError(f'literal is outside {target} range')
     return value
+
+
+def value_properties(type_name):
+    """Semantic capabilities, independent of byte size and target layout."""
+    if type_name not in SCALAR_TYPES:
+        raise ValueError(f'unknown value type: {type_name}')
+    return {'copyable': True, 'implicit_copy': True}

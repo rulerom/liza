@@ -63,7 +63,10 @@ def llvm(module):
                 if op.op == 'constant' or (op.op.startswith('convert.') and op.source_type == 'integer'):
                     continue
                 args = [refs[a] for a in op.args]
-                if op.op.startswith('convert.'):
+                if op.op in ('copy', 'move'):
+                    # Scalar value identity; no address or allocation is introduced.
+                    lines.append(f'  %{name} = select i1 true, {ty} {args[0]}, {ty} {args[0]}')
+                elif op.op.startswith('convert.'):
                     # i128 holds every supported source value and target bound.
                     # Extend by source signedness, then check/clamp mathematically.
                     value = extend(name + '_wide', args[0], op.source_type, 'i128')

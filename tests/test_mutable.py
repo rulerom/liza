@@ -144,10 +144,10 @@ class MutableNativeTests(unittest.TestCase):
         source = '''fn main()->u32 {
             var x:u8=10
             y=x
-            var copy=x
+            var duplicate=x
             x=x+1
-            copy=copy+2
-            if y!=10 || x!=11 || copy!=12 {return 1}
+            duplicate=duplicate+2
+            if y!=10 || x!=11 || duplicate!=12 {return 1}
             if true {x=13}
             if x!=13 {return 2}
             if false {x=14}

@@ -100,7 +100,7 @@ class Parser:
 
     def identifier(self):
         token = self.current
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -196,6 +196,10 @@ class Parser:
             self.take()
             number = self.take()
             left = Expr(Token('-' + number.text, token.line, token.column), 'literal', [])
+        elif token.text in ('copy', 'move'):
+            left = Expr(self.take(), token.text, [self.expression(11)])
+            if token.text == 'move' and left.args[0].kind != 'name':
+                raise CompileError(token, 'move requires a binding name')
         elif token.text in ('!', '~', '-'):
             left = Expr(self.take(), {'!': 'not', '~': 'bit_not', '-': 'neg'}[token.text], [self.expression(11)])
         elif token.text in INTEGER_TYPES:

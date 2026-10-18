@@ -4,7 +4,8 @@ import json
 from typing import Optional
 from .frontend import CompileError, Token, Conditional, While, LoopControl
 from .typecheck import infer_expression
-from .types import signed
+from .types import signed, SCALAR_TYPES, value_properties
+from .ownership import check_ownership
 
 
 @dataclass
@@ -119,7 +120,7 @@ class Lowerer:
         args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
         if expr.kind.startswith('convert.'):
             return self.emit(expr.kind, args, type=type_name, source_type=self.types[args[0]])
-        if expr.kind in ('not', 'bit_not'):
+        if expr.kind in ('copy', 'move', 'not', 'bit_not'):
             return self.emit(expr.kind, args, type=type_name)
         if expr.kind == 'neg':
             zero = self.emit('constant', [0], type=type_name)
@@ -281,6 +282,8 @@ def lower(functions):
     if signatures['main'].result_type != 'u32':
         raise CompileError(signatures['main'].name, 'main must return u32')
     module = [Lowerer(fn, signatures).lower() for fn in functions]
+    for fn in functions:
+        check_ownership(fn)
     annotate_traps(module)
     return module
 
@@ -313,4 +316,4 @@ def annotate_traps(module):
 
 
 def dump(module):
-    return json.dumps({'version': 7, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
+    return json.dumps({'version': 8, 'type_properties': {t: value_properties(t) for t in SCALAR_TYPES}, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
