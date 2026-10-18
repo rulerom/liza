@@ -1,0 +1,5 @@
+fn main() -> u32 {
+    last: u32 = 0xffffffff
+    first = last +% 1
+    return first
+}

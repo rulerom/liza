@@ -1,0 +1,9 @@
+// Names bind values; no mutable storage is introduced.
+fn twice(value: u32) -> u32 : pure {
+    return value * 2
+}
+
+fn main() -> u32 {
+    answer = twice(20) + 2
+    return answer
+}
