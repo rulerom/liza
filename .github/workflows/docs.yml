@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'overrides/**'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - '.github/workflows/docs.yml'
   pull_request:
     paths:
       - 'docs/**'
+      - 'overrides/**'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - '.github/workflows/docs.yml'
@@ -85,8 +87,10 @@ jobs:
             --only-show-errors
       - name: Check published pages
         run: |
-          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
-            --max-time 30 http://liza.rulerom.com/ -o /dev/null
-          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
-            --max-time 30 http://liza.rulerom.com/core.html -o /dev/null
-          echo 'Documentation: http://liza.rulerom.com/' >> "$GITHUB_STEP_SUMMARY"
+          curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
+            --max-time 30 https://liza.rulerom.com/ -o /dev/null
+          curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
+            --max-time 30 https://liza.rulerom.com/core.html -o /dev/null
+          curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
+            --max-time 30 https://liza.rulerom.com/assets/images/liza-social-v1.png -o /dev/null
+          echo 'Documentation: https://liza.rulerom.com/' >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,6 @@
 site_name: Liza
-site_description: Экспериментальный системный язык с архитектурно-независимой семантикой
-site_url: http://liza.rulerom.com/
+site_description: 'Liza — экспериментальный системный язык: переносимые вычисления, определённая арифметика и нативное исполнение.'
+site_url: https://liza.rulerom.com/
 repo_url: https://github.com/rulerom/liza
 repo_name: rulerom/liza
 edit_uri: edit/main/docs/
@@ -10,6 +10,7 @@ use_directory_urls: false
 
 theme:
   name: material
+  custom_dir: overrides
   language: ru
   palette:
     - scheme: default
@@ -29,6 +30,10 @@ theme:
     - navigation.footer
     - content.code.copy
   font: false
+
+extra:
+  social_image: assets/images/liza-social-v1.png
+  social_image_alt: 'Liza — системный язык. Переносимые вычисления. Предсказуемое поведение.'
 
 plugins:
   - search:
