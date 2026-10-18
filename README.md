@@ -80,3 +80,5 @@ python -m mkdocs serve
 ```
 
 Подробности для сопровождающих: [работа с документацией и публикация](maintenance/documentation.md).
+
+Правила реализации конструкций и проверок: [разработка Liza](CONTRIBUTING.md).
