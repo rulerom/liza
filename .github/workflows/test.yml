@@ -12,4 +12,14 @@ jobs:
         with:
           python-version: '3.9'
       - run: clang --version
-      - run: python -m unittest discover -s tests -v
+      - name: Configure expected trap tests on Linux
+        if: runner.os == 'Linux'
+        run: |
+          # A piped crash reporter ignores RLIMIT_CORE and can delay each trap.
+          # This runner is disposable; use file-based dumps so ulimit applies.
+          sysctl kernel.core_pattern kernel.core_pipe_limit
+          sudo sysctl -w kernel.core_pattern=core
+      - name: Run compiler tests
+        run: |
+          ulimit -c 0
+          python -m unittest discover -s tests -v
