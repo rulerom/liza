@@ -41,5 +41,3 @@ fn main() -> u32 {
 
 Сейчас Clang связывает обычную host-программу с системным startup-кодом;
 freestanding-сборка ещё не реализована.
-
-Исходная постановка: [диалог о Liza](https://chatgpt.com/share/6ad4aa33-5ae0-83ed-8684-69472e7c8ce5).

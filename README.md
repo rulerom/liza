@@ -78,4 +78,4 @@ python -m pip install -r requirements-docs.txt
 python -m mkdocs serve
 ```
 
-Подробности: [работа с документацией и публикация](docs/documentation.md).
+Подробности для сопровождающих: [работа с документацией и публикация](maintenance/documentation.md).

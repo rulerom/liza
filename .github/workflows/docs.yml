@@ -80,6 +80,9 @@ jobs:
             --content-type 'text/html; charset=utf-8' \
             --cache-control 'no-cache' \
             --only-show-errors
+          # Retired internal page: remove the previously published object too.
+          aws --endpoint-url=https://storage.yandexcloud.net s3 rm "s3://${YC_BUCKET_NAME}/documentation.html" \
+            --only-show-errors
       - name: Check published pages
         run: |
           curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
