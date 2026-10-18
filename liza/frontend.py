@@ -1,7 +1,7 @@
 """Source -> AST. No backend semantics live here."""
 from dataclasses import dataclass
 import re
-from .types import SCALAR_TYPES
+from .types import SCALAR_TYPES, INTEGER_TYPES
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,7 @@ class CompileError(Exception):
 
 def lex(source):
     tokens = []
-    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-]%|[{}(),:=;+*\-!<>~&|^/%]")
+    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[{}(),:=;+*\-!<>~&|^/%.]")
     pos, line, column = 0, 1, 1
     while pos < len(source):
         match = pattern.match(source, pos)
@@ -174,6 +174,18 @@ class Parser:
             left = Expr(Token('-' + number.text, token.line, token.column), 'literal', [])
         elif token.text in ('!', '~', '-'):
             left = Expr(self.take(), {'!': 'not', '~': 'bit_not', '-': 'neg'}[token.text], [self.expression(11)])
+        elif token.text in INTEGER_TYPES:
+            target = self.take()
+            mode = 'checked'
+            if self.current.text == '.':
+                self.take('.')
+                mode = self.take().text
+                if mode not in ('wrap', 'saturate'):
+                    raise CompileError(target, 'expected wrap or saturate conversion')
+            self.take('(')
+            arg = self.expression()
+            self.take(')')
+            left = Expr(target, 'convert.' + mode, [arg])
         elif token.text in ('true', 'false'):
             left = Expr(self.take(), 'bool', [])
         elif token.text == '(':
@@ -199,8 +211,8 @@ class Parser:
                 left = Expr(name, 'name', [])
         precedence = {'||': 1, '&&': 2, '|': 3, '^': 4, '&': 5,
                       '==': 6, '!=': 6, '<': 7, '<=': 7, '>': 7, '>=': 7,
-                      '<<': 8, '>>': 8, '+': 9, '-': 9, '+%': 9, '-%': 9,
-                      '*': 10, '*%': 10, '/': 10, '%': 10}
+                      '<<': 8, '>>': 8, '+': 9, '-': 9, '+%': 9, '-%': 9, '+|': 9, '-|': 9,
+                      '*': 10, '*%': 10, '*|': 10, '/': 10, '%': 10}
         while self.current.text in precedence and precedence[self.current.text] >= minimum:
             op = self.take()
             right = self.expression(precedence[op.text] + 1)

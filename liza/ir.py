@@ -18,6 +18,7 @@ class Operation:
     may_trap: bool = False
     shift_policy: str = 'none'
     division_policy: str = 'none'
+    source_type: str = ''
     incoming_blocks: list = field(default_factory=list)
 
 
@@ -66,7 +67,7 @@ class Lowerer:
     def emit(self, op, args, type='u32', **kwargs):
         name = f'v{self.counter}'
         self.counter += 1
-        may_trap = any(kwargs.get(policy) == 'trap'
+        may_trap = op == 'convert.checked' or any(kwargs.get(policy) == 'trap'
                        for policy in ('overflow', 'shift_policy', 'division_policy'))
         self.current.operations.append(Operation(
             name, op, args, type, may_trap=may_trap, **kwargs))
@@ -106,6 +107,8 @@ class Lowerer:
             return self.emit('phi', [short_value, right], type='bool',
                              incoming_blocks=[short.name, right_end.name])
         args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
+        if expr.kind.startswith('convert.'):
+            return self.emit(expr.kind, args, type=type_name, source_type=self.types[args[0]])
         if expr.kind in ('not', 'bit_not'):
             return self.emit(expr.kind, args, type=type_name)
         if expr.kind == 'neg':
@@ -126,7 +129,7 @@ class Lowerer:
         if text in ('&', '|', '^'):
             return self.emit({'&': 'and', '|': 'or', '^': 'xor'}[text], args, type=type_name)
         return self.emit({'+': 'add', '-': 'sub', '*': 'mul'}[text[0]], args,
-                         type=type_name, overflow='wrap' if text.endswith('%') else 'trap')
+                         type=type_name, overflow='wrap' if text.endswith('%') else 'saturate' if text.endswith('|') else 'trap')
 
     def statements(self, statements, names):
         for stmt in statements:
@@ -204,7 +207,7 @@ def annotate_traps(module):
                   for fn in module}
     for fn in module:
         for op in operations[fn.name]:
-            op.may_trap = op.overflow == 'trap' or op.shift_policy == 'trap' or op.division_policy == 'trap'
+            op.may_trap = (op.op == 'convert.checked' and op.source_type != 'integer') or op.overflow == 'trap' or op.shift_policy == 'trap' or op.division_policy == 'trap'
         fn.may_trap = any(op.may_trap for op in operations[fn.name])
     changed = True
     while changed:
@@ -220,4 +223,4 @@ def annotate_traps(module):
 
 
 def dump(module):
-    return json.dumps({'version': 5, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
+    return json.dumps({'version': 6, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'

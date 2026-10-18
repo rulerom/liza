@@ -1,6 +1,6 @@
 """Infer literal contexts without emitting or reordering executable operations."""
 from .frontend import CompileError
-from .types import INTEGER_TYPES, bounds, signed
+from .types import INTEGER_TYPES, bounds, signed, convert_integer
 
 
 class TypeVariable:
@@ -39,6 +39,20 @@ def infer_expression(expr, names, value_types, signatures, expected=None):
         if node.kind == 'literal':
             integers.append((var, token))
             literals.append((var, token))
+        elif node.kind.startswith('convert.'):
+            bind(var, token.text, token)
+            arg = node.args[0]
+            if arg.kind == 'literal':
+                literal_var = TypeVariable()
+                literal_var.type = 'integer'
+                variables[id(arg)] = literal_var
+                try:
+                    value = int(arg.token.text, 16 if arg.token.text.lstrip('-').startswith('0x') else 10)
+                    convert_integer(value, token.text, node.kind.split('.')[1])
+                except ValueError as error:
+                    raise CompileError(arg.token, str(error)) from None
+            else:
+                integers.append((visit(arg), arg.token))
         elif node.kind == 'bool':
             bind(var, 'bool', token)
         elif node.kind == 'name':

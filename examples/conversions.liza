@@ -1,0 +1,18 @@
+// Decode a network-order 16-bit word from two already supplied bytes.
+fn network_word(high: u8, low: u8) -> u16 {
+    return (u16(high) << 8) | u16(low)
+}
+
+fn main() -> u32 {
+    if network_word(0x12, 0x34) != 0x1234 { return 1 }
+
+    value: i64 = 300
+    if u8.wrap(value) != 44 { return 2 }
+    if u8.saturate(value) != 255 { return 3 }
+
+    level: u8 = 250
+    if level +| 10 != 255 { return 4 }
+    if (level +| 10) -| 10 != 245 { return 5 }
+    if i8.wrap(-129) != 127 { return 6 }
+    return 0
+}
