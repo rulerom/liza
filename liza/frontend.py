@@ -49,6 +49,7 @@ class Statement:
     expr: Expr
     is_return: bool
     annotation: str = ''
+    is_var: bool = False
 
 
 @dataclass
@@ -87,7 +88,7 @@ class Parser:
 
     def identifier(self):
         token = self.current
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -108,7 +109,10 @@ class Parser:
             if self.current.text == 'if':
                 body.append(self.conditional())
             else:
-                is_return = self.current.text == 'return'
+                is_var = self.current.text == 'var'
+                if is_var:
+                    self.take('var')
+                is_return = not is_var and self.current.text == 'return'
                 token = self.take('return') if is_return else self.identifier()
                 annotation = ''
                 if not is_return:
@@ -116,7 +120,7 @@ class Parser:
                         self.take(':')
                         annotation = self.type_name()
                     self.take('=')
-                body.append(Statement(token, self.expression(), is_return, annotation))
+                body.append(Statement(token, self.expression(), is_return, annotation, is_var))
                 if self.current.text not in ('\n', ';', '}'):
                     raise CompileError(self.current, 'expected newline, semicolon, or closing brace')
             self.separators()

@@ -1,0 +1,23 @@
+// Select and adjust a local value without introducing a mutable object.
+fn adjusted_level(input: u8, boost: bool) -> u8 {
+    var level = input
+    original = level
+    if boost {
+        level = level +| 20
+    } else {
+        level = level -| 10
+    }
+    if level == original { return original }
+    return level
+}
+
+fn main() -> u32 {
+    if adjusted_level(250, true) != 255 { return 1 }
+    if adjusted_level(5, false) != 0 { return 2 }
+
+    var x: u32 = 10
+    snapshot = x
+    x = x + 1
+    if x != 11 || snapshot != 10 { return 3 }
+    return 0
+}

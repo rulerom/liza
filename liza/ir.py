@@ -131,7 +131,7 @@ class Lowerer:
         return self.emit({'+': 'add', '-': 'sub', '*': 'mul'}[text[0]], args,
                          type=type_name, overflow='wrap' if text.endswith('%') else 'saturate' if text.endswith('|') else 'trap')
 
-    def statements(self, statements, names):
+    def statements(self, statements, names, mutable):
         for stmt in statements:
             if self.current is None:
                 raise CompileError(stmt.token, 'unreachable statement after return')
@@ -140,28 +140,49 @@ class Lowerer:
                 self.expect(condition, 'bool', stmt.condition.token)
                 then_block, else_block = self.new_block(), self.new_block()
                 self.current.terminator = Terminator('branch', [condition, then_block.name, else_block.name])
+                then_names, else_names = names.copy(), names.copy()
                 self.current = then_block
-                self.statements(stmt.then_body, names.copy())
+                self.statements(stmt.then_body, then_names, mutable.copy())
                 then_end = self.current
                 self.current = else_block
-                self.statements(stmt.else_body, names.copy())
+                self.statements(stmt.else_body, else_names, mutable.copy())
                 else_end = self.current
-                ends = [block for block in (then_end, else_end) if block is not None]
+                ends = [(block, env) for block, env in
+                        ((then_end, then_names), (else_end, else_names)) if block is not None]
                 self.current = self.new_block() if ends else None
-                for block in ends:
+                for block, _ in ends:
                     block.terminator = Terminator('jump', [self.current.name])
+                # Only bindings visible before the branch survive its scopes.
+                # Returned paths contribute no values to the continuation.
+                for name in names:
+                    if name not in mutable or not ends:
+                        continue
+                    values = [env[name] for _, env in ends]
+                    if all(value == values[0] for value in values):
+                        names[name] = values[0]
+                    else:
+                        names[name] = self.emit('phi', values, type=self.types[names[name]],
+                                                incoming_blocks=[block.name for block, _ in ends])
             elif stmt.is_return:
                 value = self.expression(stmt.expr, names, self.fn.result_type)
                 self.expect(value, self.fn.result_type, stmt.expr.token)
                 self.current.terminator = Terminator('return', [value])
                 self.current = None
             else:
-                if stmt.token.text in names:
-                    raise CompileError(stmt.token, 'values are immutable; duplicate binding')
-                value = self.expression(stmt.expr, names, stmt.annotation or None)
-                if stmt.annotation:
-                    self.expect(value, stmt.annotation, stmt.token)
-                names[stmt.token.text] = value
+                name = stmt.token.text
+                if name in names:
+                    if stmt.is_var or stmt.annotation:
+                        raise CompileError(stmt.token, 'duplicate binding; shadowing is not allowed')
+                    if name not in mutable:
+                        raise CompileError(stmt.token, 'values are immutable; assignment requires var')
+                    expected = self.types[names[name]]
+                else:
+                    expected = stmt.annotation or None
+                # Evaluate using the old environment, then rebind to a new SSA value.
+                value = self.expression(stmt.expr, names, expected)
+                names[name] = value
+                if stmt.is_var:
+                    mutable.add(name)
 
     def lower(self):
         names, params = {}, []
@@ -172,7 +193,7 @@ class Lowerer:
             names[param.text] = name
             self.types[name] = type_name
             params.append({'name': name, 'type': type_name})
-        self.statements(self.fn.body, names)
+        self.statements(self.fn.body, names, set())
         if self.current is not None:
             raise CompileError(self.fn.name, f'function must return a {self.fn.result_type} value on every path')
         return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type)
