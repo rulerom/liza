@@ -7,12 +7,7 @@ description: "Первая программа на Liza: проверка исх
 ## Требования
 
 Нужны Python 3.9+ и Clang в PATH. Прототип проверен локально на macOS ARM64
-с Python 3.9.6 и Apple Clang 21. Команды выполняются из корня репозитория.
-
-```sh
-git clone https://github.com/rulerom/liza.git
-cd liza
-```
+с Python 3.9.6 и Apple Clang 21. Команды выполняются из каталога с исходниками Liza.
 
 ## Первая программа
 

@@ -5,6 +5,8 @@ description: "Liza — системный язык программирован�
 
 # Liza
 
+*Founded October 18, 2026 · Основан 18 октября 2026 года.*
+
 **Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций.**
 
 *Liza — a systems programming language for portable computation with well-defined semantics and explicit control over execution costs.*

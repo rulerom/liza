@@ -1,5 +1,7 @@
 # Liza
 
+*Founded October 18, 2026 · Основан 18 октября 2026 года.*
+
 [Документация](https://liza.rulerom.com/) · [Быстрый старт](https://liza.rulerom.com/getting-started.html)
 
 **Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций.**
@@ -71,21 +73,3 @@ freestanding-сборка ещё не реализована.
 - [Модель языка и открытые решения](docs/design.md)
 - [Точная семантика работающего подмножества](docs/core.md)
 - [Этапы и критерии готовности](docs/roadmap.md)
-
-Исходная постановка: [диалог о Liza](https://chatgpt.com/share/6ad4aa33-5ae0-83ed-8684-69472e7c8ce5).
-
-## Документация
-
-Ведём документацию в `docs/` на MkDocs Material. GitHub Actions проверяет сборку
-в pull request и публикует изменения из `main` в Yandex Object Storage.
-
-```sh
-python3.12 -m venv .venv-docs
-source .venv-docs/bin/activate
-python -m pip install -r requirements-docs.txt
-python -m mkdocs serve
-```
-
-Подробности для сопровождающих: [работа с документацией и публикация](maintenance/documentation.md).
-
-Правила реализации конструкций и проверок: [разработка Liza](CONTRIBUTING.md).
