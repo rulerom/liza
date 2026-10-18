@@ -143,6 +143,8 @@ def llvm(module):
             term = block.terminator
             if term.op == 'return':
                 lines.append(f'  ret {types[fn.result_type]} {refs[term.args[0]]}')
+            elif term.op == 'unreachable':
+                lines.append('  unreachable')
             elif term.op == 'branch':
                 condition, then, otherwise = term.args
                 lines.append(f'  br i1 {refs[condition]}, label %{then}, label %{otherwise}')

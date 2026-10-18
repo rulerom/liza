@@ -61,6 +61,18 @@ class Conditional:
 
 
 @dataclass
+class While:
+    token: Token
+    condition: Expr
+    body: list
+
+
+@dataclass
+class LoopControl:
+    token: Token
+
+
+@dataclass
 class Function:
     name: Token
     params: list
@@ -88,7 +100,7 @@ class Parser:
 
     def identifier(self):
         token = self.current
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -108,6 +120,14 @@ class Parser:
         while self.current.text != '}':
             if self.current.text == 'if':
                 body.append(self.conditional())
+            elif self.current.text == 'while':
+                token = self.take('while')
+                condition = self.expression()
+                body.append(While(token, condition, self.block()))
+            elif self.current.text in ('break', 'continue'):
+                body.append(LoopControl(self.take()))
+                if self.current.text not in ('\n', ';', '}'):
+                    raise CompileError(self.current, 'expected newline, semicolon, or closing brace')
             else:
                 is_var = self.current.text == 'var'
                 if is_var:

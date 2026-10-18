@@ -1,0 +1,27 @@
+fn gcd(a: u32, b: u32) -> u32 {
+    var x = a
+    var y = b
+    while y != 0 {
+        remainder = x % y
+        x = y
+        y = remainder
+    }
+    return x
+}
+
+fn odd_sum(limit: u32) -> u32 {
+    var i: u32 = 0
+    var sum: u32 = 0
+    while true {
+        if i == limit { break }
+        i = i + 1
+        if i % 2 == 0 { continue }
+        sum = sum + i
+    }
+    return sum
+}
+
+fn main() -> u32 {
+    if gcd(48, 18) == 6 && odd_sum(10) == 25 { return 0 }
+    return 1
+}

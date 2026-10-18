@@ -2,7 +2,7 @@
 from dataclasses import dataclass, asdict, field
 import json
 from typing import Optional
-from .frontend import CompileError, Token, Conditional
+from .frontend import CompileError, Token, Conditional, While, LoopControl
 from .typecheck import infer_expression
 from .types import signed
 
@@ -43,6 +43,15 @@ class FunctionIR:
     result_type: str
     effect_contract: str = 'pure'
     may_trap: bool = False
+    termination_contract: str = 'may_diverge'
+
+
+@dataclass
+class LoopContext:
+    header: Block
+    exit: Block
+    backedges: list = field(default_factory=list)
+    breaks: list = field(default_factory=list)
 
 
 class Lowerer:
@@ -53,6 +62,7 @@ class Lowerer:
         self.current = self.new_block()
         self.types = {}
         self.counter = 0
+        self.loops = []
 
     def new_block(self):
         block = Block(f'b{len(self.blocks)}')
@@ -131,10 +141,64 @@ class Lowerer:
         return self.emit({'+': 'add', '-': 'sub', '*': 'mul'}[text[0]], args,
                          type=type_name, overflow='wrap' if text.endswith('%') else 'saturate' if text.endswith('|') else 'trap')
 
+    def merge_names(self, names, mutable, edges):
+        # Only bindings visible before a construct survive its local scopes.
+        for name in names:
+            if name not in mutable or not edges:
+                continue
+            values = [env[name] for _, env in edges]
+            if all(value == values[0] for value in values):
+                names[name] = values[0]
+            else:
+                names[name] = self.emit('phi', values, type=self.types[names[name]],
+                                        incoming_blocks=[block.name for block, _ in edges])
+
+    def while_loop(self, stmt, names, mutable):
+        entry = self.current
+        header, body, exit_block = self.new_block(), self.new_block(), self.new_block()
+        entry.terminator = Terminator('jump', [header.name])
+        self.current = header
+        header_names, phis = names.copy(), {}
+        # Create loop-carried SSA values before lowering the condition/body.
+        # Fill backedges only after all continue and fallthrough paths are known.
+        for name in names:
+            if name in mutable:
+                header_names[name] = self.emit('phi', [names[name]], type=self.types[names[name]],
+                                               incoming_blocks=[entry.name])
+                phis[name] = header.operations[-1]
+        condition = self.expression(stmt.condition, header_names, 'bool')
+        condition_end = self.current
+        always_true = stmt.condition.kind == 'bool' and stmt.condition.token.text == 'true'
+        if always_true:
+            condition_end.terminator = Terminator('jump', [body.name])
+        else:
+            condition_end.terminator = Terminator('branch', [condition, body.name, exit_block.name])
+        context = LoopContext(header, exit_block)
+        self.loops.append(context)
+        self.current = body
+        body_names = header_names.copy()
+        self.statements(stmt.body, body_names, mutable.copy())
+        if self.current is not None:
+            context.backedges.append((self.current, body_names.copy()))
+            self.current.terminator = Terminator('jump', [header.name])
+        self.loops.pop()
+        for name, phi in phis.items():
+            for block, env in context.backedges:
+                phi.args.append(env[name])
+                phi.incoming_blocks.append(block.name)
+        exits = ([] if always_true else [(condition_end, header_names)]) + context.breaks
+        self.current = exit_block
+        if exits:
+            self.merge_names(names, mutable, exits)
+        else:
+            # No CFG edge reaches this reserved break target.
+            exit_block.terminator = Terminator('unreachable', [])
+            self.current = None
+
     def statements(self, statements, names, mutable):
         for stmt in statements:
             if self.current is None:
-                raise CompileError(stmt.token, 'unreachable statement after return')
+                raise CompileError(stmt.token, 'unreachable statement after control transfer')
             if isinstance(stmt, Conditional):
                 condition = self.expression(stmt.condition, names, 'bool')
                 self.expect(condition, 'bool', stmt.condition.token)
@@ -152,17 +216,22 @@ class Lowerer:
                 self.current = self.new_block() if ends else None
                 for block, _ in ends:
                     block.terminator = Terminator('jump', [self.current.name])
-                # Only bindings visible before the branch survive its scopes.
-                # Returned paths contribute no values to the continuation.
-                for name in names:
-                    if name not in mutable or not ends:
-                        continue
-                    values = [env[name] for _, env in ends]
-                    if all(value == values[0] for value in values):
-                        names[name] = values[0]
-                    else:
-                        names[name] = self.emit('phi', values, type=self.types[names[name]],
-                                                incoming_blocks=[block.name for block, _ in ends])
+                # Returned, broken and continued paths do not reach this join.
+                self.merge_names(names, mutable, ends)
+            elif isinstance(stmt, While):
+                self.while_loop(stmt, names, mutable)
+            elif isinstance(stmt, LoopControl):
+                if not self.loops:
+                    raise CompileError(stmt.token, f'{stmt.token.text} outside a loop')
+                context = self.loops[-1]
+                if stmt.token.text == 'break':
+                    context.breaks.append((self.current, names.copy()))
+                    target = context.exit
+                else:
+                    context.backedges.append((self.current, names.copy()))
+                    target = context.header
+                self.current.terminator = Terminator('jump', [target.name])
+                self.current = None
             elif stmt.is_return:
                 value = self.expression(stmt.expr, names, self.fn.result_type)
                 self.expect(value, self.fn.result_type, stmt.expr.token)
@@ -244,4 +313,4 @@ def annotate_traps(module):
 
 
 def dump(module):
-    return json.dumps({'version': 6, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
+    return json.dumps({'version': 7, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
