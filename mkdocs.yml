@@ -1,6 +1,8 @@
 site_name: Liza
 site_description: 'Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций.'
 site_url: https://liza.rulerom.com/
+repo_url: https://github.com/rulerom/liza
+repo_name: rulerom/liza
 strict: true
 # Direct object URLs also work without directory-index rewrites in S3.
 use_directory_urls: false
