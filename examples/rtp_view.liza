@@ -1,0 +1,14 @@
+// Decode the first four supplied octets, not the complete RTP header.
+fn rtp_fields(packet: View<u8>) -> u32 {
+    version = packet[0] >> 6
+    payload_type = packet[1] & 0x7f
+    sequence = (u32(packet[2]) << 8) | u32(packet[3])
+    return (u32(version) << 24) | (u32(payload_type) << 16) | sequence
+}
+
+fn main() -> u32 {
+    packet: [u8; 4] = [128, 96, 18, 52]
+    header = view packet[0..4]
+    if rtp_fields(header) == 0x02601234 { return 0 }
+    return 1
+}

@@ -4,8 +4,9 @@ import json
 from typing import Optional
 from .frontend import CompileError, Token, Conditional, While, LoopControl
 from .typecheck import infer_expression
-from .types import signed, SCALAR_TYPES, value_properties
+from .types import signed, SCALAR_TYPES, value_properties, is_array, is_view, element_type, array_length, validate_type
 from .ownership import check_ownership
+from .borrowing import check_borrows
 
 
 @dataclass
@@ -21,6 +22,8 @@ class Operation:
     division_policy: str = 'none'
     source_type: str = ''
     field_name: str = ''
+    bounds_policy: str = 'none'
+    owner_binding: str = ''
     incoming_blocks: list = field(default_factory=list)
 
 
@@ -81,12 +84,17 @@ def structure_types(program):
             if field.text in seen:
                 raise CompileError(field, 'duplicate field')
             seen.add(field.text)
-            if type_name in SCALAR_TYPES:
-                member = value_properties(type_name)
-            elif type_name in declarations:
-                member = resolve(type_name).properties
+            member_type = type_name
+            while is_array(member_type):
+                member_type = element_type(member_type)
+            if is_view(member_type):
+                raise CompileError(field, 'views cannot be stored in structures')
+            if member_type in SCALAR_TYPES:
+                member = value_properties(member_type)
+            elif member_type in declarations:
+                member = resolve(member_type).properties
             else:
-                raise CompileError(field, f'unknown type {type_name!r}')
+                raise CompileError(field, f'unknown type {member_type!r}')
             fields.append((field.text, type_name))
             for key in properties:
                 properties[key] = properties[key] and member[key]
@@ -117,6 +125,7 @@ class Lowerer:
         self.types = {}
         self.counter = 0
         self.loops = []
+        self.expression_types = {}
 
     def new_block(self):
         block = Block(f'b{len(self.blocks)}')
@@ -132,16 +141,20 @@ class Lowerer:
         name = f'v{self.counter}'
         self.counter += 1
         may_trap = op == 'convert.checked' or any(kwargs.get(policy) == 'trap'
-                       for policy in ('overflow', 'shift_policy', 'division_policy'))
+                       for policy in ('overflow', 'shift_policy', 'division_policy', 'bounds_policy'))
         self.current.operations.append(Operation(
             name, op, args, type, may_trap=may_trap, **kwargs))
         self.types[name] = type
         return name
 
     def expression(self, expr, names, expected=None):
-        if expected and expected not in SCALAR_TYPES and expected not in self.structs:
-            raise CompileError(expr.token, f'unknown type {expected!r}')
+        if expected:
+            try:
+                validate_type(expected, self.structs)
+            except ValueError as error:
+                raise CompileError(expr.token, str(error)) from None
         inferred = infer_expression(expr, names, self.types, self.signatures, expected, self.structs)
+        self.expression_types.update(inferred)
         return self.emit_expression(expr, names, inferred)
 
     def emit_expression(self, expr, names, inferred):
@@ -158,6 +171,15 @@ class Lowerer:
             if text in self.structs:
                 return self.emit('struct.construct', args, type=type_name)
             return self.emit('call', args, type=type_name, callee=text)
+        if expr.kind in ('array', 'index', 'view'):
+            args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
+            if expr.kind == 'array':
+                return self.emit('array.construct', args, type=type_name)
+            source = self.types[args[0]]
+            op = 'view.create' if expr.kind == 'view' else 'view.read' if is_view(source) else 'array.read'
+            return self.emit(op, args, type=type_name, source_type=source,
+                             bounds_policy='trap',
+                             owner_binding=expr.args[0].token.text if expr.kind == 'view' else '')
         if expr.kind == 'field':
             value = self.emit_expression(expr.args[0], names, inferred)
             return self.emit('struct.field', [value], type=type_name,
@@ -327,6 +349,7 @@ class Lowerer:
         self.statements(self.fn.body, names, set())
         if self.current is not None:
             raise CompileError(self.fn.name, f'function must return a {self.fn.result_type} value on every path')
+        check_borrows(self.fn, self.expression_types)
         return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type)
 
 
@@ -337,8 +360,10 @@ def lower(functions):
         if fn.name.text in structs:
             raise CompileError(fn.name, 'function and structure names must be distinct')
         for token, type_name in fn.params + [(fn.name, fn.result_type)]:
-            if type_name not in SCALAR_TYPES and type_name not in structs:
-                raise CompileError(token, f'unknown type {type_name!r}')
+            try:
+                validate_type(type_name, structs, token is not fn.name)
+            except ValueError as error:
+                raise CompileError(token, str(error)) from None
         if fn.name.text in signatures:
             raise CompileError(fn.name, 'duplicate function')
         signatures[fn.name.text] = fn
@@ -367,7 +392,7 @@ def annotate_traps(module):
                   for fn in module}
     for fn in module:
         for op in operations[fn.name]:
-            op.may_trap = (op.op == 'convert.checked' and op.source_type != 'integer') or op.overflow == 'trap' or op.shift_policy == 'trap' or op.division_policy == 'trap'
+            op.may_trap = (op.op == 'convert.checked' and op.source_type != 'integer') or op.overflow == 'trap' or op.shift_policy == 'trap' or op.division_policy == 'trap' or op.bounds_policy == 'trap'
         fn.may_trap = any(op.may_trap for op in operations[fn.name])
     changed = True
     while changed:
@@ -386,6 +411,22 @@ def dump(module):
     structs = getattr(module, 'structs', {})
     properties = {t: value_properties(t) for t in SCALAR_TYPES}
     properties.update({name: struct.properties for name, struct in structs.items()})
-    return json.dumps({'version': 9, 'type_properties': properties,
+    def describe(t):
+        if t in properties or t == 'integer':
+            return
+        if is_array(t) or is_view(t):
+            describe(element_type(t))
+            properties[t] = dict(properties[element_type(t)]) if is_array(t) else {'copyable': True, 'implicit_copy': True}
+    for struct in structs.values():
+        for _, t in struct.fields:
+            describe(t)
+    for fn in module:
+        describe(fn.result_type)
+        for param in fn.params:
+            describe(param['type'])
+        for block in fn.blocks:
+            for op in block.operations:
+                describe(op.type)
+    return json.dumps({'version': 10, 'type_properties': properties,
                        'structures': [asdict(s) for s in structs.values()],
                        'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'

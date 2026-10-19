@@ -1,6 +1,6 @@
 """Infer literal contexts without emitting or reordering executable operations."""
 from .frontend import CompileError
-from .types import INTEGER_TYPES, SCALAR_TYPES, bounds, signed, convert_integer
+from .types import INTEGER_TYPES, SCALAR_TYPES, bounds, signed, convert_integer, is_array, is_view, element_type, array_type, array_length
 
 
 class TypeVariable:
@@ -17,7 +17,7 @@ class TypeVariable:
 def infer_expression(expr, names, value_types, signatures, expected=None, structs=None):
     structs = structs or {}
     variables, integers, signed_operands, literals = {}, [], [], []
-    scalars = []
+    scalars, arrays, projections, derived, empty_elements = [], [], [], [], []
 
     def bind(var, type_name, token):
         root = var.root()
@@ -63,14 +63,20 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
             if token.text not in names:
                 raise CompileError(token, f'unknown value {token.text!r}')
             bind(var, value_types[names[token.text]], token)
-        elif node.kind == 'field':
-            receiver = visit(node.args[0]).root().type
-            if receiver not in structs:
-                raise CompileError(token, 'field access requires a structure value')
-            fields = dict(structs[receiver].fields)
-            if token.text not in fields:
-                raise CompileError(token, f'unknown field {token.text!r} in {receiver}')
-            bind(var, fields[token.text], token)
+        elif node.kind == 'array':
+            element = TypeVariable()
+            for arg in node.args:
+                unify(element, visit(arg), arg.token)
+            arrays.append((var, element, len(node.args), token))
+            derived.append(var)
+            if not node.args:
+                empty_elements.append(element)
+        elif node.kind in ('index', 'view', 'field'):
+            source = visit(node.args[0])
+            for arg in node.args[1:]:
+                bind(visit(arg), 'u32', arg.token)
+            projections.append((node.kind, var, source, token))
+            derived.append(var)
         elif node.kind == 'call' and token.text in structs:
             structure = structs[token.text]
             if len(node.args) != len(structure.fields):
@@ -115,9 +121,52 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
     root = visit(expr)
     if expected:
         bind(root, expected, expr.token)
+    # Composite constraints propagate context both into literals and out of
+    # typed elements. Do not default a composite or an empty element to u32.
+    def solve():
+        changed = True
+        while changed:
+            before = tuple(v.root().type for v in list(variables.values()) + [e for _, e, _, _ in arrays])
+            for aggregate, element, count, token in arrays:
+                t = aggregate.root().type
+                if t:
+                    if not is_array(t) or array_length(t) != count:
+                        raise CompileError(token, 'array literal length/type mismatch')
+                    bind(element, element_type(t), token)
+                if element.root().type:
+                    if is_view(element.root().type):
+                        raise CompileError(token, 'views cannot be stored in arrays')
+                    bind(aggregate, array_type(element.root().type, count), token)
+            for kind, result, source, token in projections:
+                t = source.root().type
+                if not t:
+                    if kind == 'index' and result.root().type:
+                        for aggregate, element, _, _ in arrays:
+                            if aggregate.root() is source.root():
+                                bind(element, result.root().type, token)
+                    continue
+                if kind == 'field':
+                    if t not in structs:
+                        raise CompileError(token, 'field access requires a structure value')
+                    fields = dict(structs[t].fields)
+                    if token.text not in fields:
+                        raise CompileError(token, f'unknown field {token.text!r} in {t}')
+                    bind(result, fields[token.text], token)
+                else:
+                    if not is_array(t) and not (kind == 'index' and is_view(t)):
+                        raise CompileError(token, 'view requires an array binding' if kind == 'view' else 'index requires array or view')
+                    target = element_type(t)
+                    bind(result, f'View<{target}>' if kind == 'view' else target, token)
+            after = tuple(v.root().type for v in list(variables.values()) + [e for _, e, _, _ in arrays])
+            changed = before != after
+    solve()
+    excluded = {v.root() for v in derived + empty_elements}
     for var in variables.values():
-        if var.root().type is None:
+        if var.root().type is None and var.root() not in excluded:
             var.root().type = 'u32'
+    solve()
+    if any(v.root().type is None for v in variables.values()):
+        raise CompileError(expr.token, 'cannot infer array element type; provide a type annotation')
     for var, token in integers:
         if var.root().type not in INTEGER_TYPES:
             raise CompileError(token, f'expected integer, got {var.root().type}')

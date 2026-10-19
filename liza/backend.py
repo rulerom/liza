@@ -1,9 +1,19 @@
 """Liza IR -> textual LLVM IR. The host toolchain supplies ABI and linking."""
-from .types import INTEGER_TYPES, width, signed, bounds, convert_integer
+from .types import INTEGER_TYPES, width, signed, bounds, convert_integer, is_array, is_view, element_type, array_length
 
 
 def llvm(module):
-    types = {name: f'i{width(name)}' for name in INTEGER_TYPES}
+    class LLVMTypes(dict):
+        def __missing__(self, t):
+            if is_array(t):
+                result = f'[{array_length(t)} x {self[element_type(t)]}]'
+            elif is_view(t):
+                result = '{ ptr, i32 }'
+            else:
+                raise KeyError(t)
+            self[t] = result
+            return result
+    types = LLVMTypes({name: f'i{width(name)}' for name in INTEGER_TYPES})
     types['bool'] = 'i1'
     types['integer'] = None  # Only a compile-time conversion literal, never a runtime type.
     structs = getattr(module, 'structs', {})
@@ -59,11 +69,11 @@ def llvm(module):
                 value_types[op.result] = types[op.type]
                 if op.op in ('copy', 'move'):
                     aliases[op.result] = op.args[0]
-                if op.op == 'struct.construct' and not op.args:
+                if op.op in ('struct.construct', 'array.construct') and not op.args:
                     refs[op.result] = 'zeroinitializer'
                 if op.op.startswith('convert.') and op.source_type == 'integer':
                     refs[op.result] = str(convert_integer(int(refs[op.args[0]]), op.type, op.op.split('.')[1]))
-                if (op.op == 'convert.checked' and op.source_type != 'integer') or op.overflow == 'trap' or op.shift_policy == 'trap' or op.division_policy == 'trap':
+                if (op.op == 'convert.checked' and op.source_type != 'integer') or op.overflow == 'trap' or op.shift_policy == 'trap' or op.division_policy == 'trap' or op.bounds_policy == 'trap':
                     exits[block.name] = f'{op.result}_ok'
         # Resolve identities after every SSA reference is known, including
         # forward references across loop backedges and block ordering.
@@ -72,14 +82,71 @@ def llvm(module):
             while value in aliases:
                 value = aliases[value]
             refs[name] = refs[value]
+        def canonical(value):
+            while value in aliases:
+                value = aliases[value]
+            return value
+        slots = {canonical(op.args[0]) for b in fn.blocks for op in b.operations
+                 if op.op in ('array.read', 'view.create')}
+        pending = []
+
+        def flush():
+            for value in pending:
+                lines.append(f'  store {value_types[value]} {refs[value]}, ptr %{value}_storage')
+            pending.clear()
+
         for block in fn.blocks:
             lines.append(f'{block.name}:')
+            if block is fn.blocks[0]:
+                for value in sorted(slots):
+                    lines.append(f'  %{value}_storage = alloca {value_types[value]}')
+                pending.extend(p['name'] for p in fn.params if p['name'] in slots)
+
             for op in block.operations:
+                if op.op != 'phi':
+                    flush()
                 name, ty = op.result, types[op.type]
                 if op.op in ('constant', 'copy', 'move') or (op.op.startswith('convert.') and op.source_type == 'integer'):
                     continue
                 args = [refs[a] for a in op.args]
-                if op.op == 'struct.construct':
+                if op.op in ('array.read', 'view.create', 'view.read'):
+                    if op.op == 'view.create':
+                        length = array_length(op.source_type)
+                        lines.extend([
+                            f'  %{name}_order = icmp ugt i32 {args[1]}, {args[2]}',
+                            f'  %{name}_end = icmp ugt i32 {args[2]}, {length}',
+                            f'  %{name}_invalid = or i1 %{name}_order, %{name}_end',
+                        ])
+                        guard(name, f'%{name}_invalid')
+                        lines.append(f'  %{name}_length = sub i32 {args[2]}, {args[1]}')
+                        lines.append(f'  %{name}_offset = zext i32 {args[1]} to i64')
+                        storage = canonical(op.args[0])
+                        lines.append(f'  %{name}_ptr = getelementptr {types[op.source_type]}, ptr %{storage}_storage, i64 0, i64 %{name}_offset')
+                        lines.append(f'  %{name}_base = insertvalue {ty} zeroinitializer, ptr %{name}_ptr, 0')
+                        lines.append(f'  %{name} = insertvalue {ty} %{name}_base, i32 %{name}_length, 1')
+                    else:
+                        if op.op == 'array.read':
+                            length = str(array_length(op.source_type))
+                        else:
+                            lines.append(f'  %{name}_base = extractvalue {types[op.source_type]} {args[0]}, 0')
+                            lines.append(f'  %{name}_length = extractvalue {types[op.source_type]} {args[0]}, 1')
+                            length = f'%{name}_length'
+                        lines.append(f'  %{name}_invalid = icmp uge i32 {args[1]}, {length}')
+                        guard(name, f'%{name}_invalid')
+                        lines.append(f'  %{name}_offset = zext i32 {args[1]} to i64')
+                        if op.op == 'array.read':
+                            storage = canonical(op.args[0])
+                            lines.append(f'  %{name}_ptr = getelementptr {types[op.source_type]}, ptr %{storage}_storage, i64 0, i64 %{name}_offset')
+                        else:
+                            lines.append(f'  %{name}_ptr = getelementptr {ty}, ptr %{name}_base, i64 %{name}_offset')
+                        lines.append(f'  %{name} = load {ty}, ptr %{name}_ptr')
+                elif op.op == 'array.construct':
+                    aggregate = 'zeroinitializer'
+                    for index, value in enumerate(args):
+                        result = name if index == len(args)-1 else f'{name}_element{index}'
+                        lines.append(f'  %{result} = insertvalue {ty} {aggregate}, {types[element_type(op.type)]} {value}, {index}')
+                        aggregate = f'%{result}'
+                elif op.op == 'struct.construct':
                     aggregate = 'zeroinitializer'
                     for index, (value, (_, field_type)) in enumerate(zip(args, structs[op.type].fields)):
                         result = name if index == len(args) - 1 else f'{name}_field{index}'
@@ -166,6 +233,9 @@ def llvm(module):
                     guard(name, f'%{name}_overflow')
                 else:
                     raise ValueError(f'unsupported IR operation: {op.op}')
+                if name in slots:
+                    pending.append(name)
+            flush()
             term = block.terminator
             if term.op == 'return':
                 lines.append(f'  ret {types[fn.result_type]} {refs[term.args[0]]}')

@@ -37,3 +37,34 @@ def value_properties(type_name):
     if type_name not in SCALAR_TYPES:
         raise ValueError(f'unknown value type: {type_name}')
     return {'copyable': True, 'implicit_copy': True}
+
+
+def is_array(t):
+    return t.startswith('[')
+
+
+def is_view(t):
+    return t.startswith('View<')
+
+
+def element_type(t):
+    return t[1:-1].rsplit(';', 1)[0] if is_array(t) else t[5:-1]
+
+
+def array_length(t):
+    return int(t[1:-1].rsplit(';', 1)[1])
+
+
+def array_type(element, length):
+    return f'[{element};{length}]'
+
+
+def validate_type(t, structs, allow_view=True):
+    if is_array(t):
+        validate_type(element_type(t), structs, False)
+    elif is_view(t):
+        if not allow_view:
+            raise ValueError('views cannot be stored in aggregates or returned')
+        validate_type(element_type(t), structs, False)
+    elif t not in SCALAR_TYPES and t not in structs:
+        raise ValueError(f'unknown type {t!r}')

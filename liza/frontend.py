@@ -18,7 +18,7 @@ class CompileError(Exception):
 
 def lex(source):
     tokens = []
-    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[{}(),:=;+*\-!<>~&|^/%.]")
+    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|\.\.|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[\[\]{}(),:=;+*\-!<>~&|^/%.]")
     pos, line, column = 0, 1, 1
     while pos < len(source):
         match = pattern.match(source, pos)
@@ -112,7 +112,7 @@ class Parser:
 
     def identifier(self):
         token = self.current
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -121,6 +121,24 @@ class Parser:
             self.take()
 
     def type_name(self):
+        if self.current.text == '[':
+            self.take('[')
+            element = self.type_name()
+            self.take(';')
+            length = self.take()
+            if not re.fullmatch(r'0x[0-9a-fA-F]+|[0-9]+', length.text):
+                raise CompileError(length, 'array length must be a u32 integer literal')
+            size = int(length.text, 16 if length.text.startswith('0x') else 10)
+            if size > 4294967295:
+                raise CompileError(length, 'array length exceeds u32')
+            self.take(']')
+            return f'[{element};{size}]'
+        if self.current.text == 'View':
+            self.take('View')
+            self.take('<')
+            element = self.type_name()
+            self.take('>')
+            return f'View<{element}>'
         if self.current.text in SCALAR_TYPES:
             return self.take().text
         return self.identifier().text
@@ -230,6 +248,25 @@ class Parser:
             self.take()
             number = self.take()
             left = Expr(Token('-' + number.text, token.line, token.column), 'literal', [])
+        elif token.text == '[':
+            self.take('[')
+            elements = []
+            while self.current.text != ']':
+                elements.append(self.expression())
+                if self.current.text != ',':
+                    break
+                self.take(',')
+            self.take(']')
+            left = Expr(token, 'array', elements)
+        elif token.text == 'view':
+            self.take('view')
+            owner = Expr(self.identifier(), 'name', [])
+            self.take('[')
+            start = self.expression()
+            self.take('..')
+            end = self.expression()
+            self.take(']')
+            left = Expr(token, 'view', [owner, start, end])
         elif token.text in ('copy', 'move'):
             left = Expr(self.take(), token.text, [self.expression(11)])
             if token.text == 'move' and left.args[0].kind != 'name':
@@ -271,10 +308,16 @@ class Parser:
                 left = Expr(name, 'call', args)
             else:
                 left = Expr(name, 'name', [])
-        while self.current.text == '.':
-            self.take('.')
-            field = self.identifier()
-            left = Expr(field, 'field', [left])
+        while self.current.text in ('.', '['):
+            if self.current.text == '.':
+                self.take('.')
+                field = self.identifier()
+                left = Expr(field, 'field', [left])
+            else:
+                token = self.take('[')
+                index = self.expression()
+                self.take(']')
+                left = Expr(token, 'index', [left, index])
         precedence = {'||': 1, '&&': 2, '|': 3, '^': 4, '&': 5,
                       '==': 6, '!=': 6, '<': 7, '<=': 7, '>': 7, '>=': 7,
                       '<<': 8, '>>': 8, '+': 9, '-': 9, '+%': 9, '-%': 9, '+|': 9, '-|': 9,
