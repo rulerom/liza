@@ -41,3 +41,23 @@ jobs:
         with:
           name: console-cost-${{ matrix.os }}
           path: build/console-cost/
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Windows compiler and console acceptance
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do call "%%i\VC\Auxiliary\Build\vcvars64.bat"
+          clang --version
+          python -m unittest discover -s tests -p test_windows.py -v
+          if errorlevel 1 exit /b 1
+          python tools/check_console_cost.py --output build/console-cost
+          if errorlevel 1 exit /b 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: console-cost-windows
+          path: build/console-cost/

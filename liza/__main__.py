@@ -41,6 +41,10 @@ def main():
             output = (args.output or Path('build') / args.source.stem).resolve() if args.command == 'build' else Path(temporary) / 'program'
             if output == args.source.resolve():
                 raise ValueError('output must not overwrite source')
+            if sys.platform == 'win32' and output.suffix.lower() != '.exe':
+                output = Path(str(output)+'.exe')
+            if output == args.source.resolve():
+                raise ValueError('output must not overwrite source')
             output.parent.mkdir(parents=True, exist_ok=True)
             compiled = subprocess.run([args.clang, '-Wno-override-module', f'-O{args.O}', str(ir_file), *link_flags(module), '-o', str(output)])
             if compiled.returncode:
@@ -49,6 +53,10 @@ def main():
                 print(output)
                 return 0
             code = subprocess.run([str(output)]).returncode
+            if sys.platform == 'win32':
+                # Python's sys.exit uses a signed C long on Windows. Preserve
+                # all 32 bits, including exception statuses and u32 main results.
+                return code if code < 0x80000000 else code-(1 << 32)
             if code < 0:
                 print(f'liza: program terminated by signal {-code}', file=sys.stderr)
                 return 128 - code

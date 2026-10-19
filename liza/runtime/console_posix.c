@@ -70,3 +70,7 @@ uint64_t liza_rt_print_i64(int64_t value) {
     /* Unsigned negation includes INT64_MIN without signed overflow. */
     return number(value<0 ? UINT64_C(0)-(uint64_t)value : (uint64_t)value,value<0);
 }
+
+uint64_t liza_rt_write_text(const uint8_t *data, uint32_t length) {
+    return liza_rt_write(data, length);
+}

@@ -15,7 +15,7 @@ def inspect(output,clang='clang'):
     repo=Path(__file__).resolve().parents[1]
     module=llvm(lower(Parser((repo/'examples/hello.liza').read_text()).parse()))
     ir=root/'hello.ll';ir.write_text(module)
-    runtime=repo/'liza/runtime/console_posix.c'
+    runtime=repo/('liza/runtime/console_windows.c' if sys.platform == 'win32' else 'liza/runtime/console_posix.c')
     for name,source in [('hello',ir),('runtime',runtime)]:
         for flags,suffix in [(['-S','-emit-llvm'],'ll'),(['-S'],'s')]:
             dest=root/(name+'.O2.'+suffix)
@@ -25,7 +25,7 @@ def inspect(output,clang='clang'):
                 raise AssertionError('unexpected heap/stdio/formatting dependency')
     if '@liza_rt_write' not in (root/'hello.O2.ll').read_text():
         raise AssertionError('console effect disappeared')
-    report='Target: '+subprocess.run([clang,'-dumpmachine'],capture_output=True,text=True,check=True).stdout.strip()+'\nConsole implementation: no heap calls or stdio formatting; static text and bounded 21-byte number buffer. OS/libc internals are outside this check.\n'
+    report='Target: '+subprocess.run([clang,'-dumpmachine'],capture_output=True,text=True,check=True).stdout.strip()+'\nConsole implementation: no heap calls or stdio formatting; static text and bounded number/conversion buffers. OS/libc internals are outside this check.\n'
     (root/'report.txt').write_text(report)
     return report
 

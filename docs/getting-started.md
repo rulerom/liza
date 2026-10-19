@@ -201,7 +201,7 @@ python3 -m unittest discover -s tests -v
 
 ## Hello World
 
-На Linux/macOS консоль доступна через библиотечные функции с эффектом `io`:
+На Linux/macOS/Windows консоль доступна через библиотечные функции с эффектом `io`:
 
 ```liza
 fn main()->u32:io {
@@ -215,3 +215,10 @@ fn main()->u32:io {
 Запуск: `python3 -m liza run examples/hello.liza`.
 Runtime подключается автоматически. [Консоль и обработка ошибок](io-model.md)
 определяют поведение при частичном выводе и отказе окружения.
+
+### Windows
+
+Нужны Python, Clang и MSVC Build Tools с Windows SDK. В **x64 Native Tools
+Command Prompt** выполните `python -m liza run examples/hello.liza`.
+Для сборки: `python -m liza build examples/hello.liza`; результат —
+`build\hello.exe`. [Особенности вывода и кодов завершения](io-model.md#windows).

@@ -94,3 +94,10 @@ heap/bulk-copy не означает отсутствие ABI расходов �
 Runtime использует POSIX write и временную маску SIGPIPE вызывающего потока.
 Для ручной линковки консольного emit-llvm добавьте
 `liza/runtime/console_posix.c -pthread`. Пользовательский FFI не предоставляется.
+
+Windows acceptance: в x64 Native Tools Command Prompt выполните
+`python -m unittest discover -s tests -p test_windows.py -v`.
+Это frontend-проверки и отдельный нативный набор: все примеры при O0/O2,
+CLI/.exe, коды возврата, traps, точные байты, Unicode-консоль и ошибки handles.
+POSIX signal-тесты не подменяются Windows-проверками; их CI остаётся отдельно.
+Стоимость runtime проверяет `python tools/check_console_cost.py` на каждой ОС.

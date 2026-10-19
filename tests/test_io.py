@@ -63,7 +63,7 @@ class Effects(unittest.TestCase):
 @unittest.skipUnless(shutil.which('clang') and sys.platform in ('darwin','linux'),'POSIX native tests')
 class ConsoleNative(unittest.TestCase):
     def build(self,root,source,opt,shim=None):
-        root=Path(root); m=compile_source(source); ir=root/'module.ll'; exe=root/'program'
+        root=Path(root); m=compile_source(source); ir=root/'module.ll'; exe=root/('program.exe' if sys.platform == 'win32' else 'program')
         ir.write_text(llvm(m))
         files=[str(ir),*link_flags(m)]
         if shim:
@@ -183,7 +183,7 @@ class ConsoleNative(unittest.TestCase):
         """
         for opt in ('-O0','-O2'):
             with tempfile.TemporaryDirectory() as d:
-                root=Path(d);c=root/'test.c';exe=root/'program';c.write_text(harness)
+                root=Path(d);c=root/'test.c';exe=root/('program.exe' if sys.platform == 'win32' else 'program');c.write_text(harness)
                 subprocess.run(['clang',opt,str(c),'liza/runtime/console_posix.c','-pthread','-o',str(exe)],check=True,capture_output=True)
                 self.assertEqual(subprocess.run([str(exe)],capture_output=True,timeout=5).returncode,0)
 

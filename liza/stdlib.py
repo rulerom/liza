@@ -42,6 +42,8 @@ def link_flags(module):
     if not getattr(module,'externals',[]):
         return []
     import sys
+    if sys.platform == 'win32':
+        return [str(Path(__file__).parent/'runtime/console_windows.c')]
     if sys.platform not in ('darwin','linux'):
-        raise ValueError('console runtime currently supports Linux and macOS only')
+        raise ValueError('console runtime currently supports Linux, macOS and Windows only')
     return [str(Path(__file__).parent/'runtime/console_posix.c'), '-pthread']

@@ -115,7 +115,7 @@ Runtime-проверка при O0/O2 и анализ O2 IR/машинного �
 | **0.0.14** | Открытие/закрытие и move-only файловые ресурсы | Проверки use-after-close/move, двойного закрытия и освобождения на всех путях |
 
 **0.0.12:** `examples/hello.liza`, `Text`, ошибки и частичный вывод через
-`Result`; runtime для Linux/macOS.
+`Result`; runtime для Linux/macOS/Windows.
 
 **Контракт и границы этапа:** [минимальный I/O](io-model.md).
 

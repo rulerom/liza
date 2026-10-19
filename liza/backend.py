@@ -37,6 +37,7 @@ def llvm(module):
                     lines.append(f'@text.{fn.name}.{op.result} = private constant [{len(data)} x i8] c"{escaped}"')
     if getattr(module, 'externals', []):
         lines.extend(['declare i64 @liza_rt_write(ptr, i32)',
+                      'declare i64 @liza_rt_write_text(ptr, i32)',
                       'declare i64 @liza_rt_print_u64(i64)',
                       'declare i64 @liza_rt_print_i64(i64)'])
         for fn in module.externals:
@@ -46,7 +47,7 @@ def llvm(module):
             if t in ('Text','View<u8>'):
                 lines.extend(['  %data = extractvalue { ptr, i32 } %value, 0',
                               '  %length = extractvalue { ptr, i32 } %value, 1',
-                              '  %result = call i64 @liza_rt_write(ptr %data, i32 %length)'])
+                              f'  %result = call i64 @liza_rt_write{"_text" if t == "Text" else ""}(ptr %data, i32 %length)'])
             else:
                 symbol = 'liza_rt_print_'+t
                 lines.append(f'  %result = call i64 @{symbol}(i64 %value)')
