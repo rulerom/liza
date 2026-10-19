@@ -1,0 +1,30 @@
+// Work with supplied octets; reading a packet buffer comes with arrays/views.
+struct RtpFields {
+    version: u8
+    marker: bool
+    payload_type: u8
+}
+
+struct PacketInfo {
+    fields: RtpFields
+    sequence: u16
+}
+
+fn decode(first: u8, second: u8, high: u8, low: u8) -> PacketInfo {
+    fields = RtpFields(first >> 6, (second & 0x80) != 0, second & 0x7f)
+    return PacketInfo(move fields, (u16(high) << 8) | u16(low))
+}
+
+fn next(packet: PacketInfo) -> PacketInfo {
+    return PacketInfo(packet.fields, packet.sequence +% 1)
+}
+
+fn main() -> u32 {
+    var packet = decode(0x80, 0xe0, 0x12, 0x34)
+    snapshot = copy packet
+    packet = next(move packet)
+    if snapshot.fields.version != 2 || !snapshot.fields.marker { return 1 }
+    if snapshot.fields.payload_type != 96 { return 2 }
+    if snapshot.sequence != 0x1234 || packet.sequence != 0x1235 { return 3 }
+    return 0
+}

@@ -73,6 +73,18 @@ class LoopControl:
 
 
 @dataclass
+class Struct:
+    name: Token
+    fields: list
+
+
+class Program(list):
+    def __init__(self):
+        super().__init__()
+        self.structs = []
+
+
+@dataclass
 class Function:
     name: Token
     params: list
@@ -100,7 +112,7 @@ class Parser:
 
     def identifier(self):
         token = self.current
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -109,9 +121,9 @@ class Parser:
             self.take()
 
     def type_name(self):
-        if self.current.text not in SCALAR_TYPES:
-            raise CompileError(self.current, 'expected a fixed-width integer type or bool')
-        return self.take().text
+        if self.current.text in SCALAR_TYPES:
+            return self.take().text
+        return self.identifier().text
 
     def block(self):
         self.take('{')
@@ -163,10 +175,32 @@ class Parser:
             self.index = saved
         return Conditional(token, condition, then_body, else_body)
 
+    def structure(self):
+        self.take('struct')
+        name = self.identifier()
+        self.take('{')
+        fields = []
+        self.separators()
+        while self.current.text != '}':
+            field = self.identifier()
+            self.take(':')
+            fields.append((field, self.type_name()))
+            if self.current.text == ',':
+                self.take(',')
+            elif self.current.text not in ('\n', ';', '}'):
+                raise CompileError(self.current, 'expected field separator or closing brace')
+            self.separators()
+        self.take('}')
+        return Struct(name, fields)
+
     def parse(self):
-        functions = []
+        functions = Program()
         self.separators()
         while self.current.text != '<eof>':
+            if self.current.text == 'struct':
+                functions.structs.append(self.structure())
+                self.separators()
+                continue
             self.take('fn')
             name = self.identifier()
             self.take('(')
@@ -237,6 +271,10 @@ class Parser:
                 left = Expr(name, 'call', args)
             else:
                 left = Expr(name, 'name', [])
+        while self.current.text == '.':
+            self.take('.')
+            field = self.identifier()
+            left = Expr(field, 'field', [left])
         precedence = {'||': 1, '&&': 2, '|': 3, '^': 4, '&': 5,
                       '==': 6, '!=': 6, '<': 7, '<=': 7, '>': 7, '>=': 7,
                       '<<': 8, '>>': 8, '+': 9, '-': 9, '+%': 9, '-%': 9, '+|': 9, '-|': 9,

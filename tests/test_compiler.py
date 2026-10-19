@@ -41,7 +41,7 @@ class FrontendTests(unittest.TestCase):
             ('fn main()->u32{return 1', 'expected newline'),
             ('fn main()->u32{return 1 2}', 'expected newline'),
             ('fn main()->u32:realtime{return 0}', "expected 'pure'"),
-            ('fn main()->i128{return 0}', 'expected a fixed-width integer type or bool'),
+            ('fn main()->i128{return 0}', "unknown type"),
         ]
         for source, message in cases:
             with self.subTest(source=source), self.assertRaisesRegex(CompileError, message):
@@ -108,7 +108,7 @@ class FrontendTests(unittest.TestCase):
                     else:
                         self.assertEqual(op.may_trap, op.overflow == 'trap')
         serialized = json.loads(dump(list(module.values())))
-        self.assertEqual(serialized['version'], 8)
+        self.assertEqual(serialized['version'], 9)
         self.assertTrue(serialized['functions'][0]['may_trap'])
 
     def test_arithmetic_lowering_has_no_unproven_flags(self):

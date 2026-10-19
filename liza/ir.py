@@ -20,6 +20,7 @@ class Operation:
     shift_policy: str = 'none'
     division_policy: str = 'none'
     source_type: str = ''
+    field_name: str = ''
     incoming_blocks: list = field(default_factory=list)
 
 
@@ -48,6 +49,57 @@ class FunctionIR:
 
 
 @dataclass
+class StructIR:
+    name: str
+    fields: list
+    properties: dict
+
+
+class ModuleIR(list):
+    def __init__(self, functions, structs):
+        super().__init__(functions)
+        self.structs = structs
+
+
+def structure_types(program):
+    declarations, result, visiting = {}, {}, set()
+    for decl in getattr(program, 'structs', []):
+        if decl.name.text in declarations:
+            raise CompileError(decl.name, 'duplicate structure')
+        declarations[decl.name.text] = decl
+
+    def resolve(name):
+        if name in result:
+            return result[name]
+        decl = declarations[name]
+        if name in visiting:
+            raise CompileError(decl.name, 'recursive by-value structure is not allowed')
+        visiting.add(name)
+        fields, properties = [], {'copyable': True, 'implicit_copy': True}
+        seen = set()
+        for field, type_name in decl.fields:
+            if field.text in seen:
+                raise CompileError(field, 'duplicate field')
+            seen.add(field.text)
+            if type_name in SCALAR_TYPES:
+                member = value_properties(type_name)
+            elif type_name in declarations:
+                member = resolve(type_name).properties
+            else:
+                raise CompileError(field, f'unknown type {type_name!r}')
+            fields.append((field.text, type_name))
+            for key in properties:
+                properties[key] = properties[key] and member[key]
+        visiting.remove(name)
+        result[name] = StructIR(name, fields, properties)
+        return result[name]
+
+    for name in declarations:
+        resolve(name)
+    return result
+
+
+@dataclass
 class LoopContext:
     header: Block
     exit: Block
@@ -56,9 +108,10 @@ class LoopContext:
 
 
 class Lowerer:
-    def __init__(self, fn, signatures):
+    def __init__(self, fn, signatures, structs):
         self.fn = fn
         self.signatures = signatures
+        self.structs = structs
         self.blocks = []
         self.current = self.new_block()
         self.types = {}
@@ -86,7 +139,9 @@ class Lowerer:
         return name
 
     def expression(self, expr, names, expected=None):
-        inferred = infer_expression(expr, names, self.types, self.signatures, expected)
+        if expected and expected not in SCALAR_TYPES and expected not in self.structs:
+            raise CompileError(expr.token, f'unknown type {expected!r}')
+        inferred = infer_expression(expr, names, self.types, self.signatures, expected, self.structs)
         return self.emit_expression(expr, names, inferred)
 
     def emit_expression(self, expr, names, inferred):
@@ -100,7 +155,13 @@ class Lowerer:
             return names[text]
         if expr.kind == 'call':
             args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
+            if text in self.structs:
+                return self.emit('struct.construct', args, type=type_name)
             return self.emit('call', args, type=type_name, callee=text)
+        if expr.kind == 'field':
+            value = self.emit_expression(expr.args[0], names, inferred)
+            return self.emit('struct.field', [value], type=type_name,
+                             source_type=self.types[value], field_name=text)
         if text in ('&&', '||'):
             left = self.emit_expression(expr.args[0], names, inferred)
             rhs, short = self.new_block(), self.new_block()
@@ -270,8 +331,14 @@ class Lowerer:
 
 
 def lower(functions):
+    structs = structure_types(functions)
     signatures = {}
     for fn in functions:
+        if fn.name.text in structs:
+            raise CompileError(fn.name, 'function and structure names must be distinct')
+        for token, type_name in fn.params + [(fn.name, fn.result_type)]:
+            if type_name not in SCALAR_TYPES and type_name not in structs:
+                raise CompileError(token, f'unknown type {type_name!r}')
         if fn.name.text in signatures:
             raise CompileError(fn.name, 'duplicate function')
         signatures[fn.name.text] = fn
@@ -281,7 +348,7 @@ def lower(functions):
         raise CompileError(signatures['main'].name, 'main must have no parameters')
     if signatures['main'].result_type != 'u32':
         raise CompileError(signatures['main'].name, 'main must return u32')
-    module = [Lowerer(fn, signatures).lower() for fn in functions]
+    module = ModuleIR([Lowerer(fn, signatures, structs).lower() for fn in functions], structs)
     for fn in functions:
         check_ownership(fn)
     annotate_traps(module)
@@ -316,4 +383,9 @@ def annotate_traps(module):
 
 
 def dump(module):
-    return json.dumps({'version': 8, 'type_properties': {t: value_properties(t) for t in SCALAR_TYPES}, 'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'
+    structs = getattr(module, 'structs', {})
+    properties = {t: value_properties(t) for t in SCALAR_TYPES}
+    properties.update({name: struct.properties for name, struct in structs.items()})
+    return json.dumps({'version': 9, 'type_properties': properties,
+                       'structures': [asdict(s) for s in structs.values()],
+                       'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'

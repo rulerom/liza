@@ -1,6 +1,6 @@
 """Infer literal contexts without emitting or reordering executable operations."""
 from .frontend import CompileError
-from .types import INTEGER_TYPES, bounds, signed, convert_integer
+from .types import INTEGER_TYPES, SCALAR_TYPES, bounds, signed, convert_integer
 
 
 class TypeVariable:
@@ -14,8 +14,10 @@ class TypeVariable:
         return self.parent
 
 
-def infer_expression(expr, names, value_types, signatures, expected=None):
+def infer_expression(expr, names, value_types, signatures, expected=None, structs=None):
+    structs = structs or {}
     variables, integers, signed_operands, literals = {}, [], [], []
+    scalars = []
 
     def bind(var, type_name, token):
         root = var.root()
@@ -61,6 +63,21 @@ def infer_expression(expr, names, value_types, signatures, expected=None):
             if token.text not in names:
                 raise CompileError(token, f'unknown value {token.text!r}')
             bind(var, value_types[names[token.text]], token)
+        elif node.kind == 'field':
+            receiver = visit(node.args[0]).root().type
+            if receiver not in structs:
+                raise CompileError(token, 'field access requires a structure value')
+            fields = dict(structs[receiver].fields)
+            if token.text not in fields:
+                raise CompileError(token, f'unknown field {token.text!r} in {receiver}')
+            bind(var, fields[token.text], token)
+        elif node.kind == 'call' and token.text in structs:
+            structure = structs[token.text]
+            if len(node.args) != len(structure.fields):
+                raise CompileError(token, f'wrong number of constructor arguments for {token.text!r}')
+            for arg, (_, type_name) in zip(node.args, structure.fields):
+                bind(visit(arg), type_name, arg.token)
+            bind(var, token.text, token)
         elif node.kind == 'call':
             if token.text not in signatures:
                 raise CompileError(token, f'unknown function {token.text!r}')
@@ -81,6 +98,8 @@ def infer_expression(expr, names, value_types, signatures, expected=None):
                 unify(args[0], args[1], token)
                 if token.text not in ('==', '!='):
                     integers.append((args[0], token))
+                else:
+                    scalars.append((args[0], token))
             elif token.text in ('<<', '>>'):
                 unify(var, args[0], token)
                 integers.append((var, token))
@@ -102,6 +121,9 @@ def infer_expression(expr, names, value_types, signatures, expected=None):
     for var, token in integers:
         if var.root().type not in INTEGER_TYPES:
             raise CompileError(token, f'expected integer, got {var.root().type}')
+    for var, token in scalars:
+        if var.root().type not in SCALAR_TYPES:
+            raise CompileError(token, 'equality is only defined for scalar types')
     for var, token in signed_operands:
         if not signed(var.root().type):
             raise CompileError(token, 'negation requires a signed integer')
