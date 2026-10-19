@@ -29,3 +29,9 @@ jobs:
         with:
           name: view-cost-${{ matrix.os }}
           path: build/view-cost/
+      - name: Inspect RTP Result and match cost
+        run: python tools/check_result_cost.py --output build/result-cost
+      - uses: actions/upload-artifact@v4
+        with:
+          name: result-cost-${{ matrix.os }}
+          path: build/result-cost/

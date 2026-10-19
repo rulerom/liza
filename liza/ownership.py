@@ -4,7 +4,7 @@ True means available on every incoming path. Loop headers use the greatest
 fixed point below their entry state. Source scopes are already validated by
 lowering; this pass never guesses reachability from constant expressions.
 """
-from .frontend import CompileError, Conditional, While, LoopControl
+from .frontend import CompileError, Conditional, While, LoopControl, Match
 
 
 def merge(scope, paths):
@@ -38,6 +38,15 @@ def statements(body, state, loops):
             left = statements(stmt.then_body, state.copy(), loops)
             right = statements(stmt.else_body, state.copy(), loops)
             state = merge(state, [left, right])
+        elif isinstance(stmt, Match):
+            expression(stmt.expr, state)
+            paths = []
+            for arm in stmt.arms:
+                branch = state.copy()
+                if arm.binding and arm.binding.text != '_':
+                    branch[arm.binding.text] = True
+                paths.append(statements(arm.body, branch, loops))
+            state = merge(state, paths)
         elif isinstance(stmt, While):
             entry = state.copy()
             header = entry.copy()

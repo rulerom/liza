@@ -2,9 +2,9 @@
 from dataclasses import dataclass, asdict, field
 import json
 from typing import Optional
-from .frontend import CompileError, Token, Conditional, While, LoopControl
+from .frontend import CompileError, Token, Conditional, While, LoopControl, Match
 from .typecheck import infer_expression
-from .types import signed, SCALAR_TYPES, value_properties, is_array, is_view, element_type, array_length, validate_type
+from .types import signed, SCALAR_TYPES, value_properties, is_array, is_view, element_type, array_length, validate_type, generic_args
 from .ownership import check_ownership
 from .borrowing import check_borrows
 
@@ -62,48 +62,79 @@ class ModuleIR(list):
     def __init__(self, functions, structs):
         super().__init__(functions)
         self.structs = structs
+        self.variants = structs.variants
+
+
+@dataclass
+class VariantIR:
+    name: str
+    cases: list
+    properties: dict
+
+
+class TypeTable(dict):
+    def __init__(self):
+        super().__init__()
+        self.variants = {}
 
 
 def structure_types(program):
-    declarations, result, visiting = {}, {}, set()
-    for decl in getattr(program, 'structs', []):
+    declarations, result, visiting = {}, TypeTable(), set()
+    for decl in list(getattr(program, 'structs', [])) + list(getattr(program, 'enums', [])):
         if decl.name.text in declarations:
-            raise CompileError(decl.name, 'duplicate structure')
+            raise CompileError(decl.name, 'duplicate structure or enum')
         declarations[decl.name.text] = decl
 
-    def resolve(name):
+    def resolve(name, allow_view=True):
+        if is_array(name):
+            return resolve(element_type(name), False)
+        if is_view(name):
+            if not allow_view:
+                raise ValueError('views cannot be stored in aggregates or returned')
+            resolve(element_type(name), False)
+            return {'copyable': True, 'implicit_copy': True}
+        if name in SCALAR_TYPES:
+            return value_properties(name)
         if name in result:
-            return result[name]
-        decl = declarations[name]
+            return result[name].properties
+        if name in result.variants:
+            return result.variants[name].properties
         if name in visiting:
-            raise CompileError(decl.name, 'recursive by-value structure is not allowed')
+            raise ValueError('recursive by-value structure or variant is not allowed')
+        args = generic_args(name)
+        if args is not None:
+            entries = [('Some', args[0]), ('None', None)] if name.startswith('Option<') else [('Ok',args[0]),('Err',args[1])]
+            decl, variant = None, True
+        elif name in declarations:
+            decl = declarations[name]
+            variant = hasattr(decl, 'cases')
+            entries = [(t.text, ty) for t, ty in (decl.cases if variant else decl.fields)]
+        else:
+            raise ValueError(f'unknown type {name!r}')
         visiting.add(name)
-        fields, properties = [], {'copyable': True, 'implicit_copy': True}
+        properties = {'copyable': True, 'implicit_copy': True}
         seen = set()
-        for field, type_name in decl.fields:
-            if field.text in seen:
-                raise CompileError(field, 'duplicate field')
-            seen.add(field.text)
-            member_type = type_name
-            while is_array(member_type):
-                member_type = element_type(member_type)
-            if is_view(member_type):
-                raise CompileError(field, 'views cannot be stored in structures')
-            if member_type in SCALAR_TYPES:
-                member = value_properties(member_type)
-            elif member_type in declarations:
-                member = resolve(member_type).properties
-            else:
-                raise CompileError(field, f'unknown type {member_type!r}')
-            fields.append((field.text, type_name))
-            for key in properties:
-                properties[key] = properties[key] and member[key]
+        for field_name, type_name in entries:
+            if field_name in seen:
+                raise ValueError('duplicate alternative' if variant else 'duplicate field')
+            seen.add(field_name)
+            if type_name is not None:
+                member = resolve(type_name, False)
+                for key in properties:
+                    properties[key] = properties[key] and member[key]
         visiting.remove(name)
-        result[name] = StructIR(name, fields, properties)
-        return result[name]
+        if variant:
+            result.variants[name] = VariantIR(name, entries, properties)
+        else:
+            result[name] = StructIR(name, entries, properties)
+        return properties
 
-    for name in declarations:
-        resolve(name)
+    result.ensure = resolve
+    for name, decl in declarations.items():
+        try:
+            resolve(name)
+        except ValueError as error:
+            raise CompileError(decl.name, str(error)) from None
     return result
 
 
@@ -126,6 +157,7 @@ class Lowerer:
         self.counter = 0
         self.loops = []
         self.expression_types = {}
+        self.match_types = {}
 
     def new_block(self):
         block = Block(f'b{len(self.blocks)}')
@@ -180,8 +212,14 @@ class Lowerer:
             return self.emit(op, args, type=type_name, source_type=source,
                              bounds_policy='trap',
                              owner_binding=expr.args[0].token.text if expr.kind == 'view' else '')
+        if expr.kind == 'variant':
+            args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
+            case = text.rsplit('.',1)[-1]
+            return self.emit('variant.construct', args, type=type_name, field_name=case)
         if expr.kind == 'field':
             value = self.emit_expression(expr.args[0], names, inferred)
+            if text == 'len' and (is_array(self.types[value]) or is_view(self.types[value])):
+                return self.emit('sequence.length', [value], type='u32', source_type=self.types[value])
             return self.emit('struct.field', [value], type=type_name,
                              source_type=self.types[value], field_name=text)
         if text in ('&&', '||'):
@@ -279,6 +317,59 @@ class Lowerer:
             exit_block.terminator = Terminator('unreachable', [])
             self.current = None
 
+    def match_statement(self, stmt, names, mutable):
+        value = self.expression(stmt.expr, names)
+        type_name = self.types[value]
+        if type_name not in self.structs.variants:
+            raise CompileError(stmt.token, 'match requires a variant value')
+        cases = self.structs.variants[type_name].cases
+        expected = {case for case, _ in cases}
+        seen, arm_info = set(), []
+        for arm in stmt.arms:
+            if '.' in arm.case:
+                qualifier, case = arm.case.rsplit('.',1)
+                if qualifier != type_name:
+                    raise CompileError(arm.token, 'pattern belongs to a different variant type')
+            else:
+                case = arm.case
+                if generic_args(type_name) is None:
+                    raise CompileError(arm.token, 'user variant patterns require Type.Alternative')
+            if case not in expected:
+                raise CompileError(arm.token, 'unknown alternative')
+            if case in seen:
+                raise CompileError(arm.token, 'duplicate match alternative')
+            seen.add(case)
+            payload = dict(cases)[case]
+            if (payload is None) != (arm.binding is None):
+                raise CompileError(arm.token, 'pattern payload binding does not match alternative')
+            if arm.binding and arm.binding.text != '_' and arm.binding.text in names:
+                raise CompileError(arm.binding, 'duplicate binding; shadowing is not allowed')
+            arm_info.append((arm, case, payload))
+        if seen != expected:
+            raise CompileError(stmt.token, 'non-exhaustive match; missing '+', '.join(sorted(expected-seen)))
+        self.match_types[id(stmt)] = type_name
+        tag = self.emit('variant.tag', [value], type='u32', source_type=type_name)
+        dispatch = self.current
+        invalid = self.new_block()
+        invalid.terminator = Terminator('unreachable', [])
+        targets, ends = [], []
+        for arm, case, payload in arm_info:
+            block = self.new_block()
+            targets.append([next(i for i,(c,_) in enumerate(cases) if c==case), block.name])
+            self.current = block
+            env = names.copy()
+            if payload is not None and arm.binding.text != '_':
+                env[arm.binding.text] = self.emit('variant.payload', [value], type=payload,
+                                                source_type=type_name, field_name=case)
+            self.statements(arm.body, env, mutable.copy())
+            if self.current is not None:
+                ends.append((self.current, env))
+        dispatch.terminator = Terminator('switch', [tag, invalid.name] + targets)
+        self.current = self.new_block() if ends else None
+        for block, _ in ends:
+            block.terminator = Terminator('jump', [self.current.name])
+        self.merge_names(names, mutable, ends)
+
     def statements(self, statements, names, mutable):
         for stmt in statements:
             if self.current is None:
@@ -302,6 +393,8 @@ class Lowerer:
                     block.terminator = Terminator('jump', [self.current.name])
                 # Returned, broken and continued paths do not reach this join.
                 self.merge_names(names, mutable, ends)
+            elif isinstance(stmt, Match):
+                self.match_statement(stmt, names, mutable)
             elif isinstance(stmt, While):
                 self.while_loop(stmt, names, mutable)
             elif isinstance(stmt, LoopControl):
@@ -349,7 +442,7 @@ class Lowerer:
         self.statements(self.fn.body, names, set())
         if self.current is not None:
             raise CompileError(self.fn.name, f'function must return a {self.fn.result_type} value on every path')
-        check_borrows(self.fn, self.expression_types)
+        check_borrows(self.fn, self.expression_types, self.match_types, self.structs.variants)
         return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type)
 
 
@@ -357,7 +450,7 @@ def lower(functions):
     structs = structure_types(functions)
     signatures = {}
     for fn in functions:
-        if fn.name.text in structs:
+        if fn.name.text in structs or fn.name.text in structs.variants:
             raise CompileError(fn.name, 'function and structure names must be distinct')
         for token, type_name in fn.params + [(fn.name, fn.result_type)]:
             try:
@@ -411,6 +504,8 @@ def dump(module):
     structs = getattr(module, 'structs', {})
     properties = {t: value_properties(t) for t in SCALAR_TYPES}
     properties.update({name: struct.properties for name, struct in structs.items()})
+    variants = getattr(module, 'variants', {})
+    properties.update({name: v.properties for name, v in variants.items()})
     def describe(t):
         if t in properties or t == 'integer':
             return
@@ -420,6 +515,10 @@ def dump(module):
     for struct in structs.values():
         for _, t in struct.fields:
             describe(t)
+    for variant in variants.values():
+        for _, t in variant.cases:
+            if t is not None:
+                describe(t)
     for fn in module:
         describe(fn.result_type)
         for param in fn.params:
@@ -427,6 +526,7 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 10, 'type_properties': properties,
+    return json.dumps({'version': 11, 'type_properties': properties,
                        'structures': [asdict(s) for s in structs.values()],
+                       'variants': [asdict(v) for v in variants.values()],
                        'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'

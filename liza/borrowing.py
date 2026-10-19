@@ -4,11 +4,11 @@ Loans survive moving/copying/reassigning a view until their lexical scope ends.
 Assigning a view into an outer binding extends the loan to that binding's scope;
 its owner must live at least that long. No view can escape a function.
 """
-from .frontend import CompileError, Conditional, While, LoopControl
+from .frontend import CompileError, Conditional, While, LoopControl, Match
 from .types import is_view
 
 
-def check_borrows(fn, types):
+def check_borrows(fn, types, match_types=None, variants=None):
     loans = [set()]
     # name -> (type, declaration depth, possible owner names)
     initial = {p.text: (t, 0, set()) for p, t in fn.params}
@@ -50,6 +50,16 @@ def check_borrows(fn, types):
             if isinstance(stmt, Conditional):
                 expr(stmt.condition, env)
                 env = join(env, [scoped(stmt.then_body, env), scoped(stmt.else_body, env)])
+            elif isinstance(stmt, Match):
+                expr(stmt.expr, env)
+                cases = dict(variants[match_types[id(stmt)]].cases)
+                paths = []
+                for arm in stmt.arms:
+                    branch = env.copy()
+                    if arm.binding and arm.binding.text != '_':
+                        branch[arm.binding.text] = (cases[arm.case.rsplit('.',1)[-1]], len(loans), set())
+                    paths.append(scoped(arm.body, branch))
+                env = join(env, paths)
             elif isinstance(stmt, While):
                 # Outer-scope loans may be acquired by an assignment in the
                 # body. Revisit until they stabilize to check the next iteration.

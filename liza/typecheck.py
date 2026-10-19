@@ -1,6 +1,6 @@
 """Infer literal contexts without emitting or reordering executable operations."""
 from .frontend import CompileError
-from .types import INTEGER_TYPES, SCALAR_TYPES, bounds, signed, convert_integer, is_array, is_view, element_type, array_type, array_length
+from .types import INTEGER_TYPES, SCALAR_TYPES, bounds, signed, convert_integer, is_array, is_view, element_type, array_type, array_length, validate_type, generic_args
 
 
 class TypeVariable:
@@ -15,7 +15,10 @@ class TypeVariable:
 
 
 def infer_expression(expr, names, value_types, signatures, expected=None, structs=None):
-    structs = structs or {}
+    if structs is None:
+        structs = {}
+    variants = getattr(structs, "variants", {})
+    constructors = []
     variables, integers, signed_operands, literals = {}, [], [], []
     scalars, arrays, projections, derived, empty_elements = [], [], [], [], []
 
@@ -63,6 +66,12 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
             if token.text not in names:
                 raise CompileError(token, f'unknown value {token.text!r}')
             bind(var, value_types[names[token.text]], token)
+        elif node.kind == 'variant':
+            if '.' in token.text:
+                type_name, case = token.text.rsplit('.',1)
+                bind(var, type_name, token)
+            constructors.append((node, var, [visit(arg) for arg in node.args]))
+            derived.append(var)
         elif node.kind == 'array':
             element = TypeVariable()
             for arg in node.args:
@@ -127,6 +136,27 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         changed = True
         while changed:
             before = tuple(v.root().type for v in list(variables.values()) + [e for _, e, _, _ in arrays])
+            for node, result, payloads in constructors:
+                case = node.token.text.rsplit('.',1)[-1]
+                t = result.root().type
+                if t is None and case == 'Some' and len(payloads)==1 and payloads[0].root().type:
+                    t = 'Option<'+payloads[0].root().type+'>'
+                    bind(result, t, node.token)
+                if t is None:
+                    continue
+                try:
+                    validate_type(t, structs, False)
+                except ValueError as error:
+                    raise CompileError(node.token, str(error)) from None
+                if t not in variants or case not in dict(variants[t].cases):
+                    raise CompileError(node.token, 'constructor does not belong to expected variant type')
+                if '.' not in node.token.text and generic_args(t) is None:
+                    raise CompileError(node.token, 'user variant constructors require Type.Alternative')
+                payload = dict(variants[t].cases)[case]
+                if len(payloads) != (0 if payload is None else 1):
+                    raise CompileError(node.token, 'wrong number of variant payload arguments')
+                if payload is not None:
+                    bind(payloads[0], payload, node.token)
             for aggregate, element, count, token in arrays:
                 t = aggregate.root().type
                 if t:
@@ -146,6 +176,9 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                                 bind(element, result.root().type, token)
                     continue
                 if kind == 'field':
+                    if token.text == 'len' and (is_array(t) or is_view(t)):
+                        bind(result, 'u32', token)
+                        continue
                     if t not in structs:
                         raise CompileError(token, 'field access requires a structure value')
                     fields = dict(structs[t].fields)
@@ -166,7 +199,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
             var.root().type = 'u32'
     solve()
     if any(v.root().type is None for v in variables.values()):
-        raise CompileError(expr.token, 'cannot infer array element type; provide a type annotation')
+        raise CompileError(expr.token, 'cannot infer composite type; provide a type annotation')
     for var, token in integers:
         if var.root().type not in INTEGER_TYPES:
             raise CompileError(token, f'expected integer, got {var.root().type}')

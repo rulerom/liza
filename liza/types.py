@@ -60,6 +60,8 @@ def array_type(element, length):
 
 
 def validate_type(t, structs, allow_view=True):
+    if hasattr(structs, "ensure"):
+        return structs.ensure(t, allow_view)
     if is_array(t):
         validate_type(element_type(t), structs, False)
     elif is_view(t):
@@ -68,3 +70,17 @@ def validate_type(t, structs, allow_view=True):
         validate_type(element_type(t), structs, False)
     elif t not in SCALAR_TYPES and t not in structs:
         raise ValueError(f'unknown type {t!r}')
+
+
+def generic_args(t):
+    if not t.startswith(('Option<', 'Result<')):
+        return None
+    depth, start, args = 0, t.index('<')+1, []
+    for i in range(start, len(t)-1):
+        c = t[i]
+        if c in '<[': depth += 1
+        elif c in '>]': depth -= 1
+        elif c == ',' and depth == 0:
+            args.append(t[start:i]); start = i+1
+    args.append(t[start:-1])
+    return args

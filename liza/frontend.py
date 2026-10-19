@@ -18,7 +18,7 @@ class CompileError(Exception):
 
 def lex(source):
     tokens = []
-    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|\.\.|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[\[\]{}(),:=;+*\-!<>~&|^/%.]")
+    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|\.\.|=>|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[\[\]{}(),:=;+*\-!<>~&|^/%.]")
     pos, line, column = 0, 1, 1
     while pos < len(source):
         match = pattern.match(source, pos)
@@ -68,6 +68,27 @@ class While:
 
 
 @dataclass
+class MatchArm:
+    token: Token
+    case: str
+    binding: object
+    body: list
+
+
+@dataclass
+class Match:
+    token: Token
+    expr: Expr
+    arms: list
+
+
+@dataclass
+class Enum:
+    name: Token
+    cases: list
+
+
+@dataclass
 class LoopControl:
     token: Token
 
@@ -82,6 +103,7 @@ class Program(list):
     def __init__(self):
         super().__init__()
         self.structs = []
+        self.enums = []
 
 
 @dataclass
@@ -96,6 +118,7 @@ class Parser:
     def __init__(self, source):
         self.tokens = lex(source)
         self.index = 0
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"}
 
     @property
     def current(self):
@@ -112,7 +135,7 @@ class Parser:
 
     def identifier(self):
         token = self.current
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -133,12 +156,18 @@ class Parser:
                 raise CompileError(length, 'array length exceeds u32')
             self.take(']')
             return f'[{element};{size}]'
-        if self.current.text == 'View':
-            self.take('View')
+        if self.current.text in ('View', 'Option', 'Result'):
+            name = self.take().text
             self.take('<')
-            element = self.type_name()
+            args = [self.type_name()]
+            if name == 'Result':
+                self.take(',')
+                args.append(self.type_name())
+            if self.current.text == '>>':
+                t = self.current
+                self.tokens[self.index:self.index+1] = [Token('>',t.line,t.column), Token('>',t.line,t.column+1)]
             self.take('>')
-            return f'View<{element}>'
+            return name+'<'+','.join(args)+'>'
         if self.current.text in SCALAR_TYPES:
             return self.take().text
         return self.identifier().text
@@ -150,6 +179,8 @@ class Parser:
         while self.current.text != '}':
             if self.current.text == 'if':
                 body.append(self.conditional())
+            elif self.current.text == 'match':
+                body.append(self.match_statement())
             elif self.current.text == 'while':
                 token = self.take('while')
                 condition = self.expression()
@@ -211,10 +242,63 @@ class Parser:
         self.take('}')
         return Struct(name, fields)
 
+    def enumeration(self):
+        self.take('enum')
+        name = self.identifier()
+        self.take('{')
+        self.separators()
+        cases = []
+        while self.current.text != '}':
+            case = self.identifier()
+            payload = None
+            if self.current.text == '(':
+                self.take('(')
+                payload = self.type_name()
+                self.take(')')
+            cases.append((case, payload))
+            if self.current.text == ',':
+                self.take(',')
+            elif self.current.text not in ('\n', ';', '}'):
+                raise CompileError(self.current, 'expected case separator')
+            self.separators()
+        self.take('}')
+        if not cases:
+            raise CompileError(name, 'enum must have at least one alternative')
+        return Enum(name, cases)
+
+    def match_statement(self):
+        token = self.take('match')
+        value = self.expression()
+        self.take('{')
+        self.separators()
+        arms = []
+        while self.current.text != '}':
+            case = self.take() if self.current.text in ('Some','None','Ok','Err') else self.identifier()
+            label = case.text
+            if self.current.text == '.':
+                self.take('.')
+                label += '.'+self.identifier().text
+            binding = None
+            if self.current.text == '(':
+                self.take('(')
+                binding = self.identifier()
+                self.take(')')
+            self.take('=>')
+            arms.append(MatchArm(case, label, binding, self.block()))
+            if self.current.text == ',':
+                self.take(',')
+            self.separators()
+        self.take('}')
+        return Match(token, value, arms)
+
     def parse(self):
         functions = Program()
         self.separators()
         while self.current.text != '<eof>':
+            if self.current.text == 'enum':
+                functions.enums.append(self.enumeration())
+                self.separators()
+                continue
             if self.current.text == 'struct':
                 functions.structs.append(self.structure())
                 self.separators()
@@ -248,6 +332,19 @@ class Parser:
             self.take()
             number = self.take()
             left = Expr(Token('-' + number.text, token.line, token.column), 'literal', [])
+        elif token.text in ('Some','None','Ok','Err') or (token.text in self.enum_names and self.tokens[self.index+1].text == '.'):
+            self.take()
+            name = token.text
+            if name in self.enum_names:
+                self.take('.')
+                name += '.'+self.identifier().text
+            args = []
+            if self.current.text == '(':
+                self.take('(')
+                if self.current.text != ')':
+                    args.append(self.expression())
+                self.take(')')
+            left = Expr(Token(name,token.line,token.column), 'variant', args)
         elif token.text == '[':
             self.take('[')
             elements = []
