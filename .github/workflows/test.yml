@@ -35,3 +35,9 @@ jobs:
         with:
           name: result-cost-${{ matrix.os }}
           path: build/result-cost/
+      - name: Inspect console runtime cost
+        run: python tools/check_console_cost.py --output build/console-cost
+      - uses: actions/upload-artifact@v4
+        with:
+          name: console-cost-${{ matrix.os }}
+          path: build/console-cost/

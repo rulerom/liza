@@ -1,0 +1,6 @@
+fn main()->u32:io {
+    match console.println("Hello, Liza!") {
+        Ok(written)=>{return 0}
+        Err(error)=>{return 1}
+    }
+}

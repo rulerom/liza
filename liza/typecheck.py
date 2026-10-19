@@ -41,7 +41,9 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         var = TypeVariable()
         variables[id(node)] = var
         token = node.token
-        if node.kind == 'literal':
+        if node.kind == 'text':
+            bind(var, 'Text', token)
+        elif node.kind == 'literal':
             integers.append((var, token))
             literals.append((var, token))
         elif node.kind.startswith('convert.'):
@@ -176,7 +178,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                                 bind(element, result.root().type, token)
                     continue
                 if kind == 'field':
-                    if token.text == 'len' and (is_array(t) or is_view(t)):
+                    if token.text == 'len' and (is_array(t) or is_view(t) or t == 'Text'):
                         bind(result, 'u32', token)
                         continue
                     if t not in structs:

@@ -198,3 +198,20 @@ python3 -m unittest discover -s tests -v
 
 Нативные тесты пропускаются без Clang. Они проверяют исполнение при `O0` и `O2`,
 включая переполнение. [Точная семантика ядра](core.md).
+
+## Hello World
+
+На Linux/macOS консоль доступна через библиотечные функции с эффектом `io`:
+
+```liza
+fn main()->u32:io {
+    match console.println("Hello, Liza!") {
+        Ok(written)=>{return 0}
+        Err(error)=>{return 1}
+    }
+}
+```
+
+Запуск: `python3 -m liza run examples/hello.liza`.
+Runtime подключается автоматически. [Консоль и обработка ошибок](io-model.md)
+определяют поведение при частичном выводе и отказе окружения.

@@ -17,6 +17,7 @@ class Operation:
     type: str = 'u32'
     overflow: str = 'none'
     callee: str = ''
+    effect_contract: str = 'pure'
     may_trap: bool = False
     shift_policy: str = 'none'
     division_policy: str = 'none'
@@ -93,7 +94,7 @@ def structure_types(program):
                 raise ValueError('views cannot be stored in aggregates or returned')
             resolve(element_type(name), False)
             return {'copyable': True, 'implicit_copy': True}
-        if name in SCALAR_TYPES:
+        if name in SCALAR_TYPES + ('Text',):
             return value_properties(name)
         if name in result:
             return result[name].properties
@@ -191,6 +192,10 @@ class Lowerer:
 
     def emit_expression(self, expr, names, inferred):
         text, type_name = expr.token.text, inferred[id(expr)]
+        if expr.kind == 'text':
+            if len(text.encode('utf-8')) > 4294967295:
+                raise CompileError(expr.token, 'text literal exceeds u32 bytes')
+            return self.emit('text.literal', [text], type='Text')
         if expr.kind == 'bool':
             return self.emit('constant', [text == 'true'], type='bool')
         if expr.kind == 'literal':
@@ -202,7 +207,10 @@ class Lowerer:
             args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
             if text in self.structs:
                 return self.emit('struct.construct', args, type=type_name)
-            return self.emit('call', args, type=type_name, callee=text)
+            effect = self.signatures[text].effect_contract
+            if effect == 'io' and self.fn.effect_contract != 'io':
+                raise CompileError(expr.token, 'pure function cannot call io function '+text)
+            return self.emit('call', args, type=type_name, callee=text, effect_contract=effect)
         if expr.kind in ('array', 'index', 'view'):
             args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
             if expr.kind == 'array':
@@ -218,7 +226,7 @@ class Lowerer:
             return self.emit('variant.construct', args, type=type_name, field_name=case)
         if expr.kind == 'field':
             value = self.emit_expression(expr.args[0], names, inferred)
-            if text == 'len' and (is_array(self.types[value]) or is_view(self.types[value])):
+            if text == 'len' and (is_array(self.types[value]) or is_view(self.types[value]) or self.types[value] == 'Text'):
                 return self.emit('sequence.length', [value], type='u32', source_type=self.types[value])
             return self.emit('struct.field', [value], type=type_name,
                              source_type=self.types[value], field_name=text)
@@ -443,12 +451,14 @@ class Lowerer:
         if self.current is not None:
             raise CompileError(self.fn.name, f'function must return a {self.fn.result_type} value on every path')
         check_borrows(self.fn, self.expression_types, self.match_types, self.structs.variants)
-        return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type)
+        return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type, self.fn.effect_contract)
 
 
 def lower(functions):
+    from .stdlib import attach
+    functions, externals = attach(functions)
     structs = structure_types(functions)
-    signatures = {}
+    signatures = {f.name.text: f for f in externals}
     for fn in functions:
         if fn.name.text in structs or fn.name.text in structs.variants:
             raise CompileError(fn.name, 'function and structure names must be distinct')
@@ -467,6 +477,7 @@ def lower(functions):
     if signatures['main'].result_type != 'u32':
         raise CompileError(signatures['main'].name, 'main must return u32')
     module = ModuleIR([Lowerer(fn, signatures, structs).lower() for fn in functions], structs)
+    module.externals = externals
     for fn in functions:
         check_ownership(fn)
     annotate_traps(module)
@@ -493,7 +504,7 @@ def annotate_traps(module):
         for fn in module:
             for op in operations[fn.name]:
                 if op.op == 'call':
-                    op.may_trap = functions[op.callee].may_trap
+                    op.may_trap = functions[op.callee].may_trap if op.callee in functions else False
             summary = any(op.may_trap for op in operations[fn.name])
             if summary != fn.may_trap:
                 fn.may_trap = summary
@@ -502,7 +513,7 @@ def annotate_traps(module):
 
 def dump(module):
     structs = getattr(module, 'structs', {})
-    properties = {t: value_properties(t) for t in SCALAR_TYPES}
+    properties = {t: value_properties(t) for t in SCALAR_TYPES + ('Text',)}
     properties.update({name: struct.properties for name, struct in structs.items()})
     variants = getattr(module, 'variants', {})
     properties.update({name: v.properties for name, v in variants.items()})
@@ -526,7 +537,8 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 11, 'type_properties': properties,
+    return json.dumps({'version': 12, 'type_properties': properties,
                        'structures': [asdict(s) for s in structs.values()],
                        'variants': [asdict(v) for v in variants.values()],
+                       'externals': [asdict(fn) for fn in getattr(module, 'externals', [])],
                        'functions': [asdict(fn) for fn in module]}, indent=2) + '\n'

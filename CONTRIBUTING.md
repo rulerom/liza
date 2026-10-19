@@ -86,3 +86,11 @@ python3 tools/check_view_cost.py --output build/view-cost
 Проверка выбранного RTP Result/match тракта: `python3 tools/check_result_cost.py`.
 Артефакты `result-cost-*` содержат O2 IR, машинный код и отчёт; отсутствие
 heap/bulk-copy не означает отсутствие ABI расходов возврата агрегатов.
+
+Консольная runtime: `python3 tools/check_console_cost.py` сохраняет O2 IR и
+машинный код в `build/console-cost`; CI публикует `console-cost-*`.
+`tests/test_io.py` проверяет ошибки stdout/pipe, короткую запись, EINTR,
+частичный результат, состояние сигналов и порядок эффектов при O0/O2.
+Runtime использует POSIX write и временную маску SIGPIPE вызывающего потока.
+Для ручной линковки консольного emit-llvm добавьте
+`liza/runtime/console_posix.c -pthread`. Пользовательский FFI не предоставляется.

@@ -1,6 +1,7 @@
 """Source -> AST. No backend semantics live here."""
 from dataclasses import dataclass
 import re
+import json
 from .types import SCALAR_TYPES, INTEGER_TYPES
 
 
@@ -18,7 +19,7 @@ class CompileError(Exception):
 
 def lex(source):
     tokens = []
-    pattern = re.compile(r"//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|\.\.|=>|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[\[\]{}(),:=;+*\-!<>~&|^/%.]")
+    pattern = re.compile(r'"(?:[^"\\\n]|\\[^\n])*"|//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|\.\.|=>|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[\[\]{}(),:=;+*\-!<>~&|^/%.]')
     pos, line, column = 0, 1, 1
     while pos < len(source):
         match = pattern.match(source, pos)
@@ -112,13 +113,15 @@ class Function:
     params: list
     body: list
     result_type: str
+    effect_contract: str = 'pure'
 
 
 class Parser:
-    def __init__(self, source):
+    def __init__(self, source, internal=False):
+        self.internal = internal
         self.tokens = lex(source)
         self.index = 0
-        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"}
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError"}
 
     @property
     def current(self):
@@ -135,7 +138,9 @@ class Parser:
 
     def identifier(self):
         token = self.current
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
+        if token.text.startswith('__liza_') and not self.internal:
+            raise CompileError(token, 'reserved implementation name')
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'io', 'Text', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -168,6 +173,8 @@ class Parser:
                 self.tokens[self.index:self.index+1] = [Token('>',t.line,t.column), Token('>',t.line,t.column+1)]
             self.take('>')
             return name+'<'+','.join(args)+'>'
+        if self.current.text == 'Text':
+            return self.take().text
         if self.current.text in SCALAR_TYPES:
             return self.take().text
         return self.identifier().text
@@ -293,6 +300,9 @@ class Parser:
 
     def parse(self):
         functions = Program()
+        functions.uses_console = any(t.text in ('IoError', 'IoFailure') or
+                                     (t.text == 'console' and self.tokens[i+1].text == '.')
+                                     for i,t in enumerate(self.tokens[:-1]))
         self.separators()
         while self.current.text != '<eof>':
             if self.current.text == 'enum':
@@ -305,6 +315,9 @@ class Parser:
                 continue
             self.take('fn')
             name = self.identifier()
+            if self.internal and self.current.text == '.':
+                self.take('.')
+                name = Token(name.text+'.'+self.identifier().text, name.line, name.column)
             self.take('(')
             params = []
             if self.current.text != ')':
@@ -318,17 +331,28 @@ class Parser:
             self.take(')')
             self.take('->')
             result_type = self.type_name()
+            effect = 'pure'
             if self.current.text == ':':
                 self.take(':')
-                self.take('pure')
+                if self.current.text not in ('pure', 'io'):
+                    raise CompileError(self.current, "expected 'pure' or 'io'")
+                effect = self.take().text
             body = self.block()
-            functions.append(Function(name, params, body, result_type))
+            functions.append(Function(name, params, body, result_type, effect))
             self.separators()
         return functions
 
     def expression(self, minimum=0):
         token = self.current
-        if token.text == '-' and re.fullmatch(r'0x[0-9a-fA-F]+|[0-9]+', self.tokens[self.index + 1].text):
+        if token.text.startswith('"'):
+            self.take()
+            try:
+                value = json.loads(token.text)
+                value.encode('utf-8')
+            except (ValueError, UnicodeError):
+                raise CompileError(token, 'invalid UTF-8 text literal or escape') from None
+            left = Expr(Token(value,token.line,token.column), 'text', [])
+        elif token.text == '-' and re.fullmatch(r'0x[0-9a-fA-F]+|[0-9]+', self.tokens[self.index + 1].text):
             self.take()
             number = self.take()
             left = Expr(Token('-' + number.text, token.line, token.column), 'literal', [])
@@ -392,6 +416,9 @@ class Parser:
             left = Expr(self.take(), 'literal', [])
         else:
             name = self.identifier()
+            if self.current.text == '.' and self.index+2 < len(self.tokens) and self.tokens[self.index+2].text == '(':
+                self.take('.')
+                name = Token(name.text+'.'+self.identifier().text,name.line,name.column)
             if self.current.text == '(':
                 self.take('(')
                 args = []

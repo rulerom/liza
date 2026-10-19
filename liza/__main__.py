@@ -6,6 +6,7 @@ import tempfile
 from .frontend import Parser, CompileError
 from .ir import lower, dump
 from .backend import llvm
+from .stdlib import link_flags
 
 
 def main():
@@ -41,7 +42,7 @@ def main():
             if output == args.source.resolve():
                 raise ValueError('output must not overwrite source')
             output.parent.mkdir(parents=True, exist_ok=True)
-            compiled = subprocess.run([args.clang, '-Wno-override-module', f'-O{args.O}', str(ir_file), '-o', str(output)])
+            compiled = subprocess.run([args.clang, '-Wno-override-module', f'-O{args.O}', str(ir_file), *link_flags(module), '-o', str(output)])
             if compiled.returncode:
                 return 1
             if args.command == 'build':

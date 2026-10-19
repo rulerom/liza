@@ -1,0 +1,36 @@
+enum IoError { Closed; PermissionDenied; BrokenPipe; WouldBlock; NoSpace; Other }
+struct IoFailure { kind:IoError; written:u64 }
+fn __liza_decode(status:u64)->Result<u64,IoFailure> {
+    written=u64(u32.wrap(status))
+    code=status >> 32
+    if code==0 {return Ok(written)}
+    if code==1 {return Err(IoFailure(IoError.Closed,written))}
+    if code==2 {return Err(IoFailure(IoError.PermissionDenied,written))}
+    if code==3 {return Err(IoFailure(IoError.BrokenPipe,written))}
+    if code==4 {return Err(IoFailure(IoError.WouldBlock,written))}
+    if code==5 {return Err(IoFailure(IoError.NoSpace,written))}
+    return Err(IoFailure(IoError.Other,written))
+}
+fn console.write(text:Text)->Result<u64,IoFailure>:io {
+    return __liza_decode(__liza_write_text(text))
+}
+fn console.write_bytes(data:View<u8>)->Result<u64,IoFailure>:io {
+    return __liza_decode(__liza_write_bytes(data))
+}
+fn console.println(text:Text)->Result<u64,IoFailure>:io {
+    match console.write(text) {
+        Err(e)=>{return Err(e)}
+        Ok(count)=>{
+            match console.write("\n") {
+                Ok(n)=>{return Ok(count+n)}
+                Err(e)=>{return Err(IoFailure(e.kind,count+e.written))}
+            }
+        }
+    }
+}
+fn console.print_u64(value:u64)->Result<u64,IoFailure>:io {
+    return __liza_decode(__liza_print_u64(value))
+}
+fn console.print_i64(value:i64)->Result<u64,IoFailure>:io {
+    return __liza_decode(__liza_print_i64(value))
+}

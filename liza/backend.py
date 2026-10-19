@@ -15,6 +15,7 @@ def llvm(module):
             return result
     types = LLVMTypes({name: f'i{width(name)}' for name in INTEGER_TYPES})
     types['bool'] = 'i1'
+    types['Text'] = '{ ptr, i32 }'
     types['integer'] = None  # Only a compile-time conversion literal, never a runtime type.
     structs = getattr(module, 'structs', {})
     types.update({name: f'%struct.{name}' for name in structs})
@@ -27,6 +28,29 @@ def llvm(module):
     for name, variant in variants.items():
         fields = ['i32'] + [types[t] if t is not None else '[0 x i8]' for _,t in variant.cases]
         lines.append(f'{types[name]} = type {{ '+', '.join(fields)+' }')
+    for fn in module:
+        for block in fn.blocks:
+            for op in block.operations:
+                if op.op == 'text.literal':
+                    data = op.args[0].encode('utf-8')
+                    escaped = ''.join('\\%02X' % byte for byte in data)
+                    lines.append(f'@text.{fn.name}.{op.result} = private constant [{len(data)} x i8] c"{escaped}"')
+    if getattr(module, 'externals', []):
+        lines.extend(['declare i64 @liza_rt_write(ptr, i32)',
+                      'declare i64 @liza_rt_print_u64(i64)',
+                      'declare i64 @liza_rt_print_i64(i64)'])
+        for fn in module.externals:
+            t = fn.params[0][1]
+            name = fn.name.text
+            lines.append(f'define i64 @liza_{name}({types[t]} %value) {{')
+            if t in ('Text','View<u8>'):
+                lines.extend(['  %data = extractvalue { ptr, i32 } %value, 0',
+                              '  %length = extractvalue { ptr, i32 } %value, 1',
+                              '  %result = call i64 @liza_rt_write(ptr %data, i32 %length)'])
+            else:
+                symbol = 'liza_rt_print_'+t
+                lines.append(f'  %result = call i64 @{symbol}(i64 %value)')
+            lines.extend(['  ret i64 %result','}'])
     intrinsics = sorted({(op.type, op.op) for fn in module for block in fn.blocks
                          for op in block.operations if op.overflow == 'trap'})
     for type_name, op in intrinsics:
@@ -71,6 +95,9 @@ def llvm(module):
             exits[block.name] = block.name
             for op in block.operations:
                 refs[op.result] = str(int(op.args[0])) if op.op == 'constant' else f'%{op.result}'
+                if op.op == 'text.literal':
+                    size = len(op.args[0].encode('utf-8'))
+                    refs[op.result] = f'{{ ptr @text.{fn.name}.{op.result}, i32 {size} }}'
                 value_types[op.result] = types[op.type]
                 if op.op in ('copy', 'move'):
                     aliases[op.result] = op.args[0]
@@ -111,7 +138,7 @@ def llvm(module):
                 if op.op != 'phi':
                     flush()
                 name, ty = op.result, types[op.type]
-                if op.op in ('constant', 'copy', 'move') or (op.op.startswith('convert.') and op.source_type == 'integer'):
+                if op.op in ('constant', 'text.literal', 'copy', 'move') or (op.op.startswith('convert.') and op.source_type == 'integer'):
                     continue
                 args = [refs[a] for a in op.args]
                 if op.op == 'sequence.length':

@@ -108,7 +108,7 @@ class FrontendTests(unittest.TestCase):
                     else:
                         self.assertEqual(op.may_trap, op.overflow == 'trap')
         serialized = json.loads(dump(list(module.values())))
-        self.assertEqual(serialized['version'], 11)
+        self.assertEqual(serialized['version'], 12)
         self.assertTrue(serialized['functions'][0]['may_trap'])
 
     def test_arithmetic_lowering_has_no_unproven_flags(self):

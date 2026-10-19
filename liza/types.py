@@ -34,7 +34,7 @@ def convert_integer(value, target, mode):
 
 def value_properties(type_name):
     """Semantic capabilities, independent of byte size and target layout."""
-    if type_name not in SCALAR_TYPES:
+    if type_name not in SCALAR_TYPES + ('Text',):
         raise ValueError(f'unknown value type: {type_name}')
     return {'copyable': True, 'implicit_copy': True}
 
