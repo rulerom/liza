@@ -44,9 +44,13 @@ markdown_extensions:
   - pymdownx.highlight
   - pymdownx.superfences
 
+extra_css:
+  - assets/stylesheets/site.css
+
 nav:
-  - О Liza: index.md
+  - Liza: index.md
   - Быстрый старт: getting-started.md
+  - Milestones: milestones.md
   - Язык:
       - Модель и открытые решения: design.md
       - Исполняемое ядро: core.md

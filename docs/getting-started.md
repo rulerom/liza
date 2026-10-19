@@ -6,28 +6,65 @@ description: "Первая программа на Liza: проверка исх
 
 ## Требования
 
-Нужны Python 3.9+ и Clang в PATH. Прототип проверен локально на macOS ARM64
-с Python 3.9.6 и Apple Clang 21. Команды выполняются из каталога с исходниками Liza.
+Нужны исходники Liza, Python 3.9+ и Clang в PATH. Сборка выполняется
+на целевой системе; готовому бинарнику Python и Clang не нужны.
 
-## Первая программа
+| Система | Проверенная архитектура | Инструменты |
+| --- | --- | --- |
+| Linux | x86-64 | Python, Clang и системный toolchain для линковки |
+| macOS | ARM64 / Apple Silicon | Python и Xcode Command Line Tools с Clang |
+| Windows | x86-64 | Python, Clang, MSVC Build Tools и Windows SDK; x64 Native Tools Command Prompt |
+
+Все команды ниже выполняются из каталога с исходниками Liza.
+
+## Первая программа — Hello World
+
+```liza
+fn main() -> u32 : io {
+    match console.println("Hello, Liza!") {
+        Ok(written) => { return 0 }
+        Err(error) => { return 1 }
+    }
+}
+```
+
+Исходник уже есть в `examples/hello.liza`. Linux/macOS:
+
+```sh
+python3 -m liza build examples/hello.liza
+./build/hello
+```
+
+Windows, в **x64 Native Tools Command Prompt**:
+
+```bat
+python -m liza build examples/hello.liza
+build\hello.exe
+```
+
+Программа печатает `Hello, Liza!` и возвращает 0 при успешном выводе.
+Отказ вывода обрабатывается через `Result` и возвращает код 1.
+[Контракт консоли](io-model.md).
+
+`build` сохраняет исполняемый файл в `build/`. Путь можно задать явно:
+`python3 -m liza build examples/hello.liza -o hello` или на Windows
+`python -m liza build examples/hello.liza -o hello.exe`.
+
+Для разового запуска используйте `python3 -m liza run examples/hello.liza`
+(на Windows — `python` вместо `python3`). `run` создаёт временный бинарник,
+запускает его и удаляет после завершения.
+
+## Вычисление без вывода
 
 ```sh
 python3 -m liza check examples/answer.liza
-python3 -m liza build examples/answer.liza
-./build/answer
+python3 -m liza run examples/answer.liza
 echo $?  # 42
 ```
 
-Программа возвращает 42 как код завершения, а не печатает текст.
-На POSIX оболочка видит младшие 8 бит результата `main`.
-
-Собрать и сразу запустить пример с циклическим переполнением:
-
-```sh
-python3 -m liza run examples/wrapping.liza
-```
-
-`run` возвращает код завершения программы.
+Этот пример возвращает 42 как код завершения, а не печатает его.
+На POSIX оболочка видит младшие 8 бит результата `main`; на Windows
+доступен 32-битный код завершения (`echo %ERRORLEVEL%` в cmd).
 
 ## Условия и логические значения
 
@@ -55,8 +92,9 @@ python3 -m liza run examples/rtp_fields.liza
 echo $?  # 0: поля совпали с ожидаемыми
 ```
 
-Здесь используются `u8`, маски и сдвиги. Это первый шаг к парсеру пакета;
-чтение буфера и проверка его границ появятся вместе с массивами и представлениями.
+Здесь используются `u8`, маски и сдвиги. Более полный пример —
+`examples/rtp_result.liza`: чтение через view, проверка заголовка
+и типизированные ошибки разбора.
 
 Пример деления позиции аудиосэмпла на целые секунды и остаток:
 
@@ -198,27 +236,3 @@ python3 -m unittest discover -s tests -v
 
 Нативные тесты пропускаются без Clang. Они проверяют исполнение при `O0` и `O2`,
 включая переполнение. [Точная семантика ядра](core.md).
-
-## Hello World
-
-На Linux/macOS/Windows консоль доступна через библиотечные функции с эффектом `io`:
-
-```liza
-fn main()->u32:io {
-    match console.println("Hello, Liza!") {
-        Ok(written)=>{return 0}
-        Err(error)=>{return 1}
-    }
-}
-```
-
-Запуск: `python3 -m liza run examples/hello.liza`.
-Runtime подключается автоматически. [Консоль и обработка ошибок](io-model.md)
-определяют поведение при частичном выводе и отказе окружения.
-
-### Windows
-
-Нужны Python, Clang и MSVC Build Tools с Windows SDK. В **x64 Native Tools
-Command Prompt** выполните `python -m liza run examples/hello.liza`.
-Для сборки: `python -m liza build examples/hello.liza`; результат —
-`build\hello.exe`. [Особенности вывода и кодов завершения](io-model.md#windows).
