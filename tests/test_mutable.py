@@ -32,7 +32,7 @@ class MutableTypeTests(unittest.TestCase):
             ('if false {x=1; x=2}', 'immutable'),
             ('var x:u32', 'expected'),
             ('var x=1; x+=1', 'expected'),
-            ('var x=1; x.field=2', 'expected'),
+            ('var x=1; x.field=2', 'requires a structure'),
             ('var x=1; return x; x=2', 'unreachable'),
         ]
         for body, message in cases:

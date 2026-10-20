@@ -1,0 +1,19 @@
+struct Point { x: u32, y: u32 }
+
+fn main() -> u32 {
+    var points = [Point(1, 2), Point(3, 4)]
+    snapshot = copy points
+    var i = 0
+    while i < points.len {
+        points[i].x = points[i].x + 10
+        i = i + 1
+    }
+    if true {
+        part = view points[0..2]
+        if part[1].x != 13 { return 1 }
+    }
+    points[1].y = 20
+    if snapshot[1].x != 3 || snapshot[1].y != 4 { return 2 }
+    if points[0].x != 11 || points[1].y != 20 { return 3 }
+    return 0
+}

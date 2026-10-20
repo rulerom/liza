@@ -100,6 +100,6 @@ def load_tests(loader,tests,pattern):
                         ('test_conversions','ConversionTypeTests'),('test_division','DivisionTypeTests'),
                         ('test_loops','LoopTypeTests'),('test_mutable','MutableTypeTests'),
                         ('test_numbers','NumericTypeTests'),('test_ownership','OwnershipTests'),
-                        ('test_structures','StructureTests'),('test_variants','VariantTypes'),('test_io','Effects'),('test_file','FileTypes'),('test_file','FileNative'),('test_resources','ResourceTypes'),('test_resources','ResourceNative')]:
+                        ('test_structures','StructureTests'),('test_variants','VariantTypes'),('test_io','Effects'),('test_file','FileTypes'),('test_file','FileNative'),('test_resources','ResourceTypes'),('test_resources','ResourceNative'),('test_updates','UpdateTypes'),('test_updates','UpdateNative')]:
         tests.addTests(loader.loadTestsFromTestCase(getattr(importlib.import_module(module),name)))
     return tests

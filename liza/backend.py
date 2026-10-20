@@ -222,6 +222,8 @@ def llvm(module):
                 for p in fn.params:
                     if large(p['type']):
                         lines.append(f'  %{p["name"]} = load {types[p["type"]]}, ptr %{p["name"]}_arg')
+                for update in (op for b in fn.blocks for op in b.operations if op.op == 'array.update'):
+                    lines.append(f'  %{update.result}_scratch = alloca {types[update.type]}')
                 for call in calls:
                     if large(call.type):
                         lines.append(f'  %{call.result}_return = alloca {types[call.type]}')
@@ -290,6 +292,18 @@ def llvm(module):
                         else:
                             lines.append(f'  %{name}_ptr = getelementptr {ty}, ptr %{name}_base, i64 %{name}_offset')
                         lines.append(f'  %{name} = load {ty}, ptr %{name}_ptr')
+                elif op.op == 'array.update':
+                    lines.append(f'  %{name}_invalid = icmp uge i32 {args[1]}, {array_length(op.type)}')
+                    guard(name, f'%{name}_invalid')
+                    lines.append(f'  store {ty} {args[0]}, ptr %{name}_scratch')
+                    lines.append(f'  %{name}_offset = zext i32 {args[1]} to i64')
+                    lines.append(f'  %{name}_ptr = getelementptr {ty}, ptr %{name}_scratch, i64 0, i64 %{name}_offset')
+                    lines.append(f'  store {types[element_type(op.type)]} {args[2]}, ptr %{name}_ptr')
+                    lines.append(f'  %{name} = load {ty}, ptr %{name}_scratch')
+                elif op.op == 'struct.update':
+                    index = [field for field, _ in structs[op.type].fields].index(op.field_name)
+                    field_type = structs[op.type].fields[index][1]
+                    lines.append(f'  %{name} = insertvalue {ty} {args[0]}, {types[field_type]} {args[1]}, {index}')
                 elif op.op == 'array.construct':
                     aggregate = 'zeroinitializer'
                     for index, value in enumerate(args):

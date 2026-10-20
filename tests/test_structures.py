@@ -43,7 +43,6 @@ class StructureTests(unittest.TestCase):
             ('x=A(true); return 0','expected u8'),
             ('x=A(1); return u32(x.missing)','unknown field'),
             ('x=1; return x.missing','requires a structure'),
-            ('var x=A(1); x.x=2; return 0',"expected '='"),
             ('x=A(1); y=move x.x; return 0','binding name'),
             ('x=A(1); y=x==x; return 0','scalar'),
             ('x=A(1); y=x+x; return 0','integer'),
@@ -67,7 +66,7 @@ class StructureTests(unittest.TestCase):
                 return 1
             }''')
         data=json.loads(dump(module))
-        self.assertEqual(data['version'],13)
+        self.assertEqual(data['version'],14)
         self.assertEqual(data['type_properties']['Box'],{'copyable':True,'implicit_copy':True})
         self.assertEqual(module.structs['Box'].fields,[('point','Point'),('valid','bool')])
         ops=[op for fn in module for block in fn.blocks for op in block.operations]

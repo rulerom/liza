@@ -4,7 +4,7 @@ Loans survive moving/copying/reassigning a view until their lexical scope ends.
 Assigning a view into an outer binding extends the loan to that binding's scope;
 its owner must live at least that long. No view can escape a function.
 """
-from .frontend import CompileError, Conditional, While, LoopControl, Match
+from .frontend import CompileError, Conditional, While, LoopControl, Match, Update
 from .types import is_view
 
 
@@ -74,6 +74,13 @@ def check_borrows(fn, types, match_types=None, variants=None):
                         break
             elif isinstance(stmt, LoopControl):
                 return env
+            elif isinstance(stmt, Update):
+                if locked(stmt.token.text):
+                    raise CompileError(stmt.token, 'cannot update owner while readonly view is live')
+                expr(stmt.target, env)
+                expr(stmt.expr, env)
+                if locked(stmt.token.text):
+                    raise CompileError(stmt.token, 'cannot update owner while readonly view is live')
             else:
                 owners = expr(stmt.expr, env)
                 if stmt.is_return:

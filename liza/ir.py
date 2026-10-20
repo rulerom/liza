@@ -2,7 +2,7 @@
 from dataclasses import dataclass, asdict, field
 import json
 from typing import Optional
-from .frontend import CompileError, Token, Conditional, While, LoopControl, Match
+from .frontend import CompileError, Token, Conditional, While, LoopControl, Match, Update
 from .typecheck import infer_expression
 from .types import signed, SCALAR_TYPES, value_properties, is_array, is_view, element_type, array_length, validate_type, generic_args
 from .ownership import check_ownership
@@ -393,6 +393,55 @@ class Lowerer:
             block.terminator = Terminator('jump', [self.current.name])
         self.merge_names(names, mutable, ends)
 
+    def update(self, stmt, names, mutable):
+        name = stmt.token.text
+        if name not in names:
+            raise CompileError(stmt.token, 'unknown binding '+name)
+        if name not in mutable:
+            raise CompileError(stmt.token, 'values are immutable; assignment requires var')
+        # Type the complete path once, then evaluate each projection once. Reads
+        # preserve bounds traps before the RHS, including the final projection.
+        inferred = infer_expression(stmt.target, names, self.types, self.signatures, None, self.structs)
+        for type_name in set(inferred.values()) - {'integer'}:
+            try:
+                validate_type(type_name, self.structs)
+            except ValueError as error:
+                raise CompileError(stmt.token, str(error)) from None
+        self.expression_types.update(inferred)
+        path = []
+        node = stmt.target
+        while node.kind != 'name':
+            path.append(node)
+            node = node.args[0]
+        value = names[name]
+        parents = []
+        for node in reversed(path):
+            source = self.types[value]
+            if node.kind == 'field':
+                if source not in self.structs:
+                    raise CompileError(node.token, 'only structure fields can be updated')
+                parents.append((node, value, None))
+                value = self.emit('struct.field', [value], type=inferred[id(node)],
+                                  source_type=source, field_name=node.token.text)
+            else:
+                if not is_array(source):
+                    raise CompileError(node.token, 'only owned array elements can be updated')
+                index = self.emit_expression(node.args[1], names, inferred)
+                parents.append((node, value, index))
+                value = self.emit('array.read', [value, index], type=inferred[id(node)],
+                                  source_type=source, bounds_policy='trap')
+        replacement = self.expression(stmt.expr, names, self.types[value])
+        self.expect(replacement, self.types[value], stmt.expr.token)
+        for node, parent, index in reversed(parents):
+            source = self.types[parent]
+            if node.kind == 'field':
+                replacement = self.emit('struct.update', [parent, replacement], type=source,
+                                        field_name=node.token.text)
+            else:
+                replacement = self.emit('array.update', [parent, index, replacement], type=source,
+                                        bounds_policy='trap')
+        names[name] = replacement
+
     def statements(self, statements, names, mutable):
         for stmt in statements:
             if self.current is None:
@@ -432,6 +481,8 @@ class Lowerer:
                     target = context.header
                 self.current.terminator = Terminator('jump', [target.name])
                 self.current = None
+            elif isinstance(stmt, Update):
+                self.update(stmt, names, mutable)
             elif stmt.is_return:
                 value = self.expression(stmt.expr, names, self.fn.result_type)
                 self.expect(value, self.fn.result_type, stmt.expr.token)
@@ -554,7 +605,7 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 13, 'type_properties': properties,
+    return json.dumps({'version': 14, 'type_properties': properties,
                        'structures': [asdict(s) for s in structs.values()],
                        'variants': [asdict(v) for v in variants.values()],
                        'externals': [asdict(fn) for fn in getattr(module, 'externals', [])],

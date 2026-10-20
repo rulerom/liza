@@ -54,6 +54,13 @@ class Statement:
 
 
 @dataclass
+class Update:
+    token: Token
+    target: Expr
+    expr: Expr
+
+
+@dataclass
 class Conditional:
     token: Token
     condition: Expr
@@ -204,13 +211,27 @@ class Parser:
                     self.take('var')
                 is_return = not is_var and self.current.text == 'return'
                 token = self.take('return') if is_return else self.identifier()
+                target = Expr(token, 'name', [])
+                while not is_return and self.current.text in ('.', '['):
+                    if is_var:
+                        raise CompileError(token, 'var declares a binding, not a field or element')
+                    if self.current.text == '.':
+                        self.take('.')
+                        target = Expr(self.identifier(), 'field', [target])
+                    else:
+                        bracket = self.take('[')
+                        index = self.expression()
+                        self.take(']')
+                        target = Expr(bracket, 'index', [target, index])
                 annotation = ''
                 if not is_return:
-                    if self.current.text == ':':
+                    if self.current.text == ':' and target.kind == 'name':
                         self.take(':')
                         annotation = self.type_name()
                     self.take('=')
-                body.append(Statement(token, self.expression(), is_return, annotation, is_var))
+                rhs = self.expression()
+                body.append(Update(token, target, rhs) if target.kind != 'name' else
+                            Statement(token, rhs, is_return, annotation, is_var))
                 if self.current.text not in ('\n', ';', '}'):
                     raise CompileError(self.current, 'expected newline, semicolon, or closing brace')
             self.separators()

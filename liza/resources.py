@@ -4,7 +4,7 @@ Existing availability analysis also checks copyable values. This pass adds
 explicit transfers and no implicit dropping of File-containing variants.
 Loops must preserve outer obligations on every backedge; joins must agree.
 """
-from .frontend import CompileError, Conditional, While, LoopControl, Match
+from .frontend import CompileError, Conditional, While, LoopControl, Match, Update
 
 
 def check_resources(fn, types, match_types, structs, signatures):
@@ -107,6 +107,9 @@ def check_resources(fn, types, match_types, structs, signatures):
                 discharged(state, state.keys()-keep, stmt.token)
                 (breaks if stmt.token.text == 'break' else backs).append({n:state[n] for n in keep})
                 return None
+            elif isinstance(stmt, Update):
+                expr(stmt.target, state)
+                expr(stmt.expr, state)
             else:
                 expr(stmt.expr, state)
                 if stmt.is_return:
