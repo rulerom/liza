@@ -1,0 +1,52 @@
+// RTP v2 fixed header, CSRC list, extension length and padding (RFC 3550).
+enum ParseError { TooShort; BadVersion; TruncatedCsrc; TruncatedExtension; BadPadding }
+struct RtpHeader { version:u8; marker:bool; payload_type:u8; sequence:u16; timestamp:u32; ssrc:u32; payload_offset:u32; payload_length:u32 }
+fn be16(data:View<u8>, i:u32)->u16 { return (u16(data[i]) << 8) | u16(data[i+1]) }
+fn be32(data:View<u8>, i:u32)->u32 { return (u32(be16(data,i)) << 16) | u32(be16(data,i+2)) }
+fn parse_rtp(data:View<u8>)->Result<RtpHeader,ParseError> {
+    if data.len < 12 { return Err(ParseError.TooShort) }
+    version = data[0] >> 6
+    if version != 2 { return Err(ParseError.BadVersion) }
+    var offset = 12 + 4 * u32(data[0] & 15)
+    if data.len < offset { return Err(ParseError.TruncatedCsrc) }
+    if (data[0] & 16) != 0 {
+        if data.len-offset < 4 { return Err(ParseError.TruncatedExtension) }
+        size = 4 * u32(be16(data,offset+2))
+        if size > data.len-offset-4 { return Err(ParseError.TruncatedExtension) }
+        offset = offset+4+size
+    }
+    var length = data.len-offset
+    if (data[0] & 32) != 0 {
+        if length == 0 { return Err(ParseError.BadPadding) }
+        padding = u32(data[data.len-1])
+        if padding == 0 || padding > length { return Err(ParseError.BadPadding) }
+        length = length-padding
+    }
+    return Ok(RtpHeader(version,(data[1]&128)!=0,data[1]&127,be16(data,2),be32(data,4),be32(data,8),offset,length))
+}
+
+// Run from the repository root; the path is relative to the working directory.
+fn main()->u32:io {
+    match file.read("examples/data/rtp.bin") {
+        Err(e)=>{
+            match console.println("Cannot read RTP file") {Ok(n)=>{} Err(output_error)=>{return 3}}
+            return 1
+        }
+        Ok(buffer)=>{
+            packet=buffer.data
+            data=view packet[0..buffer.len]
+            match parse_rtp(data) {
+                Err(e)=>{
+                    match console.println("Invalid RTP packet") {Ok(n)=>{} Err(output_error)=>{return 3}}
+                    return 2
+                }
+                Ok(header)=>{
+                    match console.write("RTP sequence: ") {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.print_u64(u64(header.sequence)) {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.println("") {Ok(n)=>{} Err(e)=>{return 3}}
+                    return 0
+                }
+            }
+        }
+    }
+}

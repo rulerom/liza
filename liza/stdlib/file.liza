@@ -1,0 +1,18 @@
+// Bounded whole-file input. Capacity and zero-filled tail are part of this API.
+enum FileError { NotFound; PermissionDenied; TooLarge; InvalidPath; PathTooLong; WouldBlock; Other }
+struct FileFailure { kind:FileError; read:u32 }
+struct FileBuffer { data:[u8;2048]; len:u32 }
+struct __liza_FileRead { data:[u8;2048]; status:u64 }
+fn file.read(path:Text)->Result<FileBuffer,FileFailure>:io {
+    raw=__liza_read_file(path)
+    count=u32.wrap(raw.status)
+    code=raw.status >> 32
+    if code==0 {return Ok(FileBuffer(raw.data,count))}
+    if code==1 {return Err(FileFailure(FileError.NotFound,count))}
+    if code==2 {return Err(FileFailure(FileError.PermissionDenied,count))}
+    if code==3 {return Err(FileFailure(FileError.TooLarge,count))}
+    if code==4 {return Err(FileFailure(FileError.InvalidPath,count))}
+    if code==5 {return Err(FileFailure(FileError.PathTooLong,count))}
+    if code==6 {return Err(FileFailure(FileError.WouldBlock,count))}
+    return Err(FileFailure(FileError.Other,count))
+}

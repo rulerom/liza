@@ -5,9 +5,11 @@ from .frontend import Parser, Function, Token, Program, Expr
 
 
 def attach(program):
-    if not getattr(program, 'uses_console', False):
+    libraries = [name for name in ('console', 'file') if getattr(program, 'uses_'+name, False)]
+    if not libraries:
         return program, []
-    library = Parser((Path(__file__).parent/'stdlib/console.liza').read_text(), internal=True).parse()
+    library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
+                               for name in libraries), internal=True).parse()
     combined = Program()
     combined.extend(program)
     def calls(node):
@@ -35,6 +37,7 @@ def attach(program):
     externals = [Function(Token(name,1,1), [(Token('value',1,1),t)], [], 'u64', 'io')
                  for name,t in [('__liza_write_text','Text'), ('__liza_write_bytes','View<u8>'),
                                 ('__liza_print_u64','u64'), ('__liza_print_i64','i64')]]
+    externals.append(Function(Token('__liza_read_file',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileRead', 'io'))
     return combined, [fn for fn in externals if fn.name.text in needed]
 
 
@@ -42,8 +45,14 @@ def link_flags(module):
     if not getattr(module,'externals',[]):
         return []
     import sys
+    suffix = 'windows' if sys.platform == 'win32' else 'posix'
+    names = {fn.name.text for fn in module.externals}
+    files = [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c'))
+             for name in ('console', 'file')
+             if (name == 'file' and '__liza_read_file' in names) or
+                (name == 'console' and names - {'__liza_read_file'})]
     if sys.platform == 'win32':
-        return [str(Path(__file__).parent/'runtime/console_windows.c')]
+        return files
     if sys.platform not in ('darwin','linux'):
         raise ValueError('console runtime currently supports Linux, macOS and Windows only')
-    return [str(Path(__file__).parent/'runtime/console_posix.c'), '-pthread']
+    return files + ['-pthread']

@@ -121,7 +121,7 @@ class Parser:
         self.internal = internal
         self.tokens = lex(source)
         self.index = 0
-        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError"}
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError", "FileError"}
 
     @property
     def current(self):
@@ -303,6 +303,9 @@ class Parser:
         functions.uses_console = any(t.text in ('IoError', 'IoFailure') or
                                      (t.text == 'console' and self.tokens[i+1].text == '.')
                                      for i,t in enumerate(self.tokens[:-1]))
+        functions.uses_file = any(t.text in ('FileError', 'FileFailure', 'FileBuffer') or
+                                  (t.text == 'file' and self.tokens[i+1].text == '.')
+                                  for i,t in enumerate(self.tokens[:-1]))
         self.separators()
         while self.current.text != '<eof>':
             if self.current.text == 'enum':

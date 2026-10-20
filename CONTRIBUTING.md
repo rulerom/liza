@@ -101,3 +101,14 @@ Windows acceptance: в x64 Native Tools Command Prompt выполните
 CLI/.exe, коды возврата, traps, точные байты, Unicode-консоль и ошибки handles.
 POSIX signal-тесты не подменяются Windows-проверками; их CI остаётся отдельно.
 Стоимость runtime проверяет `python tools/check_console_cost.py` на каждой ОС.
+
+
+Файловый срез: `python3 tools/check_file_cost.py` сохраняет исходный и O2 IR,
+ассемблер и отчёт в `build/file-cost`; CI публикует `file-cost-*`.
+Проверяется отсутствие stores/bulk-copy в выбранном `liza_main` между
+получением результата и вызовом RTP-парсера; копии внутри `file.read`
+не скрываются этим утверждением. `tests/test_file.py` проверяет граничные
+размеры, ошибки путей, UTF-8, частичное чтение/EINTR и приоритет ошибки закрытия.
+Windows-набор включает файловые тесты, кроме POSIX fault injection.
+Для ручной линковки файлового emit-llvm добавьте `liza/runtime/file_posix.c`
+или `liza/runtime/file_windows.c`; при наличии консоли добавьте её runtime.
