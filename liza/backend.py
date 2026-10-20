@@ -15,6 +15,7 @@ def llvm(module):
             return result
     types = LLVMTypes({name: f'i{width(name)}' for name in INTEGER_TYPES})
     types['bool'] = 'i1'
+    types['File'] = 'i64'  # Private runtime token, never a source-level integer.
     types['Text'] = '{ ptr, i32 }'
     types['integer'] = None  # Only a compile-time conversion literal, never a runtime type.
     structs = getattr(module, 'structs', {})
@@ -52,17 +53,38 @@ def llvm(module):
         for fn in module.externals:
             t = fn.params[0][1]
             name = fn.name.text
-            if name == '__liza_read_file':
+            if name in ('__liza_read_file', '__liza_read_chunk'):
                 # Private scalar/pointer ABI only; C never receives an LLVM aggregate.
-                lines.extend([
-                    'declare i64 @liza_rt_read_file(ptr, i32, ptr)',
-                    'define internal void @liza___liza_read_file(ptr sret(%struct.__liza_FileRead) %out, { ptr, i32 } %value) {',
-                    '  %path = extractvalue { ptr, i32 } %value, 0',
-                    '  %length = extractvalue { ptr, i32 } %value, 1',
-                    '  %storage = getelementptr %struct.__liza_FileRead, ptr %out, i32 0, i32 0',
-                    '  %status = call i64 @liza_rt_read_file(ptr %path, i32 %length, ptr %storage)',
+                chunk = name == '__liza_read_chunk'
+                symbol = 'liza_rt_read_chunk' if chunk else 'liza_rt_read_file'
+                lines.append(f'declare i64 @{symbol}('+('i64, ptr)' if chunk else 'ptr, i32, ptr)'))
+                lines.append(f'define internal void @liza_{name}(ptr sret(%struct.__liza_FileRead) %out, {types[t]} %value) {{')
+                if not chunk:
+                    lines.extend(['  %path = extractvalue { ptr, i32 } %value, 0',
+                                  '  %length = extractvalue { ptr, i32 } %value, 1'])
+                lines.append('  %storage = getelementptr %struct.__liza_FileRead, ptr %out, i32 0, i32 0')
+                args = 'i64 %value' if chunk else 'ptr %path, i32 %length'
+                lines.extend([f'  %status = call i64 @{symbol}({args}, ptr %storage)',
                     '  %status_ptr = getelementptr %struct.__liza_FileRead, ptr %out, i32 0, i32 1',
                     '  store i64 %status, ptr %status_ptr', '  ret void', '}'])
+                continue
+            if name == '__liza_file_open':
+                lines.extend(['declare i32 @liza_rt_file_open(ptr, i32, ptr)',
+                    'define internal %struct.__liza_FileOpen @liza___liza_file_open({ ptr, i32 } %value) {',
+                    '  %path = extractvalue { ptr, i32 } %value, 0',
+                    '  %length = extractvalue { ptr, i32 } %value, 1',
+                    '  %slot = alloca i64',
+                    '  %error = call i32 @liza_rt_file_open(ptr %path, i32 %length, ptr %slot)',
+                    '  %handle = load i64, ptr %slot',
+                    '  %base = insertvalue %struct.__liza_FileOpen zeroinitializer, i64 %handle, 0',
+                    '  %result = insertvalue %struct.__liza_FileOpen %base, i32 %error, 1',
+                    '  ret %struct.__liza_FileOpen %result', '}'])
+                continue
+            if name == '__liza_file_close':
+                lines.extend(['declare i32 @liza_rt_file_close(i64)',
+                    'define internal i32 @liza___liza_file_close(i64 %value) {',
+                    '  %result = call i32 @liza_rt_file_close(i64 %value)',
+                    '  ret i32 %result', '}'])
                 continue
             lines.append(f'define i64 @liza_{name}({types[t]} %value) {{')
             if t in ('Text','View<u8>'):
@@ -113,7 +135,7 @@ def llvm(module):
         if indirect_result:
             params = f'ptr sret({types[fn.result_type]}) %return_storage' + (', '+params if params else '')
         result_type = 'void' if indirect_result else types[fn.result_type]
-        linkage = 'internal ' if fn.name == 'file.read' else ''
+        linkage = 'internal ' if fn.name.startswith('file.') else ''
         lines.append(f'define {linkage}{result_type} @liza_{fn.name}({params}) {{')
         refs = {p['name']: f'%{p["name"]}' for p in fn.params}
         value_types = {p['name']: types[p['type']] for p in fn.params}

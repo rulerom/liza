@@ -1,5 +1,5 @@
 """Source -> AST. No backend semantics live here."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 import json
 from .types import SCALAR_TYPES, INTEGER_TYPES
@@ -114,6 +114,8 @@ class Function:
     body: list
     result_type: str
     effect_contract: str = 'pure'
+    borrowed_params: list = field(default_factory=list)
+    trusted_library: bool = False
 
 
 class Parser:
@@ -140,7 +142,7 @@ class Parser:
         token = self.current
         if token.text.startswith('__liza_') and not self.internal:
             raise CompileError(token, 'reserved implementation name')
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'io', 'Text', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'io', 'Text', 'File', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -173,7 +175,7 @@ class Parser:
                 self.tokens[self.index:self.index+1] = [Token('>',t.line,t.column), Token('>',t.line,t.column+1)]
             self.take('>')
             return name+'<'+','.join(args)+'>'
-        if self.current.text == 'Text':
+        if self.current.text in ('Text', 'File'):
             return self.take().text
         if self.current.text in SCALAR_TYPES:
             return self.take().text
@@ -303,7 +305,7 @@ class Parser:
         functions.uses_console = any(t.text in ('IoError', 'IoFailure') or
                                      (t.text == 'console' and self.tokens[i+1].text == '.')
                                      for i,t in enumerate(self.tokens[:-1]))
-        functions.uses_file = any(t.text in ('FileError', 'FileFailure', 'FileBuffer') or
+        functions.uses_file = any(t.text in ('File', 'FileError', 'FileFailure', 'FileBuffer', 'FileChunk') or
                                   (t.text == 'file' and self.tokens[i+1].text == '.')
                                   for i,t in enumerate(self.tokens[:-1]))
         self.separators()
@@ -341,7 +343,7 @@ class Parser:
                     raise CompileError(self.current, "expected 'pure' or 'io'")
                 effect = self.take().text
             body = self.block()
-            functions.append(Function(name, params, body, result_type, effect))
+            functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal))
             self.separators()
         return functions
 

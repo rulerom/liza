@@ -7,6 +7,7 @@ from .typecheck import infer_expression
 from .types import signed, SCALAR_TYPES, value_properties, is_array, is_view, element_type, array_length, validate_type, generic_args
 from .ownership import check_ownership
 from .borrowing import check_borrows
+from .resources import check_resources
 
 
 @dataclass
@@ -18,6 +19,7 @@ class Operation:
     overflow: str = 'none'
     callee: str = ''
     effect_contract: str = 'pure'
+    parameter_modes: list = field(default_factory=list)
     may_trap: bool = False
     shift_policy: str = 'none'
     division_policy: str = 'none'
@@ -88,13 +90,17 @@ def structure_types(program):
 
     def resolve(name, allow_view=True):
         if is_array(name):
-            return resolve(element_type(name), False)
+            member = resolve(element_type(name), False)
+            if not member['copyable']:
+                raise ValueError('resource values cannot be stored in arrays yet')
+            return member
         if is_view(name):
             if not allow_view:
                 raise ValueError('views cannot be stored in aggregates or returned')
-            resolve(element_type(name), False)
+            if not resolve(element_type(name), False)['copyable']:
+                raise ValueError('views of resource values are not supported')
             return {'copyable': True, 'implicit_copy': True}
-        if name in SCALAR_TYPES + ('Text',):
+        if name in SCALAR_TYPES + ('Text', 'File'):
             return value_properties(name)
         if name in result:
             return result[name].properties
@@ -121,6 +127,8 @@ def structure_types(program):
             seen.add(field_name)
             if type_name is not None:
                 member = resolve(type_name, False)
+                if not variant and not name.startswith('__liza_') and not member['copyable']:
+                    raise ValueError('resource fields require destructuring, which is not supported yet')
                 for key in properties:
                     properties[key] = properties[key] and member[key]
         visiting.remove(name)
@@ -187,6 +195,11 @@ class Lowerer:
             except ValueError as error:
                 raise CompileError(expr.token, str(error)) from None
         inferred = infer_expression(expr, names, self.types, self.signatures, expected, self.structs)
+        for type_name in set(inferred.values()) - {'integer'}:
+            try:
+                validate_type(type_name, self.structs)
+            except ValueError as error:
+                raise CompileError(expr.token, str(error)) from None
         self.expression_types.update(inferred)
         return self.emit_expression(expr, names, inferred)
 
@@ -210,7 +223,9 @@ class Lowerer:
             effect = self.signatures[text].effect_contract
             if effect == 'io' and self.fn.effect_contract != 'io':
                 raise CompileError(expr.token, 'pure function cannot call io function '+text)
-            return self.emit('call', args, type=type_name, callee=text, effect_contract=effect)
+            return self.emit('call', args, type=type_name, callee=text, effect_contract=effect,
+                             parameter_modes=['borrow' if i in self.signatures[text].borrowed_params else 'value'
+                                              for i in range(len(args))])
         if expr.kind in ('array', 'index', 'view'):
             args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
             if expr.kind == 'array':
@@ -446,10 +461,12 @@ class Lowerer:
             name = f'p{i}'
             names[param.text] = name
             self.types[name] = type_name
-            params.append({'name': name, 'type': type_name})
+            params.append({'name': name, 'type': type_name,
+                           'mode': 'borrow' if i in self.fn.borrowed_params else 'value'})
         self.statements(self.fn.body, names, set())
         if self.current is not None:
             raise CompileError(self.fn.name, f'function must return a {self.fn.result_type} value on every path')
+        check_resources(self.fn, self.expression_types, self.match_types, self.structs, self.signatures)
         check_borrows(self.fn, self.expression_types, self.match_types, self.structs.variants)
         return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type, self.fn.effect_contract)
 
@@ -513,7 +530,7 @@ def annotate_traps(module):
 
 def dump(module):
     structs = getattr(module, 'structs', {})
-    properties = {t: value_properties(t) for t in SCALAR_TYPES + ('Text',)}
+    properties = {t: value_properties(t) for t in SCALAR_TYPES + ('Text', 'File')}
     properties.update({name: struct.properties for name, struct in structs.items()})
     variants = getattr(module, 'variants', {})
     properties.update({name: v.properties for name, v in variants.items()})
@@ -537,7 +554,7 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 12, 'type_properties': properties,
+    return json.dumps({'version': 13, 'type_properties': properties,
                        'structures': [asdict(s) for s in structs.values()],
                        'variants': [asdict(v) for v in variants.values()],
                        'externals': [asdict(fn) for fn in getattr(module, 'externals', [])],

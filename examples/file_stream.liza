@@ -1,0 +1,30 @@
+// Stream a file in independent chunks. Run from the repository root.
+// Exit codes: 1 open, 2 read, 3 output, 4 close failure.
+fn main()->u32:io {
+    match file.open("examples/data/rtp.bin") {
+        Err(error)=>{return 1}
+        Ok(input)=>{
+            var status:u32=0
+            while true {
+                match file.read_chunk(input) {
+                    Err(error)=>{status=2;break}
+                    Ok(chunk)=>{
+                        if chunk.eof {break}
+                        bytes=chunk.data
+                        data=view bytes[0..chunk.len]
+                        match console.write_bytes(data) {
+                            Err(error)=>{status=3;break}
+                            Ok(written)=>{}
+                        }
+                    }
+                }
+            }
+            // Always attempt close; an earlier read/output error takes priority.
+            match file.close(move input) {
+                Err(error)=>{if status==0 {return 4}}
+                Ok(closed)=>{}
+            }
+            return status
+        }
+    }
+}

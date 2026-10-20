@@ -16,3 +16,33 @@ fn file.read(path:Text)->Result<FileBuffer,FileFailure>:io {
     if code==6 {return Err(FileFailure(FileError.WouldBlock,count))}
     return Err(FileFailure(FileError.Other,count))
 }
+
+// File is opaque and move-only. Only this trusted adapter handles raw handles.
+struct __liza_FileOpen { handle:File; error:u32 }
+struct FileChunk { data:[u8;2048]; len:u32; eof:bool }
+fn __liza_file_error(code:u32)->FileError {
+    if code==1 {return FileError.NotFound}
+    if code==2 {return FileError.PermissionDenied}
+    if code==3 {return FileError.TooLarge}
+    if code==4 {return FileError.InvalidPath}
+    if code==5 {return FileError.PathTooLong}
+    if code==6 {return FileError.WouldBlock}
+    return FileError.Other
+}
+fn file.open(path:Text)->Result<File,FileError>:io {
+    raw=__liza_file_open(path)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_file_error(raw.error))
+}
+fn file.close(handle:File)->Result<u32,FileError>:io {
+    code=__liza_file_close(handle)
+    if code==0 {return Ok(0)}
+    return Err(__liza_file_error(code))
+}
+fn file.read_chunk(handle:File)->Result<FileChunk,FileFailure>:io {
+    raw=__liza_read_chunk(handle)
+    count=u32.wrap(raw.status)
+    code=u32(raw.status >> 32)
+    if code==0 {return Ok(FileChunk(raw.data,count,count==0))}
+    return Err(FileFailure(__liza_file_error(code),count))
+}

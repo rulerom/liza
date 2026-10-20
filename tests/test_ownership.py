@@ -93,9 +93,11 @@ class OwnershipTests(unittest.TestCase):
             lower(Parser('fn f(x:u32)->u32{y=move x; return x} fn main()->u32{return 0}').parse())
         module = compile_body('x:u8=copy 7; y=copy x; z=move x; return u32(y+z)')
         data = json.loads(dump(module))
-        self.assertEqual(data['version'], 12)
-        self.assertEqual(set(data['type_properties']), set(SCALAR_TYPES + ('Text',)))
-        for properties in data['type_properties'].values():
+        self.assertEqual(data['version'], 13)
+        self.assertEqual(set(data['type_properties']), set(SCALAR_TYPES + ('Text', 'File')))
+        self.assertEqual(data['type_properties']['File'], {'copyable': False, 'implicit_copy': False})
+        for name, properties in data['type_properties'].items():
+            if name == 'File': continue
             self.assertEqual(properties, {'copyable': True, 'implicit_copy': True})
         ops = [op for block in module[0].blocks for op in block.operations]
         self.assertEqual([op.op for op in ops if op.op in ('copy','move')], ['copy','copy','move'])

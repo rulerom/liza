@@ -10,6 +10,9 @@ def attach(program):
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
                                for name in libraries), internal=True).parse()
+    for fn in library:
+        if fn.name.text == 'file.read_chunk':
+            fn.borrowed_params = [0]
     combined = Program()
     combined.extend(program)
     def calls(node):
@@ -38,6 +41,11 @@ def attach(program):
                  for name,t in [('__liza_write_text','Text'), ('__liza_write_bytes','View<u8>'),
                                 ('__liza_print_u64','u64'), ('__liza_print_i64','i64')]]
     externals.append(Function(Token('__liza_read_file',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileRead', 'io'))
+    externals.extend([
+        Function(Token('__liza_file_open',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileOpen', 'io'),
+        Function(Token('__liza_file_close',1,1), [(Token('handle',1,1),'File')], [], 'u32', 'io'),
+        Function(Token('__liza_read_chunk',1,1), [(Token('handle',1,1),'File')], [], '__liza_FileRead', 'io', borrowed_params=[0]),
+    ])
     return combined, [fn for fn in externals if fn.name.text in needed]
 
 
@@ -47,10 +55,9 @@ def link_flags(module):
     import sys
     suffix = 'windows' if sys.platform == 'win32' else 'posix'
     names = {fn.name.text for fn in module.externals}
-    files = [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c'))
-             for name in ('console', 'file')
-             if (name == 'file' and '__liza_read_file' in names) or
-                (name == 'console' and names - {'__liza_read_file'})]
+    file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk'}
+    libraries = (['console'] if names-file_names else []) + (['file'] if names & file_names else [])
+    files = [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if sys.platform == 'win32':
         return files
     if sys.platform not in ('darwin','linux'):

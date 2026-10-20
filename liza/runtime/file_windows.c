@@ -40,3 +40,32 @@ uint64_t liza_rt_read_file(const uint8_t *path, uint32_t length, uint8_t *out) {
     if (!CloseHandle(file) && !error) error = file_error(GetLastError());
     return ((uint64_t)error << 32) | count;
 }
+
+uint32_t liza_rt_file_open(const uint8_t *path, uint32_t length, uint64_t *handle) {
+    *handle = 0;
+    if (length == 0 || memchr(path, 0, length)) return 4;
+    if (length > 4095) return 5;
+    WCHAR name[4096];
+    int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (const char *)path,
+                               (int)length, name, 4095);
+    if (!n) return 4;
+    name[n] = 0;
+    HANDLE file = CreateFileW(name, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE) return file_error(GetLastError());
+    *handle = (uint64_t)(uintptr_t)file;
+    return 0;
+}
+uint32_t liza_rt_file_close(uint64_t handle) {
+    return CloseHandle((HANDLE)(uintptr_t)handle) ? 0 : file_error(GetLastError());
+}
+uint64_t liza_rt_read_chunk(uint64_t handle, uint8_t *out) {
+    memset(out, 0, CAPACITY);
+    DWORD got = 0;
+    if (!ReadFile((HANDLE)(uintptr_t)handle, out, CAPACITY, &got, NULL)) {
+        DWORD error = GetLastError();
+        if (error == ERROR_HANDLE_EOF) return 0;
+        return ((uint64_t)file_error(error) << 32) | got;
+    }
+    return got;
+}
