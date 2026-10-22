@@ -1,0 +1,120 @@
+// Scalar entry points keep the native harness independent of aggregate ABI.
+fn check_reuse(seed: u32) -> u32 {
+    first = table_add(table_empty(), Connection(u64(seed), 1, 7))
+    match first.result {
+        Err(e) => { return 1 }
+        Ok(old) => {
+            snapshot = copy first.table
+            changed = table_edit(first.table, old, Connection(99, 2, 8))
+            match changed.result { Err(e) => { return 2 } Ok(done) => {} }
+            match table_get(snapshot, old) {
+                None => { return 3 }
+                Some(c) => { if c.user_id != u64(seed) || c.packets != 7 { return 4 } }
+            }
+            match table_get(changed.table, old) {
+                None => { return 5 }
+                Some(c) => { if c.user_id != 99 || c.state != 2 || c.packets != 8 { return 6 } }
+            }
+            removed = table_del(changed.table, old)
+            match removed.result { Err(e) => { return 7 } Ok(done) => {} }
+            match table_get(removed.table, old) { Some(c) => { return 8 } None => {} }
+            again = table_add(removed.table, Connection(100, 3, 9))
+            match again.result {
+                Err(e) => { return 9 }
+                Ok(id) => {
+                    if id.slot != old.slot || id.generation != old.generation + 1 { return 10 }
+                    match table_get(again.table, old) { Some(c) => { return 11 } None => {} }
+                    match table_get(again.table, id) { None => { return 12 } Some(c) => {
+                        if c.user_id != 100 { return 13 }
+                    } }
+                    bad_edit = table_edit(again.table, old, Connection(0, 0, 0))
+                    match bad_edit.result { Ok(done) => { return 14 } Err(e) => {
+                        match e { TableError.Full => { return 15 } TableError.NotFound => {} }
+                    } }
+                    bad_del = table_del(bad_edit.table, old)
+                    match bad_del.result { Ok(done) => { return 16 } Err(e) => {} }
+                    match table_get(bad_del.table, id) { None => { return 17 } Some(c) => {
+                        if c.user_id != 100 { return 18 }
+                    } }
+                }
+            }
+        }
+    }
+    return 0
+}
+
+fn check_invalid(index: u32) -> u32 {
+    empty = table_empty()
+    id = ConnectionId(index, 1)
+    match table_get(empty, id) { Some(c) => { return 1 } None => {} }
+    edited = table_edit(empty, id, Connection(1, 1, 1))
+    match edited.result { Ok(done) => { return 2 } Err(e) => {
+        match e { TableError.Full => { return 3 } TableError.NotFound => {} }
+    } }
+    removed = table_del(edited.table, id)
+    match removed.result { Ok(done) => { return 4 } Err(e) => {} }
+    // Failed operations preserve free slots and their generations.
+    added = table_add(removed.table, Connection(2, 2, 2))
+    match added.result { Err(e) => { return 5 } Ok(fresh) => {
+        if fresh.slot != 0 || fresh.generation != 1 { return 6 }
+    } }
+    return 0
+}
+
+fn check_retirement(index: u32) -> u32 {
+    var table = table_empty()
+    table.slots[index] = ConnectionSlot(4294967294, true, false, Connection(1, 1, 1))
+    almost = ConnectionId(index, 4294967294)
+    removed = table_del(move table, almost)
+    match removed.result { Err(e) => { return 1 } Ok(done) => {} }
+    var last = removed.table
+    // Occupy all other slots so add must choose the last-generation slot.
+    var i = 0
+    while i < last.slots.len {
+        if i != index { last.slots[i] = ConnectionSlot(1, true, false, Connection(2, 2, 2)) }
+        i = i + 1
+    }
+    added = table_add(move last, Connection(3, 3, 3))
+    match added.result { Err(e) => { return 2 } Ok(id) => {
+        if id.slot != index || id.generation != 4294967295 { return 3 }
+        match table_get(added.table, almost) { Some(c) => { return 4 } None => {} }
+        retired = table_del(added.table, id)
+        match retired.result { Err(e) => { return 5 } Ok(done) => {} }
+        match table_get(retired.table, id) { Some(c) => { return 6 } None => {} }
+        slot = retired.table.slots[index]
+        if !slot.retired || slot.occupied || slot.generation != 4294967295 { return 7 }
+        full = table_add(retired.table, Connection(4, 4, 4))
+        match full.result { Ok(new_id) => { return 8 } Err(e) => {
+            match e { TableError.NotFound => { return 9 } TableError.Full => {} }
+        } }
+        twice = table_del(full.table, id)
+        match twice.result { Ok(done) => { return 10 } Err(e) => {} }
+    } }
+    return 0
+}
+
+fn check_full(seed: u32) -> u32 {
+    var table = table_empty()
+    var i = 0
+    while i < table.slots.len {
+        added = table_add(move table, Connection(u64(seed), i, u64(i)))
+        table = added.table
+        match added.result { Err(e) => { return 1 } Ok(id) => {
+            if id.slot != i || id.generation != 1 { return 2 }
+        } }
+        i = i + 1
+    }
+    full = table_add(move table, Connection(0, 0, 0))
+    match full.result { Ok(id) => { return 3 } Err(e) => {
+        match e { TableError.NotFound => { return 4 } TableError.Full => {} }
+    } }
+    i = 0
+    while i < full.table.slots.len {
+        match table_get(full.table, ConnectionId(i, 1)) {
+            None => { return 5 }
+            Some(c) => { if c.user_id != u64(seed) || c.state != i || c.packets != u64(i) { return 6 } }
+        }
+        i = i + 1
+    }
+    return 0
+}

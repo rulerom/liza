@@ -47,6 +47,12 @@ jobs:
         with:
           name: file-cost-${{ matrix.os }}
           path: build/file-cost/
+      - name: Check connection table semantics and cost
+        run: python tools/check_table_cost.py --output build/table-cost
+      - uses: actions/upload-artifact@v4
+        with:
+          name: table-cost-${{ matrix.os }}
+          path: build/table-cost/
   windows:
     runs-on: windows-latest
     steps:
@@ -65,6 +71,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/check_file_cost.py --output build/file-cost
           if errorlevel 1 exit /b 1
+          python tools/check_table_cost.py --output build/table-cost
+          if errorlevel 1 exit /b 1
       - uses: actions/upload-artifact@v4
         with:
           name: console-cost-windows
@@ -73,3 +81,7 @@ jobs:
         with:
           name: file-cost-windows
           path: build/file-cost/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: table-cost-windows
+          path: build/table-cost/

@@ -511,9 +511,10 @@ IR версии 14 содержит типизированные значени�
 `struct.field` содержит `source_type` и `field_name`.
 `struct.update` возвращает агрегат с заменённым полем. Смещений и адресов
 в этих операциях нет. Структуры участвуют в параметрах, результатах и `phi`
-как обычные значения. LLVM backend использует агрегаты и операции
-[`insertvalue`/`extractvalue`](https://llvm.org/docs/LangRef.html#aggregate-operations),
-а не адресуемые поля. Это стратегия реализации, а не определение семантики Liza.
+как обычные значения. Для небольших структур LLVM backend использует
+[`insertvalue`/`extractvalue`](https://llvm.org/docs/LangRef.html#aggregate-operations);
+крупные значения могут храниться в памяти backend. Это стратегия реализации,
+а не определение семантики Liza и не введение адресуемых полей в язык.
 
 `array.construct`, `array.read`, `array.update`, `view.create`, `view.read` задают логические
 операции. Доступ и создание диапазона имеют `bounds_policy: trap` и `may_trap`.

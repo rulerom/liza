@@ -46,6 +46,7 @@ fn main() -> u32 {
 с Python 3.9.6 и Apple Clang 21. Команды выполняются из корня репозитория.
 
 ```sh
+python3 -m liza run examples/connection_table.liza -O 2
 python3 -m liza run examples/hello.liza
 python3 -m liza run examples/rtp_file.liza -O 2
 python3 -m liza check examples/answer.liza

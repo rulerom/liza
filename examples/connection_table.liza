@@ -1,0 +1,96 @@
+// Fixed-capacity value table. IDs are local to a table, not global identities.
+struct ConnectionId { slot: u32, generation: u32 }
+struct Connection { user_id: u64, state: u32, packets: u64 }
+struct ConnectionSlot {
+    generation: u32
+    occupied: bool
+    retired: bool
+    value: Connection
+}
+struct ConnectionTable { slots: [ConnectionSlot; 64] }
+struct Done {}
+enum TableError { Full, NotFound }
+struct AddResult { table: ConnectionTable, result: Result<ConnectionId, TableError> }
+struct ChangeResult { table: ConnectionTable, result: Result<Done, TableError> }
+
+fn table_empty() -> ConnectionTable {
+    empty = ConnectionSlot(1, false, false, Connection(0, 0, 0))
+    // BEGIN INITIAL SLOTS: expanded by the test fixture for capacity 4096.
+    return ConnectionTable([empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty])
+    // END INITIAL SLOTS
+}
+
+fn slot_matches(slot: ConnectionSlot, id: ConnectionId) -> bool {
+    return slot.occupied && !slot.retired && slot.generation == id.generation
+}
+
+fn table_get(table: ConnectionTable, id: ConnectionId) -> Option<Connection> {
+    if id.slot >= table.slots.len { return None }
+    slot = table.slots[id.slot]
+    if !slot_matches(slot, id) { return None }
+    return Some(slot.value)
+}
+
+fn table_add(input: ConnectionTable, value: Connection) -> AddResult {
+    var i = 0
+    while i < input.slots.len {
+        slot = input.slots[i]
+        if !slot.occupied && !slot.retired {
+            var table = move input
+            id = ConnectionId(i, slot.generation)
+            table.slots[i] = ConnectionSlot(slot.generation, true, false, value)
+            return AddResult(move table, Ok(id))
+        }
+        i = i + 1
+    }
+    return AddResult(move input, Err(TableError.Full))
+}
+
+fn table_edit(input: ConnectionTable, id: ConnectionId, value: Connection) -> ChangeResult {
+    var table = move input
+    if id.slot >= table.slots.len { return ChangeResult(move table, Err(TableError.NotFound)) }
+    slot = table.slots[id.slot]
+    if !slot_matches(slot, id) { return ChangeResult(move table, Err(TableError.NotFound)) }
+    table.slots[id.slot].value = value
+    return ChangeResult(move table, Ok(Done()))
+}
+
+fn table_del(input: ConnectionTable, id: ConnectionId) -> ChangeResult {
+    var table = move input
+    if id.slot >= table.slots.len { return ChangeResult(move table, Err(TableError.NotFound)) }
+    slot = table.slots[id.slot]
+    if !slot_matches(slot, id) { return ChangeResult(move table, Err(TableError.NotFound)) }
+    // No wrapping: the last generation is usable once, then the slot retires.
+    if slot.generation == 4294967295 {
+        table.slots[id.slot] = ConnectionSlot(slot.generation, false, true, Connection(0, 0, 0))
+    } else {
+        table.slots[id.slot] = ConnectionSlot(slot.generation + 1, false, false, Connection(0, 0, 0))
+    }
+    return ChangeResult(move table, Ok(Done()))
+}
+
+fn main() -> u32 {
+    first = table_add(table_empty(), Connection(42, 1, 0))
+    match first.result {
+        Err(e) => { return 1 }
+        Ok(alice) => {
+            edited = table_edit(first.table, alice, Connection(42, 2, 10))
+            match edited.result { Err(e) => { return 2 } Ok(done) => {} }
+            removed = table_del(edited.table, alice)
+            match removed.result { Err(e) => { return 3 } Ok(done) => {} }
+            next = table_add(removed.table, Connection(99, 1, 0))
+            match next.result {
+                Err(e) => { return 4 }
+                Ok(bob) => {
+                    if bob.slot != alice.slot || bob.generation == alice.generation { return 5 }
+                    match table_get(next.table, alice) { Some(c) => { return 6 } None => {} }
+                    match table_get(next.table, bob) {
+                        None => { return 7 }
+                        Some(c) => { if c.user_id != 99 { return 8 } }
+                    }
+                }
+            }
+        }
+    }
+    return 0
+}

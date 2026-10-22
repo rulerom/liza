@@ -57,4 +57,5 @@ nav:
       - Числовая модель: numeric-model.md
       - Минимальный I/O: io-model.md
   - Эталонные программы: reference-programs.md
+  - Таблица соединений: connection-table.md
   - План разработки: roadmap.md
