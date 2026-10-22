@@ -1,0 +1,12 @@
+name = "Liza"
+grammar = "liza"
+path_suffixes = ["liza"]
+line_comments = ["// "]
+tab_size = 4
+hard_tabs = false
+brackets = [
+    { start = "{", end = "}", close = true, newline = true },
+    { start = "[", end = "]", close = true, newline = false },
+    { start = "(", end = ")", close = true, newline = false },
+    { start = "\"", end = "\"", close = true, newline = false, not_in = ["string", "comment"] },
+]

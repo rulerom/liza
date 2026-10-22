@@ -50,6 +50,7 @@ extra_css:
 nav:
   - Liza: index.md
   - Быстрый старт: getting-started.md
+  - Редактор Zed: editor.md
   - Milestones: milestones.md
   - Язык:
       - Модель и открытые решения: design.md

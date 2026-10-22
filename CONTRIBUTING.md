@@ -235,3 +235,25 @@ Gate проверяет отсутствие bulk-copy в owned edit и во в�
 копий. CI публикует `edit-cost-*` для Linux/macOS/Windows.
 Тесты включают живые copy/views, borrowed large view elements, snapshots между
 итерациями, break/continue, competing results и runtime bounds trap O0/O2.
+
+
+## Поддержка редактора
+
+Tree-sitter-грамматика находится в `editors/tree-sitter-liza`, расширение Zed —
+в `editors/zed`. Проверки редактора выполняются отдельным CI и не добавляют
+Node.js к зависимостям компилятора. Для разработки нужны Node.js, npm и C compiler:
+
+```sh
+npm ci --prefix editors/tree-sitter-liza
+npm run generate --prefix editors/tree-sitter-liza
+python3 tools/check_editor.py
+```
+
+Если npm блокирует install scripts, разрешите install script только пакета
+`tree-sitter-cli` (он загружает CLI с GitHub). Генератор закреплён на 0.25.10,
+ABI 14. В репозитории хранится сгенерированный parser.c и заголовки.
+Проверка охватывает корпус деревьев, все examples/fixtures, все SCM-запросы,
+категории подсветки и восстановление Outline после незавершённого выражения.
+После коммита грамматики обновите закреплённый SHA в `editors/zed/extension.toml`.
+Редакторная грамматика допускает свободные переносы/незавершённый код; правила
+корректности программы по-прежнему определяются frontend компилятора.

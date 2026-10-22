@@ -40,6 +40,12 @@ fn main() -> u32 {
 }
 ```
 
+## Редактор
+
+Для Zed есть подсветка `.liza`, скобки, отступы и Outline. Выполните
+`zed: install dev extension` и выберите `editors/zed`.
+[Инструкция установки](https://liza.rulerom.com/editor.html).
+
 ## Запуск
 
 Нужны Python 3.9+ и Clang в PATH; проверено локально на macOS ARM64

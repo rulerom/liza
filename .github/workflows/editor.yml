@@ -1,0 +1,21 @@
+name: Editor support
+on:
+  push:
+    paths: ['editors/**', 'examples/**', 'tests/fixtures/**', 'tools/check_editor.py', '.github/workflows/editor.yml']
+  pull_request:
+    paths: ['editors/**', 'examples/**', 'tests/fixtures/**', 'tools/check_editor.py', '.github/workflows/editor.yml']
+jobs:
+  tree-sitter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - run: npm ci --prefix editors/tree-sitter-liza
+      - run: npm run generate --prefix editors/tree-sitter-liza
+      - run: git diff --exit-code -- editors/tree-sitter-liza/src
+      - run: python tools/check_editor.py
