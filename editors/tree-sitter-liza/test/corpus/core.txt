@@ -1,0 +1,341 @@
+==================
+Functions, nested types, effects and UTF-8
+==================
+struct Header { value: u8, bytes: [u8; 4] }
+enum Error { Short, Bad(u8) }
+fn parse(data: View<u8>) -> Result<Option<Header>, Error> : pure {
+    text = "Привет\n\u0041"
+    first = data[0]
+    return Ok(None)
+}
+---
+
+(source_file
+  (struct_definition
+    (type_identifier
+      (identifier))
+    (field_definition
+      (identifier)
+      (builtin_type))
+    (field_definition
+      (identifier)
+      (array_type
+        (builtin_type)
+        (number))))
+  (enum_definition
+    (type_identifier
+      (identifier))
+    (variant_definition
+      (identifier))
+    (variant_definition
+      (identifier)
+      (builtin_type)))
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)
+        (generic_type
+          (builtin_type))))
+    (generic_type
+      (generic_type
+        (type_identifier
+          (identifier)))
+      (type_identifier
+        (identifier)))
+    (effect)
+    (block
+      (assignment
+        (identifier)
+        (string
+          (escape_sequence)
+          (escape_sequence)))
+      (assignment
+        (identifier)
+        (index_expression
+          (identifier)
+          (number)))
+      (return_statement
+        (call_expression
+          (builtin_variant)
+          (arguments
+            (builtin_variant)))))))
+
+==================
+Control flow, updates and lexical views
+==================
+fn main() -> u32 : io {
+    var data: [u8; 4] = [0x80, 96, 18, 52]
+    saved = copy data
+    if true {
+        header = view data[0..2]
+        version = header[0] >> 6
+    } else if false { return 1 }
+    var i = 0
+    while i < 4 {
+        data[i] = u8.wrap(i)
+        i = i + 1
+        if i == 2 { continue }
+        if i == 3 { break }
+    }
+    result = move data
+    match console.println("Hello, Liza!") {
+        Ok(written) => { return 0 }
+        Err(error) => { return 1 }
+    }
+}
+---
+
+(source_file
+  (function_definition
+    (identifier)
+    (parameters)
+    (builtin_type)
+    (effect)
+    (block
+      (assignment
+        (identifier)
+        (array_type
+          (builtin_type)
+          (number))
+        (array_expression
+          (number)
+          (number)
+          (number)
+          (number)))
+      (assignment
+        (identifier)
+        (unary_expression
+          (identifier)))
+      (if_statement
+        (boolean)
+        (block
+          (assignment
+            (identifier)
+            (view_expression
+              (identifier)
+              (number)
+              (number)))
+          (assignment
+            (identifier)
+            (binary_expression
+              (index_expression
+                (identifier)
+                (number))
+              (number))))
+        (if_statement
+          (boolean)
+          (block
+            (return_statement
+              (number)))))
+      (assignment
+        (identifier)
+        (number))
+      (while_statement
+        (binary_expression
+          (identifier)
+          (number))
+        (block
+          (assignment
+            (index_expression
+              (identifier)
+              (identifier))
+            (call_expression
+              (field_expression
+                (builtin_type)
+                (identifier))
+              (arguments
+                (identifier))))
+          (assignment
+            (identifier)
+            (binary_expression
+              (identifier)
+              (number)))
+          (if_statement
+            (binary_expression
+              (identifier)
+              (number))
+            (block
+              (continue_statement)))
+          (if_statement
+            (binary_expression
+              (identifier)
+              (number))
+            (block
+              (break_statement)))))
+      (assignment
+        (identifier)
+        (unary_expression
+          (identifier)))
+      (match_statement
+        (call_expression
+          (field_expression
+            (identifier)
+            (identifier))
+          (arguments
+            (string)))
+        (match_arm
+          (pattern
+            (builtin_variant)
+            (identifier))
+          (block
+            (return_statement
+              (number))))
+        (match_arm
+          (pattern
+            (builtin_variant)
+            (identifier))
+          (block
+            (return_statement
+              (number))))))))
+
+==================
+Operators, variants, comments and field updates
+==================
+fn ops(x:u32, y:u32) -> u32 {
+    // fn fake() { "not a string" }
+    a = x +% y -% 1 *% 2
+    b = x +| y -| 1 *| 2
+    c = (x << 1) >> 1 | y & x ^ y
+    d = !true || false && x != y && x <= y && x >= y
+    e = ~x / 2 % 3
+    f = -1 + 2 - 1 * 2
+    var p = Header(u8.saturate(x), [1,2,3,4])
+    p.value = u8(y)
+    match Error.Bad(1) { Error.Bad(code) => { return u32(code) } Error.Short => { return 0 } }
+    return e
+}
+---
+
+(source_file
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)
+        (builtin_type))
+      (parameter
+        (identifier)
+        (builtin_type)))
+    (builtin_type)
+    (block
+      (comment)
+      (assignment
+        (identifier)
+        (binary_expression
+          (binary_expression
+            (identifier)
+            (identifier))
+          (binary_expression
+            (number)
+            (number))))
+      (assignment
+        (identifier)
+        (binary_expression
+          (binary_expression
+            (identifier)
+            (identifier))
+          (binary_expression
+            (number)
+            (number))))
+      (assignment
+        (identifier)
+        (binary_expression
+          (binary_expression
+            (parenthesized_expression
+              (binary_expression
+                (identifier)
+                (number)))
+            (number))
+          (binary_expression
+            (binary_expression
+              (identifier)
+              (identifier))
+            (identifier))))
+      (assignment
+        (identifier)
+        (binary_expression
+          (unary_expression
+            (boolean))
+          (binary_expression
+            (binary_expression
+              (binary_expression
+                (boolean)
+                (binary_expression
+                  (identifier)
+                  (identifier)))
+              (binary_expression
+                (identifier)
+                (identifier)))
+            (binary_expression
+              (identifier)
+              (identifier)))))
+      (assignment
+        (identifier)
+        (binary_expression
+          (binary_expression
+            (unary_expression
+              (identifier))
+            (number))
+          (number)))
+      (assignment
+        (identifier)
+        (binary_expression
+          (binary_expression
+            (unary_expression
+              (number))
+            (number))
+          (binary_expression
+            (number)
+            (number))))
+      (assignment
+        (identifier)
+        (call_expression
+          (identifier)
+          (arguments
+            (call_expression
+              (field_expression
+                (builtin_type)
+                (identifier))
+              (arguments
+                (identifier)))
+            (array_expression
+              (number)
+              (number)
+              (number)
+              (number)))))
+      (assignment
+        (field_expression
+          (identifier)
+          (identifier))
+        (call_expression
+          (builtin_type)
+          (arguments
+            (identifier))))
+      (match_statement
+        (call_expression
+          (field_expression
+            (identifier)
+            (identifier))
+          (arguments
+            (number)))
+        (match_arm
+          (pattern
+            (identifier)
+            (identifier)
+            (identifier))
+          (block
+            (return_statement
+              (call_expression
+                (builtin_type)
+                (arguments
+                  (identifier))))))
+        (match_arm
+          (pattern
+            (identifier)
+            (identifier))
+          (block
+            (return_statement
+              (number)))))
+      (return_statement
+        (identifier)))))

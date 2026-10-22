@@ -1,0 +1,57 @@
+// Editor grammar: accepts whitespace during incomplete edits; compiler remains
+// authoritative for statement separators, typing, effects and ownership.
+const commaSep = rule => optional(seq(rule, repeat(seq(',', rule)), optional(',')));
+module.exports = grammar({
+  name: 'liza',
+  extras: $ => [/\s/, $.comment],
+  word: $ => $.identifier,
+  rules: {
+    source_file: $ => repeat(choice($.function_definition, $.struct_definition, $.enum_definition, ';')),
+    comment: _ => token(seq('//', /[^\n]*/)),
+    identifier: _ => /[A-Za-z_][A-Za-z_0-9]*/,
+    function_definition: $ => seq('fn', field('name', $.identifier), $.parameters, '->', field('return_type', $._type), optional($.effect), field('body', $.block)),
+    parameters: $ => seq('(', commaSep($.parameter), ')'),
+    parameter: $ => seq(field('name', $.identifier), ':', field('type', $._type)),
+    effect: _ => seq(':', choice('pure', 'io')),
+    struct_definition: $ => seq('struct', field('name', $.type_identifier), '{', repeat(choice($.field_definition, ',', ';')), '}'),
+    field_definition: $ => seq(field('name', $.identifier), ':', field('type', $._type)),
+    enum_definition: $ => seq('enum', field('name', $.type_identifier), '{', repeat(choice($.variant_definition, ',', ';')), '}'),
+    variant_definition: $ => seq(field('name', $.identifier), optional(seq('(', $._type, ')'))),
+    type_identifier: $ => $.identifier,
+    builtin_type: _ => choice('bool', 'u8', 'u16', 'u32', 'u64', 'i8', 'i16', 'i32', 'i64', 'Text', 'File'),
+    _type: $ => choice($.builtin_type, $.type_identifier, $.array_type, $.generic_type),
+    array_type: $ => seq('[', $._type, ';', $.number, ']'),
+    generic_type: $ => seq(choice('View', 'Option', 'Result'), '<', $._type, optional(seq(',', $._type)), '>'),
+    block: $ => seq('{', repeat(choice($._statement, ';')), '}'),
+    _statement: $ => choice($.assignment, $.return_statement, $.if_statement, $.while_statement, $.match_statement, $.break_statement, $.continue_statement),
+    assignment: $ => seq(optional('var'), field('target', $._target), optional(seq(':', $._type)), '=', field('value', $._expression)),
+    _target: $ => choice($.identifier, $.field_expression, $.index_expression),
+    return_statement: $ => seq('return', $._expression),
+    break_statement: _ => 'break',
+    continue_statement: _ => 'continue',
+    if_statement: $ => prec.right(seq('if', $._expression, $.block, optional(seq('else', choice($.block, $.if_statement))))),
+    while_statement: $ => seq('while', $._expression, $.block),
+    match_statement: $ => seq('match', $._expression, '{', repeat(seq($.match_arm, optional(','))), '}'),
+    match_arm: $ => seq($.pattern, '=>', $.block),
+    pattern: $ => seq(field('variant', choice($.identifier, $.builtin_variant)), optional(seq('.', field('variant', $.identifier))), optional(seq('(', field('binding', $.identifier), ')'))),
+    builtin_variant: _ => choice('Some', 'None', 'Ok', 'Err'),
+    _expression: $ => choice($.identifier, $.builtin_variant, $.builtin_type, $.number, $.boolean, $.string, $.array_expression, $.parenthesized_expression, $.call_expression, $.field_expression, $.index_expression, $.view_expression, $.unary_expression, $.binary_expression),
+    number: _ => /0x[0-9a-fA-F]+|[0-9]+/,
+    boolean: _ => choice('true', 'false'),
+    string: $ => seq('"', repeat(choice($.escape_sequence, token.immediate(/[^"\\\n]+/))), '"'),
+    escape_sequence: _ => token.immediate(seq('\\', choice(/["\\/bfnrt]/, /u[0-9a-fA-F]{4}/))),
+    array_expression: $ => seq('[', commaSep($._expression), ']'),
+    parenthesized_expression: $ => seq('(', $._expression, ')'),
+    call_expression: $ => prec(13, seq(field('function', $._expression), $.arguments)),
+    arguments: $ => seq('(', commaSep($._expression), ')'),
+    field_expression: $ => prec(13, seq(field('value', $._expression), '.', field('field', $.identifier))),
+    index_expression: $ => prec(13, seq(field('value', $._expression), '[', field('index', $._expression), ']')),
+    view_expression: $ => seq('view', $.identifier, '[', $._expression, '..', $._expression, ']'),
+    unary_expression: $ => prec(11, seq(choice('!', '~', '-', 'copy', 'move'), $._expression)),
+    binary_expression: $ => choice(...[
+      [1, ['||']], [2, ['&&']], [3, ['|']], [4, ['^']], [5, ['&']],
+      [6, ['==', '!=']], [7, ['<', '<=', '>', '>=']], [8, ['<<', '>>']],
+      [9, ['+', '-', '+%', '-%', '+|', '-|']], [10, ['*', '/', '%', '*%', '*|']]
+    ].map(([p, operators]) => prec.left(p, seq(field('left', $._expression), field('operator', operators.length === 1 ? operators[0] : choice(...operators)), field('right', $._expression)))))
+  }
+});
