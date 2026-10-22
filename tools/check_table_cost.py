@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def source_for(capacity):
-    if capacity not in (64, 4096):
-        raise ValueError('supported capacities are 64 and 4096')
+    if capacity not in (64, 4096, 16384):
+        raise ValueError('supported capacities are 64, 4096 and 16384')
     source = (ROOT/'examples/connection_table.liza').read_text()
     source = source.replace('[ConnectionSlot; 64]', f'[ConnectionSlot; {capacity}]')
     start = source.index('    return ConnectionTable([')

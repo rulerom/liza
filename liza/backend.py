@@ -1,4 +1,6 @@
 """Liza IR -> textual LLVM IR. The host toolchain supplies ABI and linking."""
+from dataclasses import replace
+from .storage import owned_variant, caller_plan
 from .types import INTEGER_TYPES, width, signed, bounds, convert_integer, is_array, is_view, element_type, array_length
 
 
@@ -137,7 +139,17 @@ def llvm(module):
         ])
         return f'%{name}_clamped'
 
-    for fn in module:
+    owned = {}
+    owned_plans = {}
+    for function in module:
+        plan = owned_variant(function, structs, large)
+        if plan is not None:
+            index = next(i for i,p in enumerate(function.params) if p['name']==plan.owned_parameter)
+            owned[function.name] = (index, plan)
+            owned_plans['__liza_owned_'+function.name] = plan
+    functions = list(module) + [replace(fn,name='__liza_owned_'+fn.name) for fn in module if fn.name in owned]
+    for fn in functions:
+        plan = owned_plans.get(fn.name) or caller_plan(fn, structs, large, owned)
         params = ', '.join((f'ptr %{p["name"]}'
                             if large(p["type"]) else f'{types[p["type"]]} %{p["name"]}') for p in fn.params)
         indirect_result = large(fn.result_type)
@@ -161,7 +173,7 @@ def llvm(module):
                     refs[op.result] = f'%{op.result}_mem'
                 if op.op == 'text.literal':
                     text_size = len(op.args[0].encode('utf-8'))
-                    refs[op.result] = f'{{ ptr @text.{fn.name}.{op.result}, i32 {text_size} }}'
+                    refs[op.result] = f'{{ ptr @text.{fn.name.removeprefix("__liza_owned_")}.{op.result}, i32 {text_size} }}'
                 value_types[op.result] = types[op.type]
                 if op.op in ('copy', 'move'):
                     aliases[op.result] = op.args[0]
@@ -171,6 +183,12 @@ def llvm(module):
                     refs[op.result] = str(convert_integer(int(refs[op.args[0]]), op.type, op.op.split('.')[1]))
                 if (op.op == 'convert.checked' and op.source_type != 'integer') or op.overflow == 'trap' or op.shift_policy == 'trap' or op.division_policy == 'trap' or op.bounds_policy == 'trap':
                     exits[block.name] = f'{op.result}_ok'
+        aliases.update(plan.aliases)
+        for b in fn.blocks:
+            for op in b.operations:
+                if op.op == 'struct.field' and large(op.type) and structs[op.source_type].fields[0][0] == op.field_name:
+                    aliases[op.result] = op.args[0]
+        refs['$return'] = '%return_storage'
         # Resolve identities after every SSA reference is known, including
         # forward references across loop backedges and block ordering.
         for name in aliases:
@@ -185,7 +203,7 @@ def llvm(module):
         slots = {canonical(op.args[0]) for b in fn.blocks for op in b.operations
                  if op.op in ('array.read', 'view.create') and not large(logical[op.args[0]])}
         calls = [op for b in fn.blocks for op in b.operations if op.op == 'call']
-        signatures = {f.name: [p['type'] for p in f.params] for f in module}
+        signatures = {f.name: [p['type'] for p in f.params] for f in functions}
         signatures.update({f.name.text: [t for _,t in f.params] for f in getattr(module,'externals',[])})
         # Large values use immutable storage. Phi edges snapshot in parallel,
         # so reusing a loop's result slot cannot change a previous iteration's value.
@@ -200,6 +218,8 @@ def llvm(module):
             return edges.get((pred,target), target)
         def predecessor_label(pred, target):
             return edges.get((pred,target), exits[pred])
+        staged_phis = {op.result for phis in large_phis.values() for op in phis
+                       if any(refs[a] != refs[op.result] for a in op.args)}
         pending = []
 
         def flush():
@@ -212,8 +232,18 @@ def llvm(module):
             if block is fn.blocks[0]:
                 for operation in (op for b in fn.blocks for op in b.operations):
                     if large(operation.type) and operation.op in materialized:
-                        lines.append(f'  %{operation.result}_mem = alloca {types[operation.type]}')
-                        if operation.op == 'phi':
+                        if operation.result not in aliases:
+                            capacity = size(operation.type)
+                            reserves = sorted(plan.reserve.get(operation.result,set()) - {operation.type})
+                            for i,t in enumerate(reserves):
+                                lines.append(f'  %{operation.result}_larger{i} = icmp ugt i64 {size(t)}, {capacity}')
+                                lines.append(f'  %{operation.result}_capacity{i} = select i1 %{operation.result}_larger{i}, i64 {size(t)}, i64 {capacity}')
+                                capacity = f'%{operation.result}_capacity{i}'
+                            if reserves:
+                                lines.append(f'  %{operation.result}_mem = alloca i8, i64 {capacity}, align 16')
+                            else:
+                                lines.append(f'  %{operation.result}_mem = alloca {types[operation.type]}')
+                        if operation.result in staged_phis:
                             lines.append(f'  %{operation.result}_next = alloca {types[operation.type]}')
                     elif operation.op == 'array.update':
                         lines.append(f'  %{operation.result}_scratch = alloca {types[operation.type]}')
@@ -243,8 +273,9 @@ def llvm(module):
                     else:
                         fields = [(i,t,a) for i,((_,t),a) in enumerate(zip(structs[op.type].fields,args))]
                     for i,t,a in fields:
-                        ptr = f'%{name}_part{i}'
-                        lines.append(f'  {ptr} = getelementptr {ty}, ptr {dest}, i32 0, i32 {i}')
+                        ptr = dest if i == 0 else f'%{name}_part{i}'
+                        if i != 0:
+                            lines.append(f'  {ptr} = getelementptr {ty}, ptr {dest}, i32 0, i32 {i}')
                         write(t,a,ptr)
                 elif large(op.type) and op.op in ('array.update','struct.update'):
                     if op.op == 'array.update':
@@ -255,6 +286,8 @@ def llvm(module):
                     else:
                         i = [field for field,_ in structs[op.type].fields].index(op.field_name)
                         index, field_type, value = f'i32 {i}', structs[op.type].fields[i][1], args[1]
+                    if name in plan.rebuilt:
+                        continue
                     transfer(op.type,args[0],refs[name])
                     lines.append(f'  %{name}_part = getelementptr {ty}, ptr {refs[name]}, i32 0, {index}')
                     write(field_type,value,f'%{name}_part')
@@ -363,6 +396,7 @@ def llvm(module):
                     value = clamp(name, f'%{name}_wide', wide, op.type)
                     lines.append(f'  %{name} = trunc {wide} {value} to {ty}')
                 elif op.op == 'call':
+                    callee = plan.calls.get(name, op.callee)
                     actuals = []
                     for i,(a,t) in enumerate(zip(op.args,signatures[op.callee])):
                         if large(t):
@@ -371,10 +405,10 @@ def llvm(module):
                             actuals.append(f'{value_types[a]} {refs[a]}')
                     if large(op.type):
                         typed = ', '.join([f'ptr sret({ty}) {refs[name]}'] + actuals)
-                        lines.append(f'  call void @liza_{op.callee}({typed})')
+                        lines.append(f'  call void @liza_{callee}({typed})')
                     else:
                         typed = ', '.join(actuals)
-                        lines.append(f'  %{name} = call {ty} @liza_{op.callee}({typed})')
+                        lines.append(f'  %{name} = call {ty} @liza_{callee}({typed})')
                 elif op.op == 'phi':
                     incoming = ', '.join(f'[ {value}, %{predecessor_label(block_name, block.name)} ]'
                                          for value, block_name in zip(args, op.incoming_blocks))
@@ -452,7 +486,8 @@ def llvm(module):
                 lines.append(f'  br label %{target_label(block.name,term.args[0])}')
         for (pred,target), label in edges.items():
             lines.append(label+':')
-            phis = large_phis[target]
+            phis = [op for op in large_phis[target]
+                    if refs[op.args[op.incoming_blocks.index(pred)]] != refs[op.result]]
             for op in phis:
                 incoming = op.args[op.incoming_blocks.index(pred)]
                 transfer(op.type,refs[incoming],f'%{op.result}_next')

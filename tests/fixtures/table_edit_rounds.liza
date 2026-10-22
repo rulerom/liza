@@ -1,0 +1,24 @@
+// Runtime seed and repeated visits make previous updates observable.
+// The caller retains its input; one cold snapshot precedes the update loop.
+fn edit_rounds(input:ConnectionTable, seed:u32, rounds:u32)->u64 {
+    var table=move input
+    var state=seed
+    var total:u64=0
+    var i:u32=0
+    while i<rounds {
+        state=state *% 1664525 +% 1013904223
+        index=(state >> 16) % table.slots.len
+        id=ConnectionId(index,1)
+        match table_get(table,id) {
+            None=>{return 18446744073709551615}
+            Some(c)=>{
+                changed=table_edit(move table,id,Connection(c.user_id,c.state,c.packets+1))
+                table=changed.table
+                match changed.result {Err(e)=>{return 18446744073709551615} Ok(done)=>{}}
+                total=total+c.packets
+            }
+        }
+        i=i+1
+    }
+    return total
+}
