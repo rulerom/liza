@@ -1,0 +1,68 @@
+// Generic fixed-capacity value table. Deleted slots retain an inaccessible copyable value. IDs are local to a table, not global identities.
+pub struct ConnectionId { pub slot: u32, pub generation: u32 }
+struct Slot<T: copyable> {
+    generation: u32
+    occupied: bool
+    retired: bool
+    value: T
+}
+pub struct Table<T: copyable,N:u32> { slots: [Slot<T>; N] }
+pub struct Done {}
+pub enum TableError { Full, NotFound }
+pub struct AddResult<T:copyable,N:u32> { pub table: Table<T,N>, pub result: Result<ConnectionId, TableError> }
+pub struct ChangeResult<T:copyable,N:u32> { pub table: Table<T,N>, pub result: Result<Done, TableError> }
+
+pub fn empty<T:copyable,N:u32>(initial:T) -> Table<T,N> {
+    slot = Slot<T>(1, false, false, copy initial)
+    return Table<T,N>([slot;N])
+}
+
+fn slot_matches<T:copyable>(slot: Slot<T>, id: ConnectionId) -> bool {
+    return slot.occupied && !slot.retired && slot.generation == id.generation
+}
+
+pub fn get<T:copyable,N:u32>(table: Table<T,N>, id: ConnectionId) -> Option<T> {
+    if id.slot >= table.slots.len { return None }
+    slot = table.slots[id.slot]
+    if !slot_matches(slot, id) { return None }
+    return Some(copy slot.value)
+}
+
+pub fn add<T:copyable,N:u32>(input: Table<T,N>, value: T) -> AddResult<T,N> {
+    var i = 0
+    while i < input.slots.len {
+        slot = input.slots[i]
+        if !slot.occupied && !slot.retired {
+            var table = move input
+            id = ConnectionId(i, slot.generation)
+            table.slots[i] = Slot<T>(slot.generation, true, false, copy value)
+            return AddResult<T,N>(move table, Ok(id))
+        }
+        i = i + 1
+    }
+    return AddResult<T,N>(move input, Err(TableError.Full))
+}
+
+pub fn edit<T:copyable,N:u32>(input: Table<T,N>, id: ConnectionId, value: T) -> ChangeResult<T,N> {
+    var table = move input
+    if id.slot >= table.slots.len { return ChangeResult<T,N>(move table, Err(TableError.NotFound)) }
+    slot = table.slots[id.slot]
+    if !slot_matches(slot, id) { return ChangeResult<T,N>(move table, Err(TableError.NotFound)) }
+    table.slots[id.slot].value = copy value
+    return ChangeResult<T,N>(move table, Ok(Done()))
+}
+
+pub fn del<T:copyable,N:u32>(input: Table<T,N>, id: ConnectionId) -> ChangeResult<T,N> {
+    var table = move input
+    if id.slot >= table.slots.len { return ChangeResult<T,N>(move table, Err(TableError.NotFound)) }
+    slot = table.slots[id.slot]
+    if !slot_matches(slot, id) { return ChangeResult<T,N>(move table, Err(TableError.NotFound)) }
+    // No wrapping: the last generation is usable once, then the slot retires.
+    if slot.generation == 4294967295 {
+        table.slots[id.slot] = Slot<T>(slot.generation, false, true, copy slot.value)
+    } else {
+        table.slots[id.slot] = Slot<T>(slot.generation + 1, false, false, copy slot.value)
+    }
+    return ChangeResult<T,N>(move table, Ok(Done()))
+}
+

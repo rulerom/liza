@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 from .frontend import (Parser, Program, CompileError, Token, Expr, Statement,
                        Update, Conditional, While, Match, LoopControl, Struct, Enum)
-from .types import SCALAR_TYPES, is_array, is_view, element_type, array_length, generic_args
+from .types import SCALAR_TYPES, is_array, is_view, element_type, array_length, generic_args, type_application
 
 BUILTINS = set(SCALAR_TYPES) | {'Text','File','IoError','IoFailure','FileError',
     'FileFailure','FileBuffer','FileChunk'}
@@ -90,6 +90,7 @@ def load_program(source, project_root=None):
 
     for module,(program,declared,imports) in loaded.items():
         heads = {n.split('.')[0] for n in imports}
+        parameters = {}
         def resolve(name, token):
             # A qualified name is visible only through an explicit import.
             if name in declared:
@@ -107,13 +108,28 @@ def load_program(source, project_root=None):
             if name in BUILTINS: return name,None
             raise CompileError(token,f'unknown or unimported declaration {name!r}')
 
-        def type_name(t, token, exported=False):
+        def type_name(t, token, exported=False, allow_capacity=False):
+            if t in parameters:
+                if parameters[t].kind == "u32" and not allow_capacity:
+                    raise CompileError(token,"capacity parameter is not a type")
+                return t
+            if t.isdigit():
+                if not allow_capacity: raise CompileError(token,"capacity value is not a type")
+                return t
             if is_array(t):
-                return '['+type_name(element_type(t),token,exported)+';'+str(array_length(t))+']'
+                return '['+type_name(element_type(t),token,exported)+';'+t[1:-1].rsplit(';',1)[1]+']'
             if is_view(t): return 'View<'+type_name(element_type(t),token,exported)+'>'
-            args = generic_args(t)
-            if args is not None:
-                return t[:t.index('<')]+'<'+','.join(type_name(a,token,exported) for a in args)+'>'
+            application = type_application(t)
+            if application is not None:
+                base,args = application
+                if base in ('Option','Result'):
+                    return base+'<'+','.join(type_name(a,token,exported) for a in args)+'>'
+                canonical,decl = resolve(base,token)
+                if not isinstance(decl,Struct) or not decl.generic_params:
+                    raise CompileError(token,'expected generic structure')
+                if exported and not decl.public: raise CompileError(token,'public interface exposes private type '+base)
+                if len(args)!=len(decl.generic_params): raise CompileError(token,'wrong number of generic arguments')
+                return canonical+'<'+','.join(type_name(a,token,exported,p.kind=='u32') for a,p in zip(args,decl.generic_params))+'>'
             canonical,decl = resolve(t,token)
             if decl is not None and not isinstance(decl,(Struct,Enum)):
                 raise CompileError(token,'expected type declaration')
@@ -157,13 +173,14 @@ def load_program(source, project_root=None):
                     canonical=variant(name,node.token);node.kind='variant'
                 else:
                     canonical,decl=resolve(name,node.token)
+                node.type_args=[type_name(t,node.token,allow_capacity=True) for t in node.type_args]
                 node.token=replace(node.token,text=canonical)
             elif node.kind=='variant':
                 node.token=replace(node.token,text=variant(node.token.text,node.token))
             return node
 
         def binding(token):
-            if token.text in heads or token.text in RESERVED:
+            if token.text in heads or token.text in RESERVED or token.text in parameters:
                 raise CompileError(token,'binding conflicts with module namespace')
 
         def statements(body):
@@ -188,10 +205,17 @@ def load_program(source, project_root=None):
                 elif not isinstance(stmt,LoopControl):raise AssertionError(type(stmt))
 
         for decl in program.structs:
+            parameters={p.token.text:p for p in decl.generic_params}
+            if set(parameters) & (set(declared)|heads|RESERVED):
+                raise CompileError(decl.name,"generic parameter conflicts with declaration or namespace")
             decl.fields=[(tok,type_name(t,tok,decl.public and tok.text in decl.public_fields)) for tok,t in decl.fields]
         for decl in program.enums:
+            parameters={}
             decl.cases=[(tok,type_name(t,tok,decl.public) if t else None) for tok,t in decl.cases]
         for fn in program:
+            parameters={p.token.text:p for p in fn.generic_params}
+            if set(parameters) & (set(declared)|heads|RESERVED):
+                raise CompileError(fn.name,"generic parameter conflicts with declaration or namespace")
             for token,_ in fn.params: binding(token)
             fn.params=[(token,type_name(t,token,fn.public)) for token,t in fn.params]
             fn.result_type=type_name(fn.result_type,fn.name,fn.public)

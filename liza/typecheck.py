@@ -1,5 +1,6 @@
 """Infer literal contexts without emitting or reordering executable operations."""
-from .frontend import CompileError
+from dataclasses import replace
+from .frontend import CompileError, Struct
 from .types import INTEGER_TYPES, SCALAR_TYPES, bounds, signed, convert_integer, is_array, is_view, element_type, array_type, array_length, validate_type, generic_args
 
 
@@ -19,6 +20,8 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         structs = {}
     variants = getattr(structs, "variants", {})
     constructors = []
+    generic_calls = []
+    mono = getattr(signatures, "monomorphizer", None)
     variables, integers, signed_operands, literals = {}, [], [], []
     scalars, arrays, projections, derived, empty_elements = [], [], [], [], []
 
@@ -41,6 +44,8 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         var = TypeVariable()
         variables[id(node)] = var
         token = node.token
+        if node.kind == "call" and node.type_args and (mono is None or token.text not in mono.templates):
+            raise CompileError(token, "non-generic declaration does not accept type arguments")
         if node.kind == 'text':
             bind(var, 'Text', token)
         elif node.kind == 'literal':
@@ -74,11 +79,12 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                 bind(var, type_name, token)
             constructors.append((node, var, [visit(arg) for arg in node.args]))
             derived.append(var)
-        elif node.kind == 'array':
+        elif node.kind in ('array', 'array.repeat'):
             element = TypeVariable()
             for arg in node.args:
                 unify(element, visit(arg), arg.token)
-            arrays.append((var, element, len(node.args), token))
+            count = int(node.type_args[0]) if node.kind == 'array.repeat' else len(node.args)
+            arrays.append((var, element, count, token))
             derived.append(var)
             if not node.args:
                 empty_elements.append(element)
@@ -87,6 +93,9 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
             for arg in node.args[1:]:
                 bind(visit(arg), 'u32', arg.token)
             projections.append((node.kind, var, source, token))
+            derived.append(var)
+        elif node.kind == 'call' and mono and token.text in mono.templates:
+            generic_calls.append((node, var, [visit(arg) for arg in node.args]))
             derived.append(var)
         elif node.kind == 'call' and token.text in structs:
             structure = structs[token.text]
@@ -141,6 +150,29 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         changed = True
         while changed:
             before = tuple(v.root().type for v in list(variables.values()) + [e for _, e, _, _ in arrays])
+            for node, result, arguments in list(generic_calls):
+                declaration = mono.templates[node.token.text]
+                args = node.type_args or mono.infer_arguments(declaration,
+                    [a.root().type for a in arguments], result.root().type, node.token)
+                if args is None:
+                    continue
+                concrete = mono.instantiate(declaration, args, node.token)
+                if isinstance(concrete, Struct):
+                    structs.ensure(concrete.name.text)
+                    visibility = getattr(structs, 'visibility', {}).get(concrete.name.text)
+                    if visibility and visibility[0] != access_module and any(t.text not in visibility[1] for t,_ in concrete.fields):
+                        raise CompileError(node.token, 'constructor contains private fields')
+                    parameters, output = concrete.fields, concrete.name.text
+                else:
+                    parameters, output = concrete.params, concrete.result_type
+                if len(arguments) != len(parameters):
+                    raise CompileError(node.token, 'wrong number of arguments')
+                for argument, (_, t) in zip(arguments, parameters):
+                    bind(argument, t, node.token)
+                bind(result, output, node.token)
+                node.token = replace(node.token, text=concrete.name.text)
+                node.type_args = []
+                generic_calls.remove((node, result, arguments))
             for node, result, payloads in constructors:
                 case = node.token.text.rsplit('.',1)[-1]
                 t = result.root().type

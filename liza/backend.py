@@ -162,7 +162,7 @@ def llvm(module):
         value_types = {p['name']: types[p['type']] for p in fn.params}
         logical = {p['name']: p['type'] for p in fn.params}
         logical.update({op.result:op.type for b in fn.blocks for op in b.operations})
-        materialized = {'array.construct', 'struct.construct', 'variant.construct', 'array.update', 'struct.update', 'call', 'phi'}
+        materialized = {'array.repeat', 'array.construct', 'struct.construct', 'variant.construct', 'array.update', 'struct.update', 'call', 'phi'}
         # LLVM guards split semantic blocks. Phi edges reference their final labels.
         exits, aliases = {}, {}
         for block in fn.blocks:
@@ -171,6 +171,11 @@ def llvm(module):
                 refs[op.result] = str(int(op.args[0])) if op.op == 'constant' else f'%{op.result}'
                 if large(op.type) and op.op in materialized:
                     refs[op.result] = f'%{op.result}_mem'
+                if op.op == 'array.repeat':
+                    if large(op.type):
+                        exits[block.name] = f'{op.result}_done'
+                    elif array_length(op.type) == 0:
+                        refs[op.result] = 'zeroinitializer'
                 if op.op == 'text.literal':
                     text_size = len(op.args[0].encode('utf-8'))
                     refs[op.result] = f'{{ ptr @text.{fn.name.removeprefix("__liza_owned_")}.{op.result}, i32 {text_size} }}'
@@ -260,7 +265,18 @@ def llvm(module):
                 args = [refs[a] for a in op.args]
                 if large(op.type) and op.op == 'phi':
                     continue
-                if large(op.type) and op.op in ('struct.construct', 'array.construct', 'variant.construct'):
+                if large(op.type) and op.op == 'array.repeat':
+                    lines.extend([f'  br label %{name}_start', f'{name}_start:',
+                        f'  br label %{name}_loop', f'{name}_loop:',
+                        f'  %{name}_i = phi i64 [0, %{name}_start], [%{name}_next, %{name}_body]',
+                        f'  %{name}_end = icmp uge i64 %{name}_i, {array_length(op.type)}',
+                        f'  br i1 %{name}_end, label %{name}_done, label %{name}_body',
+                        f'{name}_body:',
+                        f'  %{name}_ptr = getelementptr {ty}, ptr {refs[name]}, i64 0, i64 %{name}_i'])
+                    write(element_type(op.type), args[0], f'%{name}_ptr')
+                    lines.extend([f'  %{name}_next = add i64 %{name}_i, 1',
+                        f'  br label %{name}_loop', f'{name}_done:'])
+                elif large(op.type) and op.op in ('struct.construct', 'array.construct', 'variant.construct'):
                     dest = refs[name]
                     if op.op == 'variant.construct':
                         lines.append(f'  call void @llvm.memset.p0.i64(ptr {dest}, i8 0, i64 {size(op.type)}, i1 false)')
@@ -360,7 +376,9 @@ def llvm(module):
                     index = [field for field, _ in structs[op.type].fields].index(op.field_name)
                     field_type = structs[op.type].fields[index][1]
                     lines.append(f'  %{name} = insertvalue {ty} {args[0]}, {types[field_type]} {args[1]}, {index}')
-                elif op.op == 'array.construct':
+                elif op.op in ('array.construct', 'array.repeat'):
+                    if op.op == 'array.repeat':
+                        args = args * array_length(op.type)
                     aggregate = 'zeroinitializer'
                     for index, value in enumerate(args):
                         result = name if index == len(args)-1 else f'{name}_element{index}'

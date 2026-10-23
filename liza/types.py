@@ -86,3 +86,18 @@ def generic_args(t):
             args.append(t[start:i]); start = i+1
     args.append(t[start:-1])
     return args
+
+
+def type_application(t):
+    """Split a named application, including user generics and capacity arguments."""
+    if '<' not in t or t.startswith('['): return None
+    head, tail = t.split('<',1)
+    if not t.endswith('>'): return None
+    depth, start, args = 0, 0, []
+    for i,c in enumerate(tail[:-1]):
+        if c in '<[': depth += 1
+        elif c in '>]': depth -= 1
+        elif c == ',' and depth == 0:
+            args.append(tail[start:i]); start=i+1
+    args.append(tail[start:-1])
+    return head,args

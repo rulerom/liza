@@ -58,6 +58,7 @@ nav:
       - Числовая модель: numeric-model.md
       - Минимальный I/O: io-model.md
       - Пользовательские модули: modules.md
+      - Generics: generics.md
   - Эталонные программы: reference-programs.md
   - Таблица соединений: connection-table.md
   - План разработки: roadmap.md

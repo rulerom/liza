@@ -284,3 +284,26 @@ CI сохраняет `module-edit-cost-*` для Linux/macOS/Windows. Обыч�
 
 Реализация таблицы теперь находится в `examples/tables/connections.liza`;
 `examples/connection_table.liza` и `examples/connection_lookup.liza` — её клиенты.
+
+## Monomorphization (0.0.18)
+
+`generics.py` caches instances by canonical declaration, concrete type arguments
+and u32 capacities. Declaration-site module identity remains attached to clones.
+Ordinary inference discovers calls; the lowerer checks every discovered function
+before returning a ModuleIR. Failed compilations do not produce executable IR.
+Semantic IR v16 adds `specializations` (declaration, arguments, kind, symbol);
+counts can be derived by kind. Symbols use a deterministic SHA-256 encoding and
+a `$` namespace unavailable to source identifiers.
+
+`array.repeat` evaluates its operand once. Small values lower to insertvalue; large
+arrays use a compact initialization loop. Its exit participates in LLVM phi labels.
+Existing concrete table fixtures remain a historical cost baseline; the generic
+module has one implementation for all T/N instances. Compare with:
+
+```sh
+python3 tools/check_edit_cost.py --generics --output build/generic-edit-cost
+```
+
+This runs the same runtime-index/checksum/independent-snapshot proof at capacities
+64, 4096 and 16384, with O0/O2 LLVM and machine-code artifacts. Generic table
+semantics additionally cover scalar and structure records and stale IDs.

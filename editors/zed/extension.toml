@@ -1,6 +1,6 @@
 id = "liza"
 name = "Liza"
-version = "0.1.1"
+version = "0.1.2"
 schema_version = 1
 authors = ["Anton Golovkov"]
 description = "Syntax highlighting and outline for the Liza programming language"
@@ -8,5 +8,5 @@ repository = "https://github.com/rulerom/liza"
 
 [grammars.liza]
 repository = "https://github.com/rulerom/liza"
-rev = "0db985f6650f6b36b5a0e5c3ed697a8552e7993f"
+rev = "56d76a2ca62df8379fa5e8a54cb7ea49d7f83ddc"
 path = "editors/tree-sitter-liza"

@@ -139,6 +139,11 @@ def structure_types(program):
             result[name] = StructIR(name, entries, properties)
         return properties
 
+    def register(decl):
+        declarations[decl.name.text] = decl
+        if decl.module:
+            result.visibility[decl.name.text] = (decl.module, set(decl.public_fields))
+    result.register = register
     result.ensure = resolve
     for name, decl in declarations.items():
         try:
@@ -227,10 +232,10 @@ class Lowerer:
             return self.emit('call', args, type=type_name, callee=text, effect_contract=effect,
                              parameter_modes=['borrow' if i in self.signatures[text].borrowed_params else 'value'
                                               for i in range(len(args))])
-        if expr.kind in ('array', 'index', 'view'):
+        if expr.kind in ('array', 'array.repeat', 'index', 'view'):
             args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
-            if expr.kind == 'array':
-                return self.emit('array.construct', args, type=type_name)
+            if expr.kind in ('array', 'array.repeat'):
+                return self.emit('array.repeat' if expr.kind == 'array.repeat' else 'array.construct', args, type=type_name)
             source = self.types[args[0]]
             op = 'view.create' if expr.kind == 'view' else 'view.read' if is_view(source) else 'array.read'
             return self.emit(op, args, type=type_name, source_type=source,
@@ -528,8 +533,14 @@ def lower(functions):
         raise CompileError(functions.imports[0], "imports require file-based module loading")
     from .stdlib import attach
     functions, externals = attach(functions)
+    from .generics import Monomorphizer, Signatures
+    mono = Monomorphizer(functions)
     structs = structure_types(functions)
-    signatures = {f.name.text: f for f in externals}
+    mono.structs = structs
+    mono.check_bounds()
+    signatures = Signatures({f.name.text: f for f in externals})
+    signatures.monomorphizer = mono
+    mono.signatures = signatures
     for fn in functions:
         if fn.name.text in structs or fn.name.text in structs.variants:
             raise CompileError(fn.name, 'function and structure names must be distinct')
@@ -547,12 +558,26 @@ def lower(functions):
         raise CompileError(signatures['main'].name, 'main must have no parameters')
     if signatures['main'].result_type != 'u32':
         raise CompileError(signatures['main'].name, 'main must return u32')
-    module = ModuleIR([Lowerer(fn, signatures, structs).lower() for fn in functions], structs)
+    lowered = []
+    index = 0
+    while index < len(mono.functions):
+        fn = mono.functions[index]
+        mono.current_chain = fn.instantiation_chain
+        try:
+            for token, type_name in fn.params + [(fn.name, fn.result_type)]:
+                validate_type(type_name, structs, token is not fn.name)
+            lowered.append(Lowerer(fn, signatures, structs).lower())
+            check_ownership(fn)
+        except ValueError as error:
+            raise mono.trace(CompileError(fn.name, str(error))) from None
+        except CompileError as error:
+            raise mono.trace(error) from None
+        index += 1
+    module = ModuleIR(lowered, structs)
+    module.specializations = mono.instances
     module.externals = externals
     module.modules = getattr(functions,"module_names",[])
     module.declarations = getattr(functions,"declarations",[])
-    for fn in functions:
-        check_ownership(fn)
     annotate_traps(module)
     return module
 
@@ -610,8 +635,9 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 15, 'type_properties': properties,
+    return json.dumps({'version': 16, 'type_properties': properties,
                        'modules': getattr(module,'modules',[]),
+                       'specializations': getattr(module,'specializations',[]),
                        'declarations': getattr(module,'declarations',[]),
                        'structures': [asdict(s) for s in structs.values()],
                        'variants': [asdict(v) for v in variants.values()],

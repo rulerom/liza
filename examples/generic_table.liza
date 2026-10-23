@@ -1,0 +1,24 @@
+import tables.value_table
+struct Connection { user_id:u64, packets:u64 }
+fn main()->u32 {
+    var table=tables.value_table.empty<Connection,64>(Connection(0,0))
+    added=tables.value_table.add(move table, Connection(42,1))
+    table=added.table
+    match added.result {
+        Ok(id) => {
+            changed=tables.value_table.edit(move table,id,Connection(42,2))
+            table=changed.table
+            match tables.value_table.get(table,id) {
+                Some(value) => { if value.packets != 2 { return 1 } }
+                None => { return 2 }
+            }
+            removed=tables.value_table.del(move table,id)
+            table=removed.table
+            match tables.value_table.get(table,id) {
+                Some(value) => { return 3 }
+                None => { return 0 }
+            }
+        }
+        Err(error) => { return 4 }
+    }
+}

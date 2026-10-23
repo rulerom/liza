@@ -31,3 +31,6 @@
  (#match? @type "^[A-Z]"))
 
 (module_path) @variable
+
+(generic_parameter (identifier) @type)
+["copyable" "implicit_copy"] @keyword

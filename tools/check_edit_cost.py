@@ -91,15 +91,27 @@ def cyclic_blocks(body):
     return {n:text for n,text in blocks.items() if reaches(n,n)}
 
 
-def inspect(output,clang='clang',capacities=(64,4096,16384),modular=False):
+def inspect(output,clang='clang',capacities=(64,4096,16384),modular=False,generic=False):
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     report={'target':subprocess.check_output([clang,'-dumpmachine'],text=True).strip(),
             'note':'CPU clock ns/update includes cold phi copies per invocation; fixture initialization is outside timing. Input snapshot remains unchanged. Five trials after warmup; no timing threshold. Runtime LCG indices, checksum checked against independent C reference.',
-            'modular':modular,
+            'modular':modular, 'generic':generic,
             'capacities':{}}
     for n in capacities:
         root=output/str(n);root.mkdir(exist_ok=True)
-        if modular:
+        if generic:
+            (root/'tables').mkdir(exist_ok=True)
+            (root/'tables/value_table.liza').write_text((ROOT/'examples/tables/value_table.liza').read_text())
+            probe=(ROOT/'tests/fixtures/table_edit_rounds.liza').read_text()
+            probe=probe.replace('table.slots.len',str(n))
+            probe=probe.replace('table_get(', 'tables.value_table.get(').replace('table_edit(', 'tables.value_table.edit(')
+            probe=probe.replace('ConnectionTable',f'tables.value_table.Table<Connection,{n}>').replace('ConnectionId(', 'tables.value_table.ConnectionId(')
+            (root/'probe.liza').write_text('import tables.value_table\nstruct Connection { pub user_id:u64, pub state:u32, pub packets:u64 }\n'+probe+'\nfn main()->u32{return 0}\n')
+            module=lower(load_program(root/'probe.liza'))
+            symbols={i['declaration']:i['symbol'] for i in module.specializations}
+            loop_name='probe.edit_rounds';owned_name='__liza_owned_'+symbols['tables.value_table.edit']
+            bridge=BRIDGE.replace('%struct.ConnectionTable','%struct.'+symbols['tables.value_table.Table']).replace('%struct.ConnectionSlot','%struct.'+symbols['tables.value_table.Slot']).replace('%struct.Connection','%struct.probe.Connection')
+        elif modular:
             library=(ROOT/'examples/tables/connections.liza').read_text()
             library=library.replace('[ConnectionSlot; 64]',f'[ConnectionSlot; {n}]')
             # Fixture initializes through a target-layout bridge; exclude the
@@ -123,7 +135,7 @@ def inspect(output,clang='clang',capacities=(64,4096,16384),modular=False):
             module=lower(Parser(source).parse())
             loop_name='edit_rounds';owned_name='__liza_owned_table_edit';bridge=BRIDGE
         raw=llvm(module).replace('define i32 @main()', 'define i32 @example_entry()')
-        if modular:
+        if modular or generic:
             raw+='\ndefine i64 @liza_edit_rounds(ptr %input, i32 %seed, i32 %rounds) {\nentry:\n  %value = call i64 @liza_probe.edit_rounds(ptr %input, i32 %seed, i32 %rounds)\n  ret i64 %value\n}\n'
         # A private test bridge initializes the input using LLVM's target layout.
         # No C layout assumption or aggregate ABI, and no edit algorithm here.
@@ -153,7 +165,7 @@ def inspect(output,clang='clang',capacities=(64,4096,16384),modular=False):
                 assert not re.search(r'@llvm.mem(?:cpy|move)',block), 'optimized loop copies aggregate'
             # Keep both complete machine code and isolated owned edit for review.
             asm=assembly.read_text()
-            machine=re.search(r'^_?liza_'+re.escape(owned_name)+r':.*?\n(.*?)(?=^\s*\.cfi_endproc|^\s*\.seh_endproc|^\s*\.size|^[ \t]*[;#] -- End function)',asm,re.M|re.S)
+            machine=re.search(r'^"?_?liza_'+re.escape(owned_name)+r'"?:.*?\n(.*?)(?=^\s*\.cfi_endproc|^\s*\.seh_endproc|^\s*\.size|^[ \t]*[;#] -- End function)',asm,re.M|re.S)
             assert machine, 'missing owned machine function'
             assert not re.search(r'\b_?mem(?:cpy|move)\b',machine.group(0))
             (root/f'owned_edit.O{opt}.s').write_text(machine.group(0)+'\n')
@@ -179,4 +191,5 @@ if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--output',default='build/edit-cost');p.add_argument('--clang',default='clang')
     p.add_argument('--capacity',type=int,choices=(64,4096,16384),action='append')
     p.add_argument('--modules',action='store_true',help='exercise public table API through whole-program imports')
-    a=p.parse_args();inspect(a.output,a.clang,a.capacity or (64,4096,16384),a.modules)
+    p.add_argument('--generics',action='store_true',help='exercise monomorphized Table<T,N>')
+    a=p.parse_args();inspect(a.output,a.clang,a.capacity or (64,4096,16384),a.modules,a.generics)

@@ -210,7 +210,7 @@ def owned_variant(fn, structs, large):
     # wrapper/projection. Unrelated materialization/calls use the ordinary ABI.
     output_names={o.result for o in returns}
     for o in a.ops.values():
-        if large(o.type) and o.op in ('call','array.construct','struct.construct','variant.construct') and o.result not in output_names:
+        if large(o.type) and o.op in ('call','array.repeat','array.construct','struct.construct','variant.construct') and o.result not in output_names:
             return None
     for n in versions:
         plan.aliases[n]='$return'
@@ -237,7 +237,7 @@ def caller_plan(fn, structs, large, variants):
             allocation=root(allocation)
             if allocation in a.params: continue  # borrowed immutable ABI input
             allocation_op=a.ops.get(allocation)
-            if allocation_op is None or allocation_op.op not in ('call','phi','struct.construct','array.construct','variant.construct','struct.update','array.update'): continue
+            if allocation_op is None or allocation_op.op not in ('call','phi','struct.construct','array.repeat','array.construct','variant.construct','struct.update','array.update'): continue
             observers=set().union(*(a.roots.get(n,set()) for n in a.after[o.result]-{o.result}))
             if any(root(n)==allocation for n in observers): continue
             # A second argument may observe the same allocation during the call.

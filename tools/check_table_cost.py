@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
 
 
 def function_body(text, name):
-    m = re.search(r'^define [^\n]*@liza_'+re.escape(name)+r'\([^\n]*\)[^\n]*\{\n(.*?)^}', text, re.M|re.S)
+    m = re.search(r'^define [^\n]*@"?liza_'+re.escape(name)+r'"?\([^\n]*\)[^\n]*\{\n(.*?)^}', text, re.M|re.S)
     if not m:
         raise AssertionError('missing function '+name)
     return m.group(0)

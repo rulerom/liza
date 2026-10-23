@@ -44,6 +44,7 @@ class Expr:
     token: Token
     kind: str
     args: list
+    type_args: list = field(default_factory=list)
 
 
 @dataclass
@@ -106,12 +107,21 @@ class LoopControl:
 
 
 @dataclass
+class GenericParameter:
+    token: Token
+    kind: str = "type"
+    bound: str = ""
+
+
+@dataclass
 class Struct:
     name: Token
     fields: list
     public: bool = False
     public_fields: list = field(default_factory=list)
     module: str = ""
+    generic_params: list = field(default_factory=list)
+    instantiation_chain: list = field(default_factory=list)
 
 
 class Program(list):
@@ -133,6 +143,8 @@ class Function:
     trusted_library: bool = False
     public: bool = False
     module: str = ""
+    generic_params: list = field(default_factory=list)
+    instantiation_chain: list = field(default_factory=list)
 
 
 class Parser:
@@ -140,6 +152,7 @@ class Parser:
         self.internal = internal
         self.tokens = lex(source, filename)
         self.index = 0
+        self.generic_scope = {}
         self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError", "FileError"}
 
     @property
@@ -167,36 +180,67 @@ class Parser:
         while self.current.text in ('\n', ';'):
             self.take()
 
+    def close_angle(self):
+        if self.current.text == '>>':
+            t = self.current
+            self.tokens[self.index:self.index+1] = [Token('>',t.line,t.column,t.source), Token('>',t.line,t.column+1,t.source)]
+        self.take('>')
+
+    def capacity(self):
+        token = self.take()
+        if re.fullmatch(r'0x[0-9a-fA-F]+|[0-9]+', token.text):
+            n = int(token.text,16 if token.text.startswith('0x') else 10)
+            if n > 4294967295: raise CompileError(token,'capacity exceeds u32')
+            return str(n)
+        if self.generic_scope.get(token.text) == 'u32': return token.text
+        raise CompileError(token,'capacity must be a u32 literal or capacity parameter')
+
+    def generic_parameters(self):
+        params = []
+        if self.current.text != '<': return params
+        self.take('<')
+        while True:
+            token = self.identifier(); kind, bound = 'type', ''
+            if self.current.text == ':':
+                self.take(':'); constraint = self.take()
+                if constraint.text == 'u32': kind = 'u32'
+                elif constraint.text in ('copyable','implicit_copy'): bound = constraint.text
+                else: raise CompileError(constraint,'expected u32, copyable or implicit_copy')
+            if token.text in self.generic_scope: raise CompileError(token,'duplicate generic parameter')
+            self.generic_scope[token.text] = kind
+            params.append(GenericParameter(token,kind,bound))
+            if self.current.text != ',': break
+            self.take(',')
+        self.close_angle()
+        return params
+
+    def type_arguments(self):
+        self.take('<'); args = []
+        while True:
+            if re.fullmatch(r'0x[0-9a-fA-F]+|[0-9]+', self.current.text):
+                args.append(self.capacity())
+            else: args.append(self.type_name())
+            if self.current.text != ',': break
+            self.take(',')
+        self.close_angle()
+        return args
+
     def type_name(self):
         if self.current.text == '[':
-            self.take('[')
-            element = self.type_name()
-            self.take(';')
-            length = self.take()
-            if not re.fullmatch(r'0x[0-9a-fA-F]+|[0-9]+', length.text):
-                raise CompileError(length, 'array length must be a u32 integer literal')
-            size = int(length.text, 16 if length.text.startswith('0x') else 10)
-            if size > 4294967295:
-                raise CompileError(length, 'array length exceeds u32')
-            self.take(']')
-            return f'[{element};{size}]'
-        if self.current.text in ('View', 'Option', 'Result'):
+            self.take('['); element = self.type_name(); self.take(';')
+            length = self.capacity(); self.take(']')
+            return f'[{element};{length}]'
+        if self.current.text in ('View','Option','Result'):
             name = self.take().text
-            self.take('<')
-            args = [self.type_name()]
-            if name == 'Result':
-                self.take(',')
-                args.append(self.type_name())
-            if self.current.text == '>>':
-                t = self.current
-                self.tokens[self.index:self.index+1] = [Token('>',t.line,t.column), Token('>',t.line,t.column+1)]
-            self.take('>')
+            args = self.type_arguments()
+            if len(args) != (2 if name == 'Result' else 1):
+                raise CompileError(self.current,'wrong number of type arguments')
             return name+'<'+','.join(args)+'>'
-        if self.current.text in ('Text', 'File'):
+        if self.current.text in SCALAR_TYPES + ('Text','File'):
             return self.take().text
-        if self.current.text in SCALAR_TYPES:
-            return self.take().text
-        return self.qualified_name().text
+        name = self.qualified_name().text
+        if self.current.text == '<': name += '<'+','.join(self.type_arguments())+'>'
+        return name
 
     def qualified_name(self):
         first = self.identifier()
@@ -275,6 +319,8 @@ class Parser:
     def structure(self):
         self.take('struct')
         name = self.identifier()
+        self.generic_scope = {}
+        generics = self.generic_parameters()
         self.take('{')
         fields = []
         public_fields = []
@@ -292,7 +338,8 @@ class Parser:
                 raise CompileError(self.current, 'expected field separator or closing brace')
             self.separators()
         self.take('}')
-        return Struct(name, fields, public_fields=public_fields)
+        self.generic_scope = {}
+        return Struct(name, fields, public_fields=public_fields, generic_params=generics)
 
     def enumeration(self):
         self.take('enum')
@@ -377,6 +424,8 @@ class Parser:
             if self.internal and self.current.text == '.':
                 self.take('.')
                 name = Token(name.text+'.'+self.identifier().text, name.line, name.column)
+            self.generic_scope = {}
+            generics = self.generic_parameters()
             self.take('(')
             params = []
             if self.current.text != ')':
@@ -397,7 +446,8 @@ class Parser:
                     raise CompileError(self.current, "expected 'pure' or 'io'")
                 effect = self.take().text
             body = self.block()
-            functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal, public=public))
+            functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal, public=public, generic_params=generics))
+            self.generic_scope = {}
             self.separators()
         return functions
 
@@ -431,13 +481,17 @@ class Parser:
         elif token.text == '[':
             self.take('[')
             elements = []
+            count = None
             while self.current.text != ']':
                 elements.append(self.expression())
+                if self.current.text == ';' and len(elements)==1:
+                    self.take(';'); count=self.capacity()
+                    break
                 if self.current.text != ',':
                     break
                 self.take(',')
             self.take(']')
-            left = Expr(token, 'array', elements)
+            left = Expr(token, 'array.repeat', elements, [count]) if count is not None else Expr(token, 'array', elements)
         elif token.text == 'view':
             self.take('view')
             owner = Expr(self.identifier(), 'name', [])
@@ -476,6 +530,14 @@ class Parser:
         else:
             start = self.index
             name = self.qualified_name()
+            type_args = []
+            if self.current.text == '<':
+                saved_index, saved_tokens = self.index, self.tokens[:]
+                try:
+                    type_args = self.type_arguments()
+                    if self.current.text != '(': raise CompileError(self.current,'expected call')
+                except CompileError:
+                    self.index, self.tokens, type_args = saved_index, saved_tokens, []
             if self.current.text != '(':
                 self.index = start
                 name = self.identifier()
@@ -489,7 +551,7 @@ class Parser:
                             break
                         self.take(',')
                 self.take(')')
-                left = Expr(name, 'call', args)
+                left = Expr(name, 'call', args, type_args)
             else:
                 left = Expr(name, 'name', [])
         while self.current.text in ('.', '['):
