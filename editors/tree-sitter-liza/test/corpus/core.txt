@@ -36,13 +36,16 @@ fn parse(data: View<u8>) -> Result<Option<Header>, Error> : pure {
       (parameter
         (identifier)
         (generic_type
-          (builtin_type))))
+          (type_arguments
+            (builtin_type)))))
     (generic_type
-      (generic_type
+      (type_arguments
+        (generic_type
+          (type_arguments
+            (type_identifier
+              (identifier))))
         (type_identifier
-          (identifier)))
-      (type_identifier
-        (identifier)))
+          (identifier))))
     (effect)
     (block
       (assignment
@@ -419,3 +422,78 @@ pub fn read(id:tables.connections.ConnectionId)->u32 {
           (block
             (return_statement
               (number))))))))
+
+==================
+Generics and explicit repeated initialization
+==================
+pub struct Buffer<T:copyable, N:u32> { pub data:[T;N] }
+pub fn identity<T>(value:T)->T { return move value }
+fn main()->u32 {
+    b=Buffer<u8,64>([7;64])
+    x=identity(b.data[0])
+    return u32(x)
+}
+---
+
+(source_file
+  (struct_definition
+    (type_identifier
+      (identifier))
+    (generic_parameters
+      (generic_parameter
+        (identifier))
+      (generic_parameter
+        (identifier)))
+    (field_definition
+      (identifier)
+      (array_type
+        (type_identifier
+          (identifier))
+        (identifier))))
+  (function_definition
+    (identifier)
+    (generic_parameters
+      (generic_parameter
+        (identifier)))
+    (parameters
+      (parameter
+        (identifier)
+        (type_identifier
+          (identifier))))
+    (type_identifier
+      (identifier))
+    (block
+      (return_statement
+        (unary_expression
+          (identifier)))))
+  (function_definition
+    (identifier)
+    (parameters)
+    (builtin_type)
+    (block
+      (assignment
+        (identifier)
+        (call_expression
+          (identifier)
+          (type_arguments
+            (builtin_type)
+            (number))
+          (arguments
+            (array_expression
+              (number)
+              (number)))))
+      (assignment
+        (identifier)
+        (call_expression
+          (identifier)
+          (arguments
+            (index_expression
+              (field_expression
+                (identifier)
+                (identifier))
+              (number)))))
+      (return_statement
+        (call_expression
+          (builtin_type)
+          (arguments
+            (identifier)))))))
