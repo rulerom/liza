@@ -80,6 +80,9 @@ def load_program(source, project_root=None):
         active.pop()
 
     visit(entry,Token(entry,1,1,str(source)))
+    for name in loaded:
+        if name in symbols:
+            raise CompileError(Token(name,1,1), "module namespace conflicts with declaration "+name)
     combined = Program()
     combined.module_names = sorted(loaded)
     combined.source_paths = [root.joinpath(*name.split(".")).with_suffix(".liza").resolve() for name in loaded]
@@ -146,9 +149,10 @@ def load_program(source, project_root=None):
                 if name.split('.')[0] in RESERVED: return node
                 owner = name.rsplit('.',1)[0] if '.' in name else ''
                 enum_decl = declared.get(owner)
-                for imported in imports:
+                for imported in sorted(imports,key=len,reverse=True):
                     if owner.startswith(imported+'.'):
                         enum_decl = loaded[imported][1].get(owner[len(imported)+1:])
+                        break
                 if isinstance(enum_decl,Enum):
                     canonical=variant(name,node.token);node.kind='variant'
                 else:

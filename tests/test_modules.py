@@ -85,6 +85,19 @@ class ModuleTests(unittest.TestCase):
             (root/'main.liza').write_text('import alias\nfn main()->u32{return 0}')
             with self.assertRaisesRegex(CompileError,'symlink'):load_program(root/'main.liza')
 
+    def test_nested_import_order_and_namespace_collisions(self):
+        files={'a.liza':'', 'a/b.liza':'pub enum E {Value(u32)}',
+               'main.liza':''}
+        for imports in ['import a\nimport a.b', 'import a.b\nimport a']:
+            files['main.liza']=imports+'''
+fn main()->u32 {
+                x=a.b.E.Value(7)
+                match x {a.b.E.Value(n)=>{return n}}
+            }'''
+            self.compile(files)
+        files['a.liza']='pub enum b {Value(u32)}'
+        self.reject(files,'namespace conflicts with declaration')
+
     def test_entry_identity_and_dependency_diagnostics(self):
         root,entry=self.program({'a.b.liza':'fn main()->u32{return 0}',
                                  'a/b.liza':'fn main()->u32{return 1}'},'a.b.liza')
