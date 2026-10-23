@@ -53,6 +53,12 @@ jobs:
         run: python tools/check_edit_cost.py --output build/edit-cost
       - name: Check module boundary preserves owned edit
         run: python tools/check_edit_cost.py --modules --output build/module-edit-cost
+      - name: Region storage and allocation cost
+        run: python tools/check_region_cost.py --output build/region-cost
+      - uses: actions/upload-artifact@v4
+        with:
+          name: region-cost-${{ matrix.os }}
+          path: build/region-cost/
       - name: Generic table storage cost
         run: python tools/check_edit_cost.py --generics --output build/generic-edit-cost
       - uses: actions/upload-artifact@v4
@@ -97,6 +103,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/check_edit_cost.py --generics --output build/generic-edit-cost
           if errorlevel 1 exit /b 1
+          python tools/check_region_cost.py --output build/region-cost
+          if errorlevel 1 exit /b 1
       - uses: actions/upload-artifact@v4
         with:
           name: console-cost-windows
@@ -121,3 +129,7 @@ jobs:
         with:
           name: generic-edit-cost-windows
           path: build/generic-edit-cost/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: region-cost-windows
+          path: build/region-cost/

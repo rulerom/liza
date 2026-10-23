@@ -2,9 +2,9 @@
 from dataclasses import dataclass, asdict, field
 import json
 from typing import Optional
-from .frontend import CompileError, Token, Conditional, While, LoopControl, Match, Update
+from .frontend import CompileError, Token, Conditional, While, LoopControl, Match, Update, Scope
 from .typecheck import infer_expression
-from .types import signed, SCALAR_TYPES, value_properties, is_array, is_view, element_type, array_length, validate_type, generic_args
+from .types import signed, SCALAR_TYPES, value_properties, is_array, is_view, element_type, array_length, validate_type, generic_args, is_buffer, buffer_element, effects
 from .ownership import check_ownership
 from .borrowing import check_borrows
 from .resources import check_resources
@@ -28,6 +28,7 @@ class Operation:
     bounds_policy: str = 'none'
     owner_binding: str = ''
     incoming_blocks: list = field(default_factory=list)
+    storage_relation: str = ''
 
 
 @dataclass
@@ -52,6 +53,7 @@ class FunctionIR:
     effect_contract: str = 'pure'
     may_trap: bool = False
     termination_contract: str = 'may_diverge'
+    storage_contract: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -90,6 +92,14 @@ def structure_types(program):
         declarations[decl.name.text] = decl
 
     def resolve(name, allow_view=True):
+        if name == "memory.Region":
+            return {"copyable": False, "implicit_copy": False}
+        if is_buffer(name):
+            if not resolve(buffer_element(name), False)["copyable"]:
+                raise ValueError("region buffers require copyable elements")
+            from .memory import validate_element_layout
+            validate_element_layout(buffer_element(name), result)
+            return {"copyable": False, "implicit_copy": False}
         if is_array(name):
             member = resolve(element_type(name), False)
             if not member['copyable']:
@@ -227,8 +237,15 @@ class Lowerer:
             if text in self.structs:
                 return self.emit('struct.construct', args, type=type_name)
             effect = self.signatures[text].effect_contract
-            if effect == 'io' and self.fn.effect_contract != 'io':
-                raise CompileError(expr.token, 'pure function cannot call io function '+text)
+            if effects(effect) - effects(self.fn.effect_contract):
+                missing = ','.join(sorted(effects(effect) - effects(self.fn.effect_contract)))
+                raise CompileError(expr.token, 'pure function cannot call '+missing+' function '+text)
+            if hasattr(self.signatures[text], 'memory_operation'):
+                fn = self.signatures[text]
+                return self.emit(fn.memory_operation, args, type=type_name, source_type=fn.memory_element,
+                                 storage_relation={'region.create':'fresh_instance','region.alloc':'depends_on_argument_0','buffer.update':'preserve_argument_0','buffer.view':'borrow_argument_0','buffer.length':'read_argument_0','buffer.release':'end_dependency_0','region.close':'end_origin_0'}[fn.memory_operation],
+                                 effect_contract=effect, bounds_policy='trap' if fn.memory_operation == 'buffer.update' else 'none',
+                                 parameter_modes=['borrow' if i in fn.borrowed_params else 'value' for i in range(len(args))])
             return self.emit('call', args, type=type_name, callee=text, effect_contract=effect,
                              parameter_modes=['borrow' if i in self.signatures[text].borrowed_params else 'value'
                                               for i in range(len(args))])
@@ -452,7 +469,12 @@ class Lowerer:
         for stmt in statements:
             if self.current is None:
                 raise CompileError(stmt.token, 'unreachable statement after control transfer')
-            if isinstance(stmt, Conditional):
+            if isinstance(stmt, Scope):
+                inner = names.copy()
+                self.statements(stmt.body, inner, mutable.copy())
+                for name in names:
+                    names[name] = inner[name]
+            elif isinstance(stmt, Conditional):
                 condition = self.expression(stmt.condition, names, 'bool')
                 self.expect(condition, 'bool', stmt.condition.token)
                 then_block, else_block = self.new_block(), self.new_block()
@@ -531,6 +553,9 @@ class Lowerer:
 def lower(functions):
     if getattr(functions,"imports",[]):
         raise CompileError(functions.imports[0], "imports require file-based module loading")
+    from .memory import error_declaration
+    if getattr(functions, 'uses_memory', False):
+        functions.enums.append(error_declaration())
     from .stdlib import attach
     functions, externals = attach(functions)
     from .generics import Monomorphizer, Signatures
@@ -559,6 +584,7 @@ def lower(functions):
     if signatures['main'].result_type != 'u32':
         raise CompileError(signatures['main'].name, 'main must return u32')
     lowered = []
+    dependency_records = {}
     index = 0
     while index < len(mono.functions):
         fn = mono.functions[index]
@@ -566,13 +592,17 @@ def lower(functions):
         try:
             for token, type_name in fn.params + [(fn.name, fn.result_type)]:
                 validate_type(type_name, structs, token is not fn.name)
-            lowered.append(Lowerer(fn, signatures, structs).lower())
+            lowerer = Lowerer(fn, signatures, structs)
+            lowered.append(lowerer.lower())
+            dependency_records[fn.name.text] = (fn, lowerer.expression_types, lowerer.match_types, lowered[-1])
             check_ownership(fn)
         except ValueError as error:
             raise mono.trace(CompileError(fn.name, str(error))) from None
         except CompileError as error:
             raise mono.trace(error) from None
         index += 1
+    from .dependencies import check_dependencies
+    check_dependencies(dependency_records, structs, signatures)
     module = ModuleIR(lowered, structs)
     module.specializations = mono.instances
     module.externals = externals
@@ -618,7 +648,12 @@ def dump(module):
     def describe(t):
         if t in properties or t == 'integer':
             return
-        if is_array(t) or is_view(t):
+        if t == 'memory.Region':
+            properties[t] = {'copyable': False, 'implicit_copy': False}
+        elif is_buffer(t):
+            describe(buffer_element(t))
+            properties[t] = {'copyable': False, 'implicit_copy': False}
+        elif is_array(t) or is_view(t):
             describe(element_type(t))
             properties[t] = dict(properties[element_type(t)]) if is_array(t) else {'copyable': True, 'implicit_copy': True}
     for struct in structs.values():
@@ -635,7 +670,7 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 16, 'type_properties': properties,
+    return json.dumps({'version': 17, 'type_properties': properties,
                        'modules': getattr(module,'modules',[]),
                        'specializations': getattr(module,'specializations',[]),
                        'declarations': getattr(module,'declarations',[]),

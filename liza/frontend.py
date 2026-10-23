@@ -107,6 +107,12 @@ class LoopControl:
 
 
 @dataclass
+class Scope:
+    token: Token
+    body: list
+
+
+@dataclass
 class GenericParameter:
     token: Token
     kind: str = "type"
@@ -153,7 +159,7 @@ class Parser:
         self.tokens = lex(source, filename)
         self.index = 0
         self.generic_scope = {}
-        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError", "FileError"}
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError", "FileError", "MemoryError"}
 
     @property
     def current(self):
@@ -247,7 +253,7 @@ class Parser:
         name = first.text
         while self.current.text == ".":
             self.take(".")
-            name += "." + self.identifier().text
+            name += "." + (self.take().text if name == "memory" and self.current.text == "view" else self.identifier().text)
         return Token(name, first.line, first.column, first.source)
 
     def block(self):
@@ -255,7 +261,9 @@ class Parser:
         self.separators()
         body = []
         while self.current.text != '}':
-            if self.current.text == 'if':
+            if self.current.text == '{':
+                body.append(Scope(self.current, self.block()))
+            elif self.current.text == 'if':
                 body.append(self.conditional())
             elif self.current.text == 'match':
                 body.append(self.match_statement())
@@ -398,6 +406,8 @@ class Parser:
         functions.uses_file = any(t.text in ('File', 'FileError', 'FileFailure', 'FileBuffer', 'FileChunk') or
                                   (t.text == 'file' and self.tokens[i+1].text == '.')
                                   for i,t in enumerate(self.tokens[:-1]))
+        functions.uses_memory = any(t.text == 'MemoryError' or (t.text == 'memory' and self.tokens[i+1].text == '.')
+                                    for i,t in enumerate(self.tokens[:-1]))
         self.separators()
         while self.current.text != '<eof>':
             if self.current.text == 'import':
@@ -442,9 +452,15 @@ class Parser:
             effect = 'pure'
             if self.current.text == ':':
                 self.take(':')
-                if self.current.text not in ('pure', 'io'):
-                    raise CompileError(self.current, "expected 'pure' or 'io'")
+                if self.current.text not in ('pure', 'io', 'alloc'):
+                    raise CompileError(self.current, "expected 'pure', 'io' or 'alloc'")
                 effect = self.take().text
+                while self.current.text == ',':
+                    self.take(',')
+                    next_effect = self.take()
+                    if next_effect.text not in ('io', 'alloc') or effect == 'pure' or next_effect.text in effect.split(','):
+                        raise CompileError(next_effect, 'invalid or duplicate effect')
+                    effect += ',' + next_effect.text
             body = self.block()
             functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal, public=public, generic_params=generics))
             self.generic_scope = {}

@@ -101,3 +101,15 @@ def type_application(t):
             args.append(tail[start:i]); start=i+1
     args.append(tail[start:-1])
     return head,args
+
+
+def is_buffer(t):
+    return t.startswith('memory.Buffer<')
+
+
+def buffer_element(t):
+    return t[len('memory.Buffer<'):-1]
+
+
+def effects(contract):
+    return set(contract.split(',')) - {'pure'}

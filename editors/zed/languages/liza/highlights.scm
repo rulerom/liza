@@ -8,7 +8,7 @@
 (escape_sequence) @string.escape
 (comment) @comment
 ["import" "pub" "fn" "struct" "enum" "var" "return" "if" "else" "while"
- "match" "copy" "move" "view" "pure" "io"] @keyword
+ "match" "copy" "move" "view" "pure" "io" "alloc"] @keyword
 ["+" "-" "*" "/" "%" "+%" "-%" "*%" "+|" "-|" "*|"
  "==" "!=" "<" "<=" ">" ">=" "&&" "||" "!" "~" "&" "|" "^" "<<" ">>" "=" "->" "=>" ".."] @operator
 ["(" ")" "[" "]" "{" "}"] @punctuation.bracket

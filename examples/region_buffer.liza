@@ -1,0 +1,29 @@
+// Storage outlives released buffers; readonly loans end at the block boundary.
+fn update(buffer: memory.Buffer<u32>, index:u32, value:u32) -> memory.Buffer<u32> {
+    return memory.set(move buffer,index,value)
+}
+
+fn main()->u32 : alloc {
+    match memory.create(4096) {
+        Err(error)=>{return 1}
+        Ok(region)=>{
+            allocation=memory.alloc<u32>(region,64,7)
+            match move allocation {
+                Err(error)=>{}
+                Ok(initial)=>{
+                    buffer=update(move initial,3,42)
+                    var result:u32=0
+                    {
+                        data=memory.view(buffer)
+                        if data[3] != 42 || data[0] != 7 { result=2 }
+                    }
+                    released=memory.release(move buffer)
+                    if result != 0 { closed=memory.close(move region)
+return result }
+                }
+            }
+            closed=memory.close(move region)
+            return 0
+        }
+    }
+}

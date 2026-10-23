@@ -93,3 +93,11 @@ Generic-функции и структуры поддерживают парам
 вывод аргументов и мономорфизацию. Владение, эффекты и приватность проверяются
 после подстановки. Пример: `python3 -m liza run examples/generic_table.liza`.
 [Контракт](https://liza.rulerom.com/generics.html).
+
+## Регионы · 0.0.19
+
+`memory.Region` и move-only `memory.Buffer<T>` отделяют владение значением
+от владения хранилищем. Создание и выделение требуют эффекта `alloc`;
+зависимости сохраняются через `Result`, функции и CFG.
+Пример: `python3 -m liza run examples/region_buffer.liza`.
+[Контракт](https://liza.rulerom.com/regions.html).

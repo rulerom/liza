@@ -4,7 +4,7 @@ Existing availability analysis also checks copyable values. This pass adds
 explicit transfers and no implicit dropping of File-containing variants.
 Loops must preserve outer obligations on every backedge; joins must agree.
 """
-from .frontend import CompileError, Conditional, While, LoopControl, Match, Update
+from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope
 
 
 def check_resources(fn, types, match_types, structs, signatures):
@@ -30,7 +30,7 @@ def check_resources(fn, types, match_types, structs, signatures):
             fail(token, 'resource ownership must agree on every continuing path')
         return paths[0].copy()
 
-    def expr(node, state):
+    def expr(node, state, active_borrows=frozenset()):
         t = types[id(node)]
         if node.kind == 'name' and resource(t):
             fail(node.token, 'resource transfer requires explicit move')
@@ -38,29 +38,33 @@ def check_resources(fn, types, match_types, structs, signatures):
             fail(node.token, 'resource values cannot be copied')
         if node.kind == 'move' and resource(t):
             name = node.args[0].token.text
+            if name in active_borrows:
+                fail(node.token, 'cannot transfer resource while borrowed by an earlier argument')
             if not state.get(name, False):
                 fail(node.token, 'use after move: resource is not available')
             state[name] = False
             return
         if node.kind == 'binary' and node.token.text in ('&&', '||'):
-            expr(node.args[0], state)
+            expr(node.args[0], state, active_borrows)
             right = state.copy()
-            expr(node.args[1], right)
+            expr(node.args[1], right, active_borrows)
             state.update(merge([state, right], node.token))
             return
         if node.kind == 'call' and node.token.text in signatures:
             borrowed = signatures[node.token.text].borrowed_params
+            pending_borrows = set(active_borrows)
             for i, arg in enumerate(node.args):
                 if i in borrowed:
                     if arg.kind != 'name':
                         fail(arg.token, 'borrowed resource argument must be an available binding, without move')
                     if not state.get(arg.token.text, False):
                         fail(arg.token, 'cannot borrow resource after move or close')
+                    pending_borrows.add(arg.token.text)
                 else:
-                    expr(arg, state)
+                    expr(arg, state, pending_borrows)
             return
         for arg in node.args:
-            expr(arg, state)
+            expr(arg, state, active_borrows)
 
     def scoped(body, state, keep, loops, token):
         result = statements(body, state.copy(), loops)
@@ -72,7 +76,9 @@ def check_resources(fn, types, match_types, structs, signatures):
     def statements(body, state, loops):
         for stmt in body:
             outer = set(state)
-            if isinstance(stmt, Conditional):
+            if isinstance(stmt, Scope):
+                state = scoped(stmt.body, state, outer, loops, stmt.token)
+            elif isinstance(stmt, Conditional):
                 expr(stmt.condition, state)
                 state = merge([scoped(stmt.then_body, state, outer, loops, stmt.token),
                                scoped(stmt.else_body, state, outer, loops, stmt.token)], stmt.token)

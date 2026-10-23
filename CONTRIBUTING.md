@@ -307,3 +307,34 @@ python3 tools/check_edit_cost.py --generics --output build/generic-edit-cost
 This runs the same runtime-index/checksum/independent-snapshot proof at capacities
 64, 4096 and 16384, with O0/O2 LLVM and machine-code artifacts. Generic table
 semantics additionally cover scalar and structure records and stale IDs.
+
+## Storage dependencies (0.0.19)
+
+`dependencies.py` runs after ordinary typing, ownership, lexical loans and
+resource obligations. It tracks conditional provenance through variant payloads,
+including pending results and evaluated call arguments. Function summaries map
+parameter origins to results; factory calls freshen creation origins. Loop-carried
+origins must be invariant, while fully discharged local regions may be recreated.
+Ambiguous joins and recursive storage-bearing summaries are rejected.
+
+Semantic IR v17 adds `storage_relation` to operations and `storage_contract` to
+functions (preconditions, consumed parameters, provenance, transitive storage
+effects and normal-exit/trap policy). Memory-library calls become explicit
+region/buffer operations after all arguments have been evaluated.
+
+The portable C runtime owns bounded byte storage. Allocation checks size,
+alignment and capacity before committing its cursor. No individual reclamation
+is performed. LLVM uses private pointers; the source language exposes none.
+
+```sh
+python3 tools/check_region_cost.py --output build/region-cost
+```
+
+The gate saves O0/O2 LLVM and assembly, rejects allocation or bulk-copy calls in
+selected update/read functions, counts actual heap operations, injects creation
+failure, and directly verifies alignment, overflow and failure atomicity.
+
+Large `view.read` materializes an independent element snapshot before a mutable
+region buffer can change or close its storage. This copies one element, never the
+whole buffer. The storage-root analysis treats that snapshot as independent.
+Borrowed resource arguments remain protected during evaluation of later arguments.

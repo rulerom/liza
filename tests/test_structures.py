@@ -66,7 +66,7 @@ class StructureTests(unittest.TestCase):
                 return 1
             }''')
         data=json.loads(dump(module))
-        self.assertEqual(data['version'],16)
+        self.assertEqual(data['version'],17)
         self.assertEqual(data['type_properties']['Box'],{'copyable':True,'implicit_copy':True})
         self.assertEqual(module.structs['Box'].fields,[('point','Point'),('valid','bool')])
         ops=[op for fn in module for block in fn.blocks for op in block.operations]

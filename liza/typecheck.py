@@ -21,6 +21,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
     variants = getattr(structs, "variants", {})
     constructors = []
     generic_calls = []
+    memory_calls = []
     mono = getattr(signatures, "monomorphizer", None)
     variables, integers, signed_operands, literals = {}, [], [], []
     scalars, arrays, projections, derived, empty_elements = [], [], [], [], []
@@ -44,7 +45,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         var = TypeVariable()
         variables[id(node)] = var
         token = node.token
-        if node.kind == "call" and node.type_args and (mono is None or token.text not in mono.templates):
+        if node.kind == "call" and node.type_args and not token.text.startswith("memory.") and (mono is None or token.text not in mono.templates):
             raise CompileError(token, "non-generic declaration does not accept type arguments")
         if node.kind == 'text':
             bind(var, 'Text', token)
@@ -93,6 +94,9 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
             for arg in node.args[1:]:
                 bind(visit(arg), 'u32', arg.token)
             projections.append((node.kind, var, source, token))
+            derived.append(var)
+        elif node.kind == 'call' and token.text.startswith('memory.'):
+            memory_calls.append((node,var,[visit(arg) for arg in node.args]))
             derived.append(var)
         elif node.kind == 'call' and mono and token.text in mono.templates:
             generic_calls.append((node, var, [visit(arg) for arg in node.args]))
@@ -150,6 +154,16 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         changed = True
         while changed:
             before = tuple(v.root().type for v in list(variables.values()) + [e for _, e, _, _ in arrays])
+            for node, result, arguments in list(memory_calls):
+                from .memory import signature
+                fn = signature(node, [a.root().type for a in arguments], mono)
+                if fn is None: continue
+                for argument, (_, t) in zip(arguments, fn.params):
+                    bind(argument, t, node.token)
+                bind(result, fn.result_type, node.token)
+                node.token = fn.name
+                node.type_args = []
+                memory_calls.remove((node,result,arguments))
             for node, result, arguments in list(generic_calls):
                 declaration = mono.templates[node.token.text]
                 args = node.type_args or mono.infer_arguments(declaration,

@@ -6,12 +6,12 @@ separate-compilation ABI, module globals, or changes to value semantics.
 from dataclasses import replace
 from pathlib import Path
 from .frontend import (Parser, Program, CompileError, Token, Expr, Statement,
-                       Update, Conditional, While, Match, LoopControl, Struct, Enum)
+                       Update, Conditional, While, Match, LoopControl, Scope, Struct, Enum)
 from .types import SCALAR_TYPES, is_array, is_view, element_type, array_length, generic_args, type_application
 
 BUILTINS = set(SCALAR_TYPES) | {'Text','File','IoError','IoFailure','FileError',
-    'FileFailure','FileBuffer','FileChunk'}
-RESERVED = {'console','file'}
+    'FileFailure','FileBuffer','FileChunk','memory.Region','MemoryError'}
+RESERVED = {'console','file','memory'}
 
 
 def load_program(source, project_root=None):
@@ -122,7 +122,7 @@ def load_program(source, project_root=None):
             application = type_application(t)
             if application is not None:
                 base,args = application
-                if base in ('Option','Result'):
+                if base in ('Option','Result','memory.Buffer'):
                     return base+'<'+','.join(type_name(a,token,exported) for a in args)+'>'
                 canonical,decl = resolve(base,token)
                 if not isinstance(decl,Struct) or not decl.generic_params:
@@ -162,7 +162,9 @@ def load_program(source, project_root=None):
             node.args=[expression(a) for a in node.args]
             if node.kind=='call':
                 name=node.token.text
-                if name.split('.')[0] in RESERVED: return node
+                if name.split('.')[0] in RESERVED:
+                    node.type_args=[type_name(t,node.token,allow_capacity=True) for t in node.type_args]
+                    return node
                 owner = name.rsplit('.',1)[0] if '.' in name else ''
                 enum_decl = declared.get(owner)
                 for imported in sorted(imports,key=len,reverse=True):
@@ -185,7 +187,9 @@ def load_program(source, project_root=None):
 
         def statements(body):
             for stmt in body:
-                if isinstance(stmt,Conditional):
+                if isinstance(stmt,Scope):
+                    statements(stmt.body)
+                elif isinstance(stmt,Conditional):
                     stmt.condition=expression(stmt.condition)
                     statements(stmt.then_body);statements(stmt.else_body)
                 elif isinstance(stmt,While):

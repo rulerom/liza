@@ -95,7 +95,7 @@ class Analysis:
                     roots=set()
                     if o.op in ('copy','move'):
                         roots=self.roots.get(o.args[0],set()).copy()
-                    elif o.op in ('struct.field','variant.payload','array.read','view.read') and large(o.type):
+                    elif o.op in ('struct.field','variant.payload','array.read') and large(o.type):
                         roots=self.roots.get(o.args[0],set()).copy()
                     elif o.op=='view.create':
                         roots=self.roots.get(o.args[0],set()).copy()

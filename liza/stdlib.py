@@ -52,14 +52,16 @@ def attach(program):
 
 
 def link_flags(module):
+    memory_used = any(op.op.startswith(('region.','buffer.')) for fn in module for block in fn.blocks for op in block.operations)
+    memory_files = [str(Path(__file__).parent/'runtime'/'memory.c')] if memory_used else []
     if not getattr(module,'externals',[]):
-        return []
+        return memory_files
     import sys
     suffix = 'windows' if sys.platform == 'win32' else 'posix'
     names = {fn.name.text for fn in module.externals}
     file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk'}
     libraries = (['console'] if names-file_names else []) + (['file'] if names & file_names else [])
-    files = [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
+    files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if sys.platform == 'win32':
         return files
     if sys.platform not in ('darwin','linux'):
