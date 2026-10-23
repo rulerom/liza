@@ -46,6 +46,9 @@ fn main() -> u32 {
 
 ## Синтаксис
 
+Ниже базовый фрагмент грамматики. Правила модулей и параметров типов
+дополнены в разделах [модулей](modules.md) и [generics](generics.md).
+
 ```text
 program   := (function | structure | enumeration)*
 enumeration := "enum" name "{" alternative (separator alternative)* "}"
@@ -54,13 +57,15 @@ match_statement := "match" expression "{" (pattern "=>" block)* "}"
 pattern := (name ".")? name ("(" name ")")?
 structure := "struct" name "{" fields? "}"
 field     := name ":" type
-function  := "fn" name "(" parameters? ")" "->" type (":" ("pure" | "io"))? block
+function  := "fn" name "(" parameters? ")" "->" type (":" effects)? block
+effects   := "pure" | effect ("," effect)*
+effect    := "io" | "alloc"
 type      := "Text" | "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "bool" | structure_name | enum_name | "Option<" type ">" | "Result<" type "," type ">" | "[" type ";" length "]" | "View" "<" type ">"
 parameters := name ":" type ("," name ":" type)*
 block     := "{" statements "}"
 statement := ("var")? name (":" type)? "=" expression
            | "return" expression | conditional | "while" expression block
-           | "break" | "continue" | match_statement
+           | "break" | "continue" | match_statement | block
 conditional := "if" expression block ("else" (block | conditional))?
 expression := literal | "true" | "false" | name | name "(" arguments? ")"
             | "(" expression ")" | unary expression | expression binary expression
@@ -140,9 +145,11 @@ heap, ссылки и владение этой конструкцией не в
 возврата. Обе ветки проверяются статически, даже если условие известно заранее.
 
 Ровно одна `main() -> u32` без параметров обязательна. Без аннотации функция
-имеет контракт `pure`; `: io` разрешает внешние операции. Чистая функция не
-может вызывать `io`-функцию, даже в неисполняемой ветви. Локальное присваивание
-не является внешним эффектом. Полный контракт — в [минимальном I/O](io-model.md).
+имеет контракт `pure`; `: io` разрешает внешние операции, `: alloc` — операции
+выделения и освобождения хранилища. Эффекты можно объединить: `: io, alloc`.
+Чистая функция не может вызвать функцию с любым из этих эффектов, даже
+в неисполняемой ветви. Локальное присваивание не является внешним эффектом.
+Контракты описаны в [минимальном I/O](io-model.md) и [модели регионов](regions.md).
 
 ## Структуры-значения
 
