@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "liza-pygments"
+version = "0.1.0"
+description = "Liza syntax highlighting for the language documentation"
+requires-python = ">=3.9"
+dependencies = ["Pygments>=2.16,<3"]
+
+[project.entry-points."pygments.lexers"]
+liza = "liza_pygments:LizaLexer"
+
+[tool.setuptools.packages.find]
+include = ["liza_pygments*"]

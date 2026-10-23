@@ -363,3 +363,21 @@ for allocation and bulk copying, and runs with runtime capacities/values.
 A counted allocator checks one allocation per region, injected failure, and
 untouched unused capacity. This is a selected-path guarantee, not a universal
 constant-time claim for all element types or collection operations.
+
+## Подсветка документации
+
+Pygments-лексер Liza находится в `tools/pygments_liza` и подключается через
+стандартный entry point `pygments.lexers`. Блоки `liza` используют подсветку
+Material в обеих темах. Для обновления локальной сборки из корня репозитория:
+
+```sh
+.venv-docs/bin/python -m pip install -r requirements-docs.txt
+.venv-docs/bin/python -m mkdocs build --strict
+.venv-docs/bin/python tools/check_docs.py
+```
+
+После изменения лексера повторите установку: пакет устанавливается локальным
+wheel, а не в editable-режиме. `check_docs.py` проверяет категории токенов,
+все примеры и наличие подсветки в готовом HTML. Построчный разбор Vec включает
+исходный файл через Snippets; проверка сравнивает отображённый код с файлом
+и проверяет нумерацию строк. При изменении примера обновляйте пояснения к строкам.

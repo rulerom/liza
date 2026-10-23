@@ -41,8 +41,14 @@ plugins:
 markdown_extensions:
   - admonition
   - tables
-  - pymdownx.highlight
+  - pymdownx.highlight:
+      pygments_lang_class: true
+      anchor_linenums: true
+      line_spans: __span
   - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
 
 extra_css:
   - assets/stylesheets/site.css
@@ -64,3 +70,4 @@ nav:
   - Таблица соединений: connection-table.md
   - План разработки: roadmap.md
   - Линейные результаты и Vec: bounded-vec.md
+  - Разбор программы Vec: bounded-vec-walkthrough.md
