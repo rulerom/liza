@@ -63,3 +63,4 @@ nav:
   - Эталонные программы: reference-programs.md
   - Таблица соединений: connection-table.md
   - План разработки: roadmap.md
+  - Контракт 0.0.20: bounded-vec.md
