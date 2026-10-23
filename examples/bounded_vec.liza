@@ -1,0 +1,28 @@
+// A fixed allocation, a changing initialized prefix, and explicit ownership.
+fn identity<T>(value:T)->T { return move value }
+
+fn main()->u32 : alloc {
+    match memory.create(4096) {
+        Err(error)=>{ return 1 }
+        Ok(region)=>{
+            var result:u32=0
+            match vec.with_capacity<u32>(region,2) {
+                Err(error)=>{ result=2 }
+                Ok(initial)=>{
+                    (first,status)=vec.push(move initial,42)
+                    match status { Ok(done)=>{} Err(error)=>{result=3} }
+                    pending=vec.pop(move first)
+                    (empty,item)=identity(move pending)
+                    match item {
+                        Some(value)=>{if value != 42 {result=4}}
+                        None=>{result=5}
+                    }
+                    if vec.len(empty) != 0 || vec.capacity(empty) != 2 {result=6}
+                    released=vec.release(move empty)
+                }
+            }
+            closed=memory.close(move region)
+            return result
+        }
+    }
+}

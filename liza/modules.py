@@ -6,12 +6,12 @@ separate-compilation ABI, module globals, or changes to value semantics.
 from dataclasses import replace
 from pathlib import Path
 from .frontend import (Parser, Program, CompileError, Token, Expr, Statement,
-                       Update, Conditional, While, Match, LoopControl, Scope, Struct, Enum)
+                       Update, Conditional, While, Match, LoopControl, Scope, Destructure, Struct, Enum)
 from .types import SCALAR_TYPES, is_array, is_view, element_type, array_length, generic_args, type_application
 
 BUILTINS = set(SCALAR_TYPES) | {'Text','File','IoError','IoFailure','FileError',
-    'FileFailure','FileBuffer','FileChunk','memory.Region','MemoryError'}
-RESERVED = {'console','file','memory'}
+    'FileFailure','FileBuffer','FileChunk','memory.Region','MemoryError','vec.Done','vec.Error'}
+RESERVED = {'console','file','memory','vec'}
 
 
 def load_program(source, project_root=None):
@@ -122,7 +122,7 @@ def load_program(source, project_root=None):
             application = type_application(t)
             if application is not None:
                 base,args = application
-                if base in ('Option','Result','memory.Buffer'):
+                if base in ('Option','Result','memory.Buffer','vec.Vec','__liza_Product'):
                     return base+'<'+','.join(type_name(a,token,exported) for a in args)+'>'
                 canonical,decl = resolve(base,token)
                 if not isinstance(decl,Struct) or not decl.generic_params:
@@ -187,7 +187,10 @@ def load_program(source, project_root=None):
 
         def statements(body):
             for stmt in body:
-                if isinstance(stmt,Scope):
+                if isinstance(stmt,Destructure):
+                    for name in stmt.names: binding(name)
+                    stmt.expr=expression(stmt.expr)
+                elif isinstance(stmt,Scope):
                     statements(stmt.body)
                 elif isinstance(stmt,Conditional):
                     stmt.condition=expression(stmt.condition)

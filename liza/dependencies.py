@@ -6,8 +6,8 @@ must remain invariant. Call sites freshen factory origins. Variant payloads
 retain conditional dependencies until match refines the selected alternative.
 """
 from dataclasses import dataclass, field
-from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope
-from .types import is_buffer, is_view
+from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope, Destructure
+from .types import is_buffer, is_view, is_vec, is_product, product_args
 
 
 @dataclass(eq=True)
@@ -15,25 +15,28 @@ class Value:
     regions: frozenset = frozenset()
     buffers: frozenset = frozenset()
     cases: dict = field(default_factory=dict)
+    components: tuple = ()
 
     def __post_init__(self):
         if self.cases and not any(v.all_regions() or v.all_buffers() for v in self.cases.values()):
             self.cases = {}
 
     def all_regions(self):
-        return self.regions | frozenset(o for v in self.cases.values() for o in v.all_regions())
+        return self.regions | frozenset(o for v in list(self.cases.values())+list(self.components) for o in v.all_regions())
 
     def all_buffers(self):
-        return self.buffers | frozenset(o for v in self.cases.values() for o in v.all_buffers())
+        return self.buffers | frozenset(o for v in list(self.cases.values())+list(self.components) for o in v.all_buffers())
 
     def map(self, substitution):
         return Value(frozenset(x for o in self.regions for x in [substitution(o)] if x is not None),
                      frozenset(x for o in self.buffers for x in [substitution(o)] if x is not None),
-                     {k:v.map(substitution) for k,v in self.cases.items()})
+                     {k:v.map(substitution) for k,v in self.cases.items()},
+                     tuple(v.map(substitution) for v in self.components))
 
     def describe(self):
         return {'regions':sorted(map(str,self.regions)), 'depends_on':sorted(map(str,self.buffers)),
-                'variants':{k:v.describe() for k,v in self.cases.items()}}
+                'variants':{k:v.describe() for k,v in self.cases.items()},
+                'components':[v.describe() for v in self.components]}
 
 
 EMPTY = Value()
@@ -45,7 +48,8 @@ def check_dependencies(records, structs, signatures):
 
     def shape(t, origin):
         if t == 'memory.Region': return Value(regions=frozenset([origin]))
-        if is_buffer(t): return Value(buffers=frozenset([origin]))
+        if is_product(t): return Value(components=tuple(shape(c,origin+(i,)) for i,c in enumerate(product_args(t))))
+        if is_buffer(t) or is_vec(t): return Value(buffers=frozenset([origin]))
         if t in structs.variants:
             return Value(cases={k:shape(v,origin+(k,)) if v else EMPTY
                                 for k,v in structs.variants[t].cases})
@@ -54,6 +58,10 @@ def check_dependencies(records, structs, signatures):
     def join_value(values, token):
         if not values: return EMPTY
         first=values[0]
+        if first.components:
+            if any(len(v.components) != len(first.components) for v in values):
+                raise CompileError(token, 'incompatible product dependency shapes')
+            return Value(components=tuple(join_value([v.components[i] for v in values],token) for i in range(len(first.components))))
         if any(v != first for v in values[1:]):
             # Empty/nonempty alternatives are represented within the variant,
             # not by guessing equality of unrelated origins at a phi.
@@ -113,17 +121,20 @@ def check_dependencies(records, structs, signatures):
                     origin=('fresh',name,site(node))
                     origins.append({'site':site(node),'kind':'region.create','source':str(node.token)})
                     return Value(cases={'Ok':Value(regions=frozenset([origin])),'Err':EMPTY})
-                if operation=='region.alloc':
+                if operation in ('region.alloc','vec.create'):
                     region=arguments[0].all_regions()
                     if len(region)!=1: raise CompileError(node.token,'allocation requires one proven region origin')
                     return Value(cases={'Ok':Value(buffers=region),'Err':EMPTY})
+                if operation in ('vec.push','vec.pop','vec.set'): return Value(components=(arguments[0],EMPTY))
+                if operation.startswith('vec.'): return EMPTY
                 if operation=='buffer.update': return arguments[0]
                 if operation in ('region.close','buffer.release','buffer.length','buffer.view'): return EMPTY
                 result=analyze(node.token.text)
                 def substitute(origin):
                     if origin[0]=='parameter':
                         value=arguments[int(origin[1])]
-                        for case in origin[2:]: value=value.cases.get(case,EMPTY)
+                        for case in origin[2:]:
+                            value=value.components[case] if isinstance(case,int) else value.cases.get(case,EMPTY)
                         ids=value.all_regions()|value.all_buffers()
                         if not ids: return None
                         if len(ids)!=1: raise CompileError(node.token,'cannot establish function result storage origin')
@@ -145,7 +156,11 @@ def check_dependencies(records, structs, signatures):
         def statements(body,state,loops):
             for stmt in body:
                 keep=set(state)
-                if isinstance(stmt,Scope):
+                if isinstance(stmt,Destructure):
+                    value=expression(stmt.expr,state)
+                    for i,token in enumerate(stmt.names):
+                        state[token.text]=value.components[i] if value.components else EMPTY
+                elif isinstance(stmt,Scope):
                     state=scoped(stmt.body,state,keep,loops)
                 elif isinstance(stmt,Conditional):
                     expression(stmt.condition,state)
@@ -189,7 +204,7 @@ def check_dependencies(records, structs, signatures):
         result=join_value(returned,fn.name)
         summaries[name]=result
         active.remove(name)
-        storage_effects = sorted({op.op for block in ir.blocks for op in block.operations if op.op.startswith(('region.','buffer.'))})
+        storage_effects = sorted({op.op for block in ir.blocks for op in block.operations if op.op.startswith(('region.','buffer.','vec.'))})
         ir.storage_contract={'requires':['available owned arguments', 'no readonly loans on consumed buffers', 'no dependent values on consumed regions'],
                              'consumes':[p.text for p,t in fn.params if shape(t,('p',)).all_regions() or shape(t,('p',)).all_buffers()],
                              'effects':storage_effects,

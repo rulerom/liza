@@ -1,8 +1,9 @@
 """Typed value graph with explicit control flow and arithmetic policy."""
+from .types import is_vec, vec_element, is_product, product_args
 from dataclasses import dataclass, asdict, field
 import json
 from typing import Optional
-from .frontend import CompileError, Token, Conditional, While, LoopControl, Match, Update, Scope
+from .frontend import CompileError, Token, Conditional, While, LoopControl, Match, Update, Scope, Destructure
 from .typecheck import infer_expression
 from .types import signed, SCALAR_TYPES, value_properties, is_array, is_view, element_type, array_length, validate_type, generic_args, is_buffer, buffer_element, effects
 from .ownership import check_ownership
@@ -94,6 +95,16 @@ def structure_types(program):
     def resolve(name, allow_view=True):
         if name == "memory.Region":
             return {"copyable": False, "implicit_copy": False}
+        if is_product(name):
+            for component in product_args(name): resolve(component, False)
+            return {'copyable': False, 'implicit_copy': False}
+        if is_vec(name):
+            element = vec_element(name)
+            if not resolve(element, False)['copyable']:
+                raise ValueError('vectors require copyable elements')
+            from .memory import validate_element_layout
+            validate_element_layout(element, result)
+            return {'copyable': False, 'implicit_copy': False}
         if is_buffer(name):
             if not resolve(buffer_element(name), False)["copyable"]:
                 raise ValueError("region buffers require copyable elements")
@@ -137,6 +148,8 @@ def structure_types(program):
                 raise ValueError('duplicate alternative' if variant else 'duplicate field')
             seen.add(field_name)
             if type_name is not None:
+                if is_product(type_name):
+                    raise ValueError('linear products cannot be stored in aggregates')
                 member = resolve(type_name, False)
                 if not variant and not name.startswith('__liza_') and not member['copyable']:
                     raise ValueError('resource fields require destructuring, which is not supported yet')
@@ -242,8 +255,20 @@ class Lowerer:
                 raise CompileError(expr.token, 'pure function cannot call '+missing+' function '+text)
             if hasattr(self.signatures[text], 'memory_operation'):
                 fn = self.signatures[text]
+                relations = {
+                    'region.create': 'fresh_instance', 'region.alloc': 'depends_on_argument_0',
+                    'buffer.update': 'preserve_argument_0', 'buffer.view': 'borrow_argument_0',
+                    'buffer.length': 'read_argument_0', 'buffer.release': 'end_dependency_0',
+                    'region.close': 'end_origin_0', 'vec.create': 'depends_on_argument_0',
+                    'vec.push': 'preserve_argument_0_in_component_0',
+                    'vec.pop': 'preserve_argument_0_in_component_0',
+                    'vec.set': 'preserve_argument_0_in_component_0',
+                    'vec.get': 'independent_element_snapshot', 'vec.view': 'borrow_argument_0',
+                    'vec.len': 'read_argument_0', 'vec.capacity': 'read_argument_0',
+                    'vec.release': 'end_dependency_0',
+                }
                 return self.emit(fn.memory_operation, args, type=type_name, source_type=fn.memory_element,
-                                 storage_relation={'region.create':'fresh_instance','region.alloc':'depends_on_argument_0','buffer.update':'preserve_argument_0','buffer.view':'borrow_argument_0','buffer.length':'read_argument_0','buffer.release':'end_dependency_0','region.close':'end_origin_0'}[fn.memory_operation],
+                                 storage_relation=relations[fn.memory_operation],
                                  effect_contract=effect, bounds_policy='trap' if fn.memory_operation == 'buffer.update' else 'none',
                                  parameter_modes=['borrow' if i in fn.borrowed_params else 'value' for i in range(len(args))])
             return self.emit('call', args, type=type_name, callee=text, effect_contract=effect,
@@ -469,7 +494,17 @@ class Lowerer:
         for stmt in statements:
             if self.current is None:
                 raise CompileError(stmt.token, 'unreachable statement after control transfer')
-            if isinstance(stmt, Scope):
+            if isinstance(stmt, Destructure):
+                if len({n.text for n in stmt.names}) != 2 or any(n.text in names or n.text == '_' for n in stmt.names):
+                    raise CompileError(stmt.token, 'unpack requires two distinct new bindings')
+                value = self.expression(stmt.expr, names)
+                t = self.types[value]
+                if not is_product(t):
+                    raise CompileError(stmt.token, 'unpack requires a linear product')
+                consumed = self.emit('unpack.consume', [value], type=t)
+                for index, (token, component) in enumerate(zip(stmt.names, product_args(t))):
+                    names[token.text] = self.emit('unpack.component', [consumed], type=component, source_type=t, field_name=str(index))
+            elif isinstance(stmt, Scope):
                 inner = names.copy()
                 self.statements(stmt.body, inner, mutable.copy())
                 for name in names:
@@ -554,7 +589,12 @@ def lower(functions):
     if getattr(functions,"imports",[]):
         raise CompileError(functions.imports[0], "imports require file-based module loading")
     from .memory import error_declaration
-    if getattr(functions, 'uses_memory', False):
+    if getattr(functions, 'uses_vec', False):
+        from .vectors import declarations
+        done, error = declarations()
+        functions.structs.append(done)
+        functions.enums.append(error)
+    if getattr(functions, 'uses_memory', False) or getattr(functions, 'uses_vec', False):
         functions.enums.append(error_declaration())
     from .stdlib import attach
     functions, externals = attach(functions)
@@ -650,6 +690,12 @@ def dump(module):
             return
         if t == 'memory.Region':
             properties[t] = {'copyable': False, 'implicit_copy': False}
+        elif is_product(t):
+            for component in product_args(t): describe(component)
+            properties[t] = {'copyable': False, 'implicit_copy': False}
+        elif is_vec(t):
+            describe(vec_element(t))
+            properties[t] = {'copyable': False, 'implicit_copy': False}
         elif is_buffer(t):
             describe(buffer_element(t))
             properties[t] = {'copyable': False, 'implicit_copy': False}
@@ -670,7 +716,7 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 17, 'type_properties': properties,
+    return json.dumps({'version': 18, 'type_properties': properties,
                        'modules': getattr(module,'modules',[]),
                        'specializations': getattr(module,'specializations',[]),
                        'declarations': getattr(module,'declarations',[]),

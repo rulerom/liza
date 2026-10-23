@@ -113,3 +113,23 @@ def buffer_element(t):
 
 def effects(contract):
     return set(contract.split(',')) - {'pure'}
+
+
+def is_vec(t):
+    return t.startswith('vec.Vec<')
+
+
+def vec_element(t):
+    return t[len('vec.Vec<'):-1]
+
+
+def product_type(a, b):
+    return '__liza_Product<'+a+','+b+'>'
+
+
+def is_product(t):
+    return t.startswith('__liza_Product<')
+
+
+def product_args(t):
+    return type_application(t)[1]

@@ -4,7 +4,8 @@ Existing availability analysis also checks copyable values. This pass adds
 explicit transfers and no implicit dropping of File-containing variants.
 Loops must preserve outer obligations on every backedge; joins must agree.
 """
-from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope
+from .types import product_args
+from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope, Destructure
 
 
 def check_resources(fn, types, match_types, structs, signatures):
@@ -76,7 +77,11 @@ def check_resources(fn, types, match_types, structs, signatures):
     def statements(body, state, loops):
         for stmt in body:
             outer = set(state)
-            if isinstance(stmt, Scope):
+            if isinstance(stmt, Destructure):
+                expr(stmt.expr, state)
+                for token, t in zip(stmt.names, product_args(types[id(stmt.expr)])):
+                    if resource(t): state[token.text] = True
+            elif isinstance(stmt, Scope):
                 state = scoped(stmt.body, state, outer, loops, stmt.token)
             elif isinstance(stmt, Conditional):
                 expr(stmt.condition, state)

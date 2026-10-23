@@ -82,7 +82,7 @@ class Monomorphizer:
         app=type_application(t)
         if app:
             name,args=app
-            if name in ('View','Option','Result','memory.Buffer'):
+            if name in ('View','Option','Result','memory.Buffer','vec.Vec','__liza_Product'):
                 return name+'<'+','.join(self.concrete_type(a,token) for a in args)+'>'
             declaration=self.templates.get(name)
             if not isinstance(declaration,Struct):raise CompileError(token,'unknown generic type '+name)

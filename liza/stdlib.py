@@ -52,7 +52,7 @@ def attach(program):
 
 
 def link_flags(module):
-    memory_used = any(op.op.startswith(('region.','buffer.')) for fn in module for block in fn.blocks for op in block.operations)
+    memory_used = any(op.op.startswith(('region.','buffer.','vec.')) for fn in module for block in fn.blocks for op in block.operations)
     memory_files = [str(Path(__file__).parent/'runtime'/'memory.c')] if memory_used else []
     if not getattr(module,'externals',[]):
         return memory_files

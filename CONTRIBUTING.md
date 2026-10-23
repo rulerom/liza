@@ -338,3 +338,28 @@ Large `view.read` materializes an independent element snapshot before a mutable
 region buffer can change or close its storage. This copies one element, never the
 whole buffer. The storage-root analysis treats that snapshot as independent.
 Borrowed resource arguments remain protected during evaluation of later arguments.
+
+## Linear products and bounded Vec (0.0.20)
+
+Semantic IR version 18 adds internal linear products and `vec.*` operations.
+`unpack.consume` consumes the whole product; its two `unpack.component`
+projections bind the components. These projections are compiler-generated,
+not independent source-level field moves. Products carry component-wise
+resource obligations and storage provenance, including conditional variants.
+Public product constructors, annotations and aggregate storage remain forbidden.
+
+The native vector descriptor contains storage, initialized length and capacity.
+Only the initialized prefix is readable. `vec.create` reserves uninitialized
+capacity using the bounded region runtime. Other vector operations never call
+the allocator. Large `get/pop` results snapshot one element independently.
+
+```sh
+python3 -m unittest discover -s tests -p test_vectors.py -v
+python3 tools/check_vec_cost.py --output build/vec-cost
+```
+
+The cost gate saves O0/O2 LLVM IR and assembly, checks the set/pop/push cycle
+for allocation and bulk copying, and runs with runtime capacities/values.
+A counted allocator checks one allocation per region, injected failure, and
+untouched unused capacity. This is a selected-path guarantee, not a universal
+constant-time claim for all element types or collection operations.

@@ -35,7 +35,7 @@ class ModuleTests(unittest.TestCase):
             'b.liza':'import common\npub fn read(x:common.Id)->u32{return x.value}',
             'main.liza':'import a\nimport b\nfn main()->u32{return b.read(a.make())}'})
         self.assertEqual(list(module.structs),['common.Id'])
-        data=json.loads(dump(module));self.assertEqual(data['version'],17)
+        data=json.loads(dump(module));self.assertEqual(data['version'],18)
         self.assertEqual(data['modules'],['a','b','common','main'])
         self.assertEqual(sum(d['id']=='common.Id' for d in data['declarations']),1)
         self.assertIn('a.make',llvm(module))

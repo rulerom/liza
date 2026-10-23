@@ -45,7 +45,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         var = TypeVariable()
         variables[id(node)] = var
         token = node.token
-        if node.kind == "call" and node.type_args and not token.text.startswith("memory.") and (mono is None or token.text not in mono.templates):
+        if node.kind == "call" and node.type_args and not token.text.startswith(("memory.", "vec.")) and (mono is None or token.text not in mono.templates):
             raise CompileError(token, "non-generic declaration does not accept type arguments")
         if node.kind == 'text':
             bind(var, 'Text', token)
@@ -95,7 +95,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                 bind(visit(arg), 'u32', arg.token)
             projections.append((node.kind, var, source, token))
             derived.append(var)
-        elif node.kind == 'call' and token.text.startswith('memory.'):
+        elif node.kind == 'call' and token.text.startswith(('memory.', 'vec.')):
             memory_calls.append((node,var,[visit(arg) for arg in node.args]))
             derived.append(var)
         elif node.kind == 'call' and mono and token.text in mono.templates:
@@ -155,8 +155,13 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         while changed:
             before = tuple(v.root().type for v in list(variables.values()) + [e for _, e, _, _ in arrays])
             for node, result, arguments in list(memory_calls):
-                from .memory import signature
-                fn = signature(node, [a.root().type for a in arguments], mono)
+                from .memory import signature as memory_signature
+                from .vectors import signature as vec_signature
+                signature = vec_signature if node.token.text.startswith('vec.') else memory_signature
+                try:
+                    fn = signature(node, [a.root().type for a in arguments], mono)
+                except ValueError as error:
+                    raise CompileError(node.token, str(error)) from None
                 if fn is None: continue
                 for argument, (_, t) in zip(arguments, fn.params):
                     bind(argument, t, node.token)

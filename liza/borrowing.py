@@ -4,7 +4,8 @@ Loans survive moving/copying/reassigning a view until their lexical scope ends.
 Assigning a view into an outer binding extends the loan to that binding's scope;
 its owner must live at least that long. No view can escape a function.
 """
-from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope
+from .types import product_args
+from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope, Destructure
 from .types import is_view
 
 
@@ -21,7 +22,7 @@ def check_borrows(fn, types, match_types=None, variants=None):
             return set(env[node.token.text][2])
         if node.kind == 'move' and locked(node.args[0].token.text):
             raise CompileError(node.token, 'cannot move owner while readonly view is live')
-        if node.kind == 'view' or (node.kind == 'call' and node.token.text.startswith('memory$view$')):
+        if node.kind == 'view' or (node.kind == 'call' and node.token.text.startswith(('memory$view$', 'vec$view$'))):
             owner = node.args[0].token.text
             loans[-1].add(owner)
             for arg in node.args[1:]:
@@ -47,7 +48,11 @@ def check_borrows(fn, types, match_types=None, variants=None):
 
     def statements(body, env):
         for stmt in body:
-            if isinstance(stmt, Scope):
+            if isinstance(stmt, Destructure):
+                expr(stmt.expr, env)
+                for token, t in zip(stmt.names, product_args(types[id(stmt.expr)])):
+                    env[token.text] = (t, len(loans)-1, set())
+            elif isinstance(stmt, Scope):
                 env = join(env, [scoped(stmt.body, env)])
             elif isinstance(stmt, Conditional):
                 expr(stmt.condition, env)

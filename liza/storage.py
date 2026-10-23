@@ -93,9 +93,9 @@ class Analysis:
             for b in fn.blocks:
                 for o in b.operations:
                     roots=set()
-                    if o.op in ('copy','move'):
+                    if o.op in ('copy','move','unpack.consume'):
                         roots=self.roots.get(o.args[0],set()).copy()
-                    elif o.op in ('struct.field','variant.payload','array.read') and large(o.type):
+                    elif o.op in ('struct.field','variant.payload','array.read','unpack.component') and large(o.type):
                         roots=self.roots.get(o.args[0],set()).copy()
                     elif o.op=='view.create':
                         roots=self.roots.get(o.args[0],set()).copy()
@@ -107,7 +107,7 @@ class Analysis:
         self.params={p['name'] for p in fn.params}
 
     def canonical(self, name):
-        while name in self.ops and self.ops[name].op in ('copy','move'):
+        while name in self.ops and self.ops[name].op in ('copy','move','unpack.consume'):
             name=self.ops[name].args[0]
         return name
 
@@ -129,7 +129,7 @@ class Analysis:
         if o and o.op=='struct.field' and self.large(o.type):
             if self.structs[o.source_type].fields[0][0]!=o.field_name: return None
             return self.prefix(o.args[0])
-        if o and o.op in ('array.read','view.read','variant.payload'): return None
+        if o and o.op in ('array.read','view.read','variant.payload','unpack.component'): return None
         return name
 
     def transactions(self):

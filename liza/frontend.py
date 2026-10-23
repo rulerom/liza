@@ -57,6 +57,13 @@ class Statement:
 
 
 @dataclass
+class Destructure:
+    token: Token
+    names: list
+    expr: Expr
+
+
+@dataclass
 class Update:
     token: Token
     target: Expr
@@ -253,7 +260,7 @@ class Parser:
         name = first.text
         while self.current.text == ".":
             self.take(".")
-            name += "." + (self.take().text if name == "memory" and self.current.text == "view" else self.identifier().text)
+            name += "." + (self.take().text if name in ("memory", "vec") and self.current.text == "view" else self.identifier().text)
         return Token(name, first.line, first.column, first.source)
 
     def block(self):
@@ -261,7 +268,17 @@ class Parser:
         self.separators()
         body = []
         while self.current.text != '}':
-            if self.current.text == '{':
+            if self.current.text == '(':
+                token = self.take('(')
+                first = self.identifier()
+                self.take(',')
+                second = self.identifier()
+                self.take(')')
+                self.take('=')
+                body.append(Destructure(token, [first, second], self.expression()))
+                if self.current.text not in ('\n', ';', '}'):
+                    raise CompileError(self.current, 'expected statement separator')
+            elif self.current.text == '{':
                 body.append(Scope(self.current, self.block()))
             elif self.current.text == 'if':
                 body.append(self.conditional())
@@ -406,6 +423,7 @@ class Parser:
         functions.uses_file = any(t.text in ('File', 'FileError', 'FileFailure', 'FileBuffer', 'FileChunk') or
                                   (t.text == 'file' and self.tokens[i+1].text == '.')
                                   for i,t in enumerate(self.tokens[:-1]))
+        functions.uses_vec = any(t.text == 'vec' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
         functions.uses_memory = any(t.text == 'MemoryError' or (t.text == 'memory' and self.tokens[i+1].text == '.')
                                     for i,t in enumerate(self.tokens[:-1]))
         self.separators()

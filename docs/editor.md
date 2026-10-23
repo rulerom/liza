@@ -6,7 +6,7 @@ description: "Подсветка Liza в Zed: установка расшире�
 
 Расширение добавляет подсветку синтаксиса `.liza`, парные скобки, отступы,
 комментирование строк и список функций, структур и вариантов `enum` в Outline.
-Поддерживаются конструкции ядра 0.0.19, включая `alloc` и лексические блоки, generics, параметры вместимости, `[value; N]`, `import`/`pub`, квалифицированные имена, `copy`/`move`, readonly views,
+Поддерживаются конструкции ядра 0.0.20, включая `(next, item) = expression`, `vec.Vec<T>`, `alloc` и лексические блоки, generics, параметры вместимости, `[value; N]`, `import`/`pub`, квалифицированные имена, `copy`/`move`, readonly views,
 `Option`/`Result`, эффекты и checked/wrapping/saturating-операторы.
 Цвета берутся из выбранной темы Zed.
 
@@ -16,7 +16,7 @@ description: "Подсветка Liza в Zed: установка расшире�
 2. В Zed откройте палитру команд: `Cmd+Shift+P` на macOS или `Ctrl+Shift+P` на Linux/Windows.
 3. Выполните **`zed: install dev extension`**.
 4. Выберите каталог **`editors/zed`** внутри репозитория Liza.
-5. Откройте `examples/hello.liza` или `examples/connection_table.liza`.
+5. Откройте `examples/hello.liza` или `examples/bounded_vec.liza`.
    В строке состояния должен появиться язык **Liza**.
 
 Это локальная установка: расширение пока не опубликовано в каталоге Zed.
