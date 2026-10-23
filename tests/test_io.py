@@ -189,8 +189,11 @@ class ConsoleNative(unittest.TestCase):
 
     def test_cli_hello_and_runtime_cost(self):
         from tools.check_console_cost import inspect
+        # First invocation includes Python/Clang/linker startup on a fresh
+        # Windows runner. This build+run smoke check is not a latency budget.
+        startup_timeout = 60 if sys.platform == 'win32' else 15
         for opt in ('0','2'):
-            result=subprocess.run([sys.executable,'-B','-m','liza','run','examples/hello.liza','-O',opt],capture_output=True,timeout=15)
+            result=subprocess.run([sys.executable,'-B','-m','liza','run','examples/hello.liza','-O',opt],capture_output=True,timeout=startup_timeout)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertEqual(result.stdout,b'Hello, Liza!\n')
         with tempfile.TemporaryDirectory() as d:
