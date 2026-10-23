@@ -10,30 +10,32 @@ class Token:
     text: str
     line: int
     column: int
+    source: str = ""
 
 
 class CompileError(Exception):
     def __init__(self, token, message):
-        super().__init__(f"{token.line}:{token.column}: {message}")
+        self.source = token.source
+        super().__init__(f"{token.source + ':' if token.source else ''}{token.line}:{token.column}: {message}")
 
 
-def lex(source):
+def lex(source, filename=""):
     tokens = []
     pattern = re.compile(r'"(?:[^"\\\n]|\\[^\n])*"|//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|\.\.|=>|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[\[\]{}(),:=;+*\-!<>~&|^/%.]')
     pos, line, column = 0, 1, 1
     while pos < len(source):
         match = pattern.match(source, pos)
         if not match:
-            raise CompileError(Token(source[pos], line, column), f"unexpected character {source[pos]!r}")
+            raise CompileError(Token(source[pos], line, column, filename), f"unexpected character {source[pos]!r}")
         value = match.group()
         if not value.startswith('//') and not value.isspace() or value == '\n':
-            tokens.append(Token(value, line, column))
+            tokens.append(Token(value, line, column, filename))
         if value == '\n':
             line, column = line + 1, 1
         else:
             column += len(value)
         pos = match.end()
-    tokens.append(Token('<eof>', line, column))
+    tokens.append(Token('<eof>', line, column, filename))
     return tokens
 
 
@@ -94,6 +96,8 @@ class Match:
 class Enum:
     name: Token
     cases: list
+    public: bool = False
+    module: str = ""
 
 
 @dataclass
@@ -105,6 +109,9 @@ class LoopControl:
 class Struct:
     name: Token
     fields: list
+    public: bool = False
+    public_fields: list = field(default_factory=list)
+    module: str = ""
 
 
 class Program(list):
@@ -112,6 +119,7 @@ class Program(list):
         super().__init__()
         self.structs = []
         self.enums = []
+        self.imports = []
 
 
 @dataclass
@@ -123,12 +131,14 @@ class Function:
     effect_contract: str = 'pure'
     borrowed_params: list = field(default_factory=list)
     trusted_library: bool = False
+    public: bool = False
+    module: str = ""
 
 
 class Parser:
-    def __init__(self, source, internal=False):
+    def __init__(self, source, internal=False, filename=""):
         self.internal = internal
-        self.tokens = lex(source)
+        self.tokens = lex(source, filename)
         self.index = 0
         self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError", "FileError"}
 
@@ -149,7 +159,7 @@ class Parser:
         token = self.current
         if token.text.startswith('__liza_') and not self.internal:
             raise CompileError(token, 'reserved implementation name')
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'fn', 'return', 'pure', 'io', 'Text', 'File', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'import', 'pub', 'fn', 'return', 'pure', 'io', 'Text', 'File', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -186,7 +196,15 @@ class Parser:
             return self.take().text
         if self.current.text in SCALAR_TYPES:
             return self.take().text
-        return self.identifier().text
+        return self.qualified_name().text
+
+    def qualified_name(self):
+        first = self.identifier()
+        name = first.text
+        while self.current.text == ".":
+            self.take(".")
+            name += "." + self.identifier().text
+        return Token(name, first.line, first.column, first.source)
 
     def block(self):
         self.take('{')
@@ -259,9 +277,13 @@ class Parser:
         name = self.identifier()
         self.take('{')
         fields = []
+        public_fields = []
         self.separators()
         while self.current.text != '}':
+            public = self.current.text == "pub"
+            if public: self.take("pub")
             field = self.identifier()
+            if public: public_fields.append(field.text)
             self.take(':')
             fields.append((field, self.type_name()))
             if self.current.text == ',':
@@ -270,7 +292,7 @@ class Parser:
                 raise CompileError(self.current, 'expected field separator or closing brace')
             self.separators()
         self.take('}')
-        return Struct(name, fields)
+        return Struct(name, fields, public_fields=public_fields)
 
     def enumeration(self):
         self.take('enum')
@@ -305,7 +327,7 @@ class Parser:
         while self.current.text != '}':
             case = self.take() if self.current.text in ('Some','None','Ok','Err') else self.identifier()
             label = case.text
-            if self.current.text == '.':
+            while self.current.text == '.':
                 self.take('.')
                 label += '.'+self.identifier().text
             binding = None
@@ -331,12 +353,23 @@ class Parser:
                                   for i,t in enumerate(self.tokens[:-1]))
         self.separators()
         while self.current.text != '<eof>':
+            if self.current.text == 'import':
+                self.take('import')
+                functions.imports.append(self.qualified_name())
+                if self.current.text not in ('\n', ';', '<eof>'):
+                    raise CompileError(self.current, 'expected import separator')
+                self.separators()
+                continue
+            public = self.current.text == 'pub'
+            if public: self.take('pub')
             if self.current.text == 'enum':
                 functions.enums.append(self.enumeration())
+                functions.enums[-1].public = public
                 self.separators()
                 continue
             if self.current.text == 'struct':
                 functions.structs.append(self.structure())
+                functions.structs[-1].public = public
                 self.separators()
                 continue
             self.take('fn')
@@ -364,7 +397,7 @@ class Parser:
                     raise CompileError(self.current, "expected 'pure' or 'io'")
                 effect = self.take().text
             body = self.block()
-            functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal))
+            functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal, public=public))
             self.separators()
         return functions
 
@@ -377,11 +410,11 @@ class Parser:
                 value.encode('utf-8')
             except (ValueError, UnicodeError):
                 raise CompileError(token, 'invalid UTF-8 text literal or escape') from None
-            left = Expr(Token(value,token.line,token.column), 'text', [])
+            left = Expr(Token(value,token.line,token.column,token.source), 'text', [])
         elif token.text == '-' and re.fullmatch(r'0x[0-9a-fA-F]+|[0-9]+', self.tokens[self.index + 1].text):
             self.take()
             number = self.take()
-            left = Expr(Token('-' + number.text, token.line, token.column), 'literal', [])
+            left = Expr(Token('-' + number.text, token.line, token.column,token.source), 'literal', [])
         elif token.text in ('Some','None','Ok','Err') or (token.text in self.enum_names and self.tokens[self.index+1].text == '.'):
             self.take()
             name = token.text
@@ -394,7 +427,7 @@ class Parser:
                 if self.current.text != ')':
                     args.append(self.expression())
                 self.take(')')
-            left = Expr(Token(name,token.line,token.column), 'variant', args)
+            left = Expr(Token(name,token.line,token.column,token.source), 'variant', args)
         elif token.text == '[':
             self.take('[')
             elements = []
@@ -441,10 +474,11 @@ class Parser:
         elif re.fullmatch(r'0x[0-9a-fA-F]+|[0-9]+', token.text):
             left = Expr(self.take(), 'literal', [])
         else:
-            name = self.identifier()
-            if self.current.text == '.' and self.index+2 < len(self.tokens) and self.tokens[self.index+2].text == '(':
-                self.take('.')
-                name = Token(name.text+'.'+self.identifier().text,name.line,name.column)
+            start = self.index
+            name = self.qualified_name()
+            if self.current.text != '(':
+                self.index = start
+                name = self.identifier()
             if self.current.text == '(':
                 self.take('(')
                 args = []

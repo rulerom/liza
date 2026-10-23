@@ -83,6 +83,7 @@ class TypeTable(dict):
 
 def structure_types(program):
     declarations, result, visiting = {}, TypeTable(), set()
+    result.visibility = {d.name.text:(d.module,set(d.public_fields)) for d in getattr(program,"structs",[]) if d.module}
     for decl in list(getattr(program, 'structs', [])) + list(getattr(program, 'enums', [])):
         if decl.name.text in declarations:
             raise CompileError(decl.name, 'duplicate structure or enum')
@@ -194,7 +195,7 @@ class Lowerer:
                 validate_type(expected, self.structs)
             except ValueError as error:
                 raise CompileError(expr.token, str(error)) from None
-        inferred = infer_expression(expr, names, self.types, self.signatures, expected, self.structs)
+        inferred = infer_expression(expr, names, self.types, self.signatures, expected, self.structs, self.fn.module)
         for type_name in set(inferred.values()) - {'integer'}:
             try:
                 validate_type(type_name, self.structs)
@@ -401,7 +402,7 @@ class Lowerer:
             raise CompileError(stmt.token, 'values are immutable; assignment requires var')
         # Type the complete path once, then evaluate each projection once. Reads
         # preserve bounds traps before the RHS, including the final projection.
-        inferred = infer_expression(stmt.target, names, self.types, self.signatures, None, self.structs)
+        inferred = infer_expression(stmt.target, names, self.types, self.signatures, None, self.structs, self.fn.module)
         for type_name in set(inferred.values()) - {'integer'}:
             try:
                 validate_type(type_name, self.structs)
@@ -523,6 +524,8 @@ class Lowerer:
 
 
 def lower(functions):
+    if getattr(functions,"imports",[]):
+        raise CompileError(functions.imports[0], "imports require file-based module loading")
     from .stdlib import attach
     functions, externals = attach(functions)
     structs = structure_types(functions)
@@ -546,6 +549,8 @@ def lower(functions):
         raise CompileError(signatures['main'].name, 'main must return u32')
     module = ModuleIR([Lowerer(fn, signatures, structs).lower() for fn in functions], structs)
     module.externals = externals
+    module.modules = getattr(functions,"module_names",[])
+    module.declarations = getattr(functions,"declarations",[])
     for fn in functions:
         check_ownership(fn)
     annotate_traps(module)
@@ -605,7 +610,9 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 14, 'type_properties': properties,
+    return json.dumps({'version': 15, 'type_properties': properties,
+                       'modules': getattr(module,'modules',[]),
+                       'declarations': getattr(module,'declarations',[]),
                        'structures': [asdict(s) for s in structs.values()],
                        'variants': [asdict(v) for v in variants.values()],
                        'externals': [asdict(fn) for fn in getattr(module, 'externals', [])],

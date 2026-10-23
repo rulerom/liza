@@ -14,7 +14,7 @@ class TypeVariable:
         return self.parent
 
 
-def infer_expression(expr, names, value_types, signatures, expected=None, structs=None):
+def infer_expression(expr, names, value_types, signatures, expected=None, structs=None, access_module=""):
     if structs is None:
         structs = {}
     variants = getattr(structs, "variants", {})
@@ -90,6 +90,9 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
             derived.append(var)
         elif node.kind == 'call' and token.text in structs:
             structure = structs[token.text]
+            visibility = getattr(structs, "visibility", {}).get(token.text)
+            if visibility and visibility[0] != access_module and any(f not in visibility[1] for f,_ in structure.fields):
+                raise CompileError(token, "constructor contains private fields: "+token.text)
             if len(node.args) != len(structure.fields):
                 raise CompileError(token, f'wrong number of constructor arguments for {token.text!r}')
             for arg, (_, type_name) in zip(node.args, structure.fields):
@@ -186,6 +189,9 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                     fields = dict(structs[t].fields)
                     if token.text not in fields:
                         raise CompileError(token, f'unknown field {token.text!r} in {t}')
+                    visibility = getattr(structs, "visibility", {}).get(t)
+                    if visibility and visibility[0] != access_module and token.text not in visibility[1]:
+                        raise CompileError(token, f"private field {t}.{token.text}")
                     bind(result, fields[token.text], token)
                 else:
                     if not is_array(t) and not (kind == 'index' and is_view(t)):

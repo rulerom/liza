@@ -1,0 +1,15 @@
+import tables.connections
+
+// A second consumer of the same opaque type and algorithms.
+fn main()->u32 {
+    added=tables.connections.add(tables.connections.empty(), tables.connections.Connection(7,1,0))
+    match added.result {
+        Err(error)=>{return 1}
+        Ok(id)=>{
+            match tables.connections.get(added.table,id) {
+                None=>{return 2}
+                Some(connection)=>{if connection.user_id==7 {return 0} return 3}
+            }
+        }
+    }
+}

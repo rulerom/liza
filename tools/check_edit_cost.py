@@ -13,6 +13,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools.check_table_cost import source_for, function_body, ROOT
 from liza.frontend import Parser
+from liza.modules import load_program
 from liza.ir import lower
 from liza.backend import llvm
 
@@ -90,32 +91,54 @@ def cyclic_blocks(body):
     return {n:text for n,text in blocks.items() if reaches(n,n)}
 
 
-def inspect(output,clang='clang',capacities=(64,4096,16384)):
+def inspect(output,clang='clang',capacities=(64,4096,16384),modular=False):
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     report={'target':subprocess.check_output([clang,'-dumpmachine'],text=True).strip(),
             'note':'CPU clock ns/update includes cold phi copies per invocation; fixture initialization is outside timing. Input snapshot remains unchanged. Five trials after warmup; no timing threshold. Runtime LCG indices, checksum checked against independent C reference.',
+            'modular':modular,
             'capacities':{}}
     for n in capacities:
         root=output/str(n);root.mkdir(exist_ok=True)
-        source=source_for(n).split('fn main()')[0]
-        source=source[:source.index('fn table_empty()')]+source[source.index('fn slot_matches('):]
-        source+=(ROOT/'tests/fixtures/table_edit_rounds.liza').read_text()+'\nfn main()->u32{return 0}\n'
-        (root/'edit.liza').write_text(source)
-        raw=llvm(lower(Parser(source).parse())).replace('define i32 @main()', 'define i32 @example_entry()')
+        if modular:
+            library=(ROOT/'examples/tables/connections.liza').read_text()
+            library=library.replace('[ConnectionSlot; 64]',f'[ConnectionSlot; {n}]')
+            # Fixture initializes through a target-layout bridge; exclude the
+            # unused large literal constructor from this measured compilation.
+            library=library[:library.index('pub fn empty()')]+library[library.index('fn slot_matches('):]
+            (root/'tables').mkdir(exist_ok=True)
+            (root/'tables/connections.liza').write_text(library)
+            probe=(ROOT/'tests/fixtures/table_edit_rounds.liza').read_text()
+            probe=probe.replace('table.slots.len',str(n))
+            probe=probe.replace('table_get(', 'tables.connections.get(').replace('table_edit(', 'tables.connections.edit(')
+            probe=re.sub(r'\b(ConnectionTable|ConnectionId|Connection)\b',r'tables.connections.\1',probe)
+            (root/'probe.liza').write_text('import tables.connections\n'+probe+'\nfn main()->u32{return 0}\n')
+            module=lower(load_program(root/'probe.liza'))
+            loop_name='probe.edit_rounds';owned_name='__liza_owned_tables.connections.edit'
+            bridge=BRIDGE.replace('%struct.Connection','%struct.tables.connections.Connection')
+        else:
+            source=source_for(n).split('fn main()')[0]
+            source=source[:source.index('fn table_empty()')]+source[source.index('fn slot_matches('):]
+            source+=(ROOT/'tests/fixtures/table_edit_rounds.liza').read_text()+'\nfn main()->u32{return 0}\n'
+            (root/'edit.liza').write_text(source)
+            module=lower(Parser(source).parse())
+            loop_name='edit_rounds';owned_name='__liza_owned_table_edit';bridge=BRIDGE
+        raw=llvm(module).replace('define i32 @main()', 'define i32 @example_entry()')
+        if modular:
+            raw+='\ndefine i64 @liza_edit_rounds(ptr %input, i32 %seed, i32 %rounds) {\nentry:\n  %value = call i64 @liza_probe.edit_rounds(ptr %input, i32 %seed, i32 %rounds)\n  ret i64 %value\n}\n'
         # A private test bridge initializes the input using LLVM's target layout.
         # No C layout assumption or aggregate ABI, and no edit algorithm here.
         if 'declare void @llvm.memset.p0.i64' not in raw:
             raw+='\ndeclare void @llvm.memset.p0.i64(ptr, i8, i64, i1)\n'
-        raw+=BRIDGE
+        raw+=bridge
         ir=root/'edit.ll';ir.write_text(raw)
         # Prove backend storage reuse before LLVM optimization: no bulk copies
         # on any cycle and no copies inside the selected owned implementation.
-        loop=function_body(raw,'edit_rounds')
-        assert '__liza_owned_table_edit' in loop
+        loop=function_body(raw,loop_name)
+        assert owned_name in loop
         assert cyclic_blocks(loop), 'probe must retain a runtime loop'
         for body in cyclic_blocks(loop).values():
             assert not re.search(r'@llvm.mem(?:cpy|move)',body), 'copy on loop cycle'
-        owned=function_body(raw,'__liza_owned_table_edit')
+        owned=function_body(raw,owned_name)
         assert not re.search(r'@llvm.mem(?:cpy|move)',owned), 'copy inside owned edit'
         c=root/'driver.c';c.write_text(HARNESS)
         entry={}
@@ -123,14 +146,14 @@ def inspect(output,clang='clang',capacities=(64,4096,16384)):
             optimized=root/f'edit.O{opt}.ll';assembly=root/f'edit.O{opt}.s'
             for flags,dest in [(['-S','-emit-llvm'],optimized),(['-S'],assembly)]:
                 subprocess.run([clang,'-Wno-override-module',f'-O{opt}',*flags,str(ir),'-o',str(dest)],check=True,capture_output=True,timeout=240)
-            text=optimized.read_text();owned=function_body(text,'__liza_owned_table_edit')
+            text=optimized.read_text();owned=function_body(text,owned_name)
             assert not re.search(r'@llvm.mem(?:cpy|move)',owned)
-            body=function_body(text,'edit_rounds')
+            body=function_body(text,loop_name)
             for block in cyclic_blocks(body).values():
                 assert not re.search(r'@llvm.mem(?:cpy|move)',block), 'optimized loop copies aggregate'
             # Keep both complete machine code and isolated owned edit for review.
             asm=assembly.read_text()
-            machine=re.search(r'^_?liza___liza_owned_table_edit:.*?\n(.*?)(?=^\s*\.cfi_endproc|^\s*\.seh_endproc|^\s*\.size|^[ \t]*[;#] -- End function)',asm,re.M|re.S)
+            machine=re.search(r'^_?liza_'+re.escape(owned_name)+r':.*?\n(.*?)(?=^\s*\.cfi_endproc|^\s*\.seh_endproc|^\s*\.size|^[ \t]*[;#] -- End function)',asm,re.M|re.S)
             assert machine, 'missing owned machine function'
             assert not re.search(r'\b_?mem(?:cpy|move)\b',machine.group(0))
             (root/f'owned_edit.O{opt}.s').write_text(machine.group(0)+'\n')
@@ -155,4 +178,5 @@ def inspect(output,clang='clang',capacities=(64,4096,16384)):
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--output',default='build/edit-cost');p.add_argument('--clang',default='clang')
     p.add_argument('--capacity',type=int,choices=(64,4096,16384),action='append')
-    a=p.parse_args();inspect(a.output,a.clang,a.capacity or (64,4096,16384))
+    p.add_argument('--modules',action='store_true',help='exercise public table API through whole-program imports')
+    a=p.parse_args();inspect(a.output,a.clang,a.capacity or (64,4096,16384),a.modules)

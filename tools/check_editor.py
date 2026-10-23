@@ -20,7 +20,7 @@ def check():
                 raise RuntimeError(result.stdout + result.stderr)
             return result.stdout
         print(run('test'))
-        sources = sorted((ROOT/'examples').glob('*.liza'))
+        sources = sorted((ROOT/'examples').rglob('*.liza'))
         sources += sorted((ROOT/'tests/fixtures').glob('*.liza'))
         run('parse', '--quiet', *sources)
         queries = ROOT/'editors/zed/languages/liza'
@@ -32,8 +32,8 @@ def check():
                               ('type.builtin','u32'), ('constructor','Ok'),
                               ('string','"Hello, Liza!"')]:
             assert re.search(r' - '+re.escape(category)+r',.*text: `'+re.escape(text)+r'`',highlighted), (category,text)
-        outline = run('query', queries/'outline.scm', ROOT/'examples/connection_table.liza')
-        for name in ['ConnectionId','TableError','table_edit']:
+        outline = run('query', queries/'outline.scm', ROOT/'examples/tables/connections.liza')
+        for name in ['ConnectionId','TableError','edit']:
             assert re.search(r' - name,.*text: `'+name+r'`',outline),name
         # Recovery while editing: one unfinished expression must not hide the
         # next top-level declaration from the outline.

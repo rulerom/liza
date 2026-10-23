@@ -257,3 +257,30 @@ ABI 14. В репозитории хранится сгенерированны�
 После коммита грамматики обновите закреплённый SHA в `editors/zed/extension.toml`.
 Редакторная грамматика допускает свободные переносы/незавершённый код; правила
 корректности программы по-прежнему определяются frontend компилятора.
+
+
+## Модули 0.0.17
+
+`liza/modules.py` загружает файлы один раз, проверяет корень/регистр/циклы,
+разрешает имена и публичные интерфейсы, затем объединяет AST. Номинальные имена
+имеют вид `module.Type`; entry main сохраняет символ `main`. Semantic IR v15
+добавляет `modules` и `declarations` (стабильный project-relative `id`, symbol,
+module, public); операции вычислений не меняются. Type inference проверяет
+приватность конструкторов и полей в контексте исходного модуля функции.
+
+```sh
+python3 -m unittest discover -s tests -p test_modules.py -v
+python3 tools/check_edit_cost.py --modules --output build/module-edit-cost
+```
+
+Межмодульный cost probe использует настоящие `import`, публичные методы и
+приватную таблицу. Test bridge лишь инициализирует вход по target layout; цикл
+и edit написаны на Liza. Для 64/4096/16384 проверяются O0/O2, контрольная сумма,
+неизменность входа и отсутствие bulk copies в owned edit и циклических блоках.
+CI сохраняет `module-edit-cost-*` для Linux/macOS/Windows. Обычный baseline
+по-прежнему строится из тех же алгоритмов: снимает pub/квалификацию и добавляет
+внутренние acceptance fixtures, в том числе моделирование исчерпания поколений.
+Потребители публичного API не получают доступа к служебным полям.
+
+Реализация таблицы теперь находится в `examples/tables/connections.liza`;
+`examples/connection_table.liza` и `examples/connection_lookup.liza` — её клиенты.

@@ -7,7 +7,7 @@
 (string) @string
 (escape_sequence) @string.escape
 (comment) @comment
-["fn" "struct" "enum" "var" "return" "if" "else" "while"
+["import" "pub" "fn" "struct" "enum" "var" "return" "if" "else" "while"
  "match" "copy" "move" "view" "pure" "io"] @keyword
 ["+" "-" "*" "/" "%" "+%" "-%" "*%" "+|" "-|" "*|"
  "==" "!=" "<" "<=" ">" ">=" "&&" "||" "!" "~" "&" "|" "^" "<<" ">>" "=" "->" "=>" ".."] @operator
@@ -29,3 +29,5 @@
 
 ((field_expression value: (identifier) @type field: (identifier) @constructor)
  (#match? @type "^[A-Z]"))
+
+(module_path) @variable

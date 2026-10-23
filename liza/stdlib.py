@@ -14,6 +14,8 @@ def attach(program):
         if fn.name.text == 'file.read_chunk':
             fn.borrowed_params = [0]
     combined = Program()
+    combined.module_names = getattr(program,"module_names",[])
+    combined.declarations = getattr(program,"declarations",[])
     combined.extend(program)
     def calls(node):
         if isinstance(node, Expr) and node.kind == 'call':

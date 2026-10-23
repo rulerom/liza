@@ -3,7 +3,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from .frontend import Parser, CompileError
+from .frontend import CompileError
+from .modules import load_program
 from .ir import lower, dump
 from .backend import llvm
 from .stdlib import link_flags
@@ -15,6 +16,7 @@ def main():
     for command in ('check', 'emit-ir', 'emit-llvm', 'build', 'run'):
         p = sub.add_parser(command)
         p.add_argument('source', type=Path)
+        p.add_argument('--project-root', type=Path, help='explicit import root (default: entry source directory)')
         if command in ('emit-ir', 'emit-llvm', 'build'):
             p.add_argument('-o', '--output', type=Path)
         if command in ('build', 'run'):
@@ -22,14 +24,16 @@ def main():
             p.add_argument('-O', choices=('0', '2'), default='2')
     args = parser.parse_args()
     try:
-        module = lower(Parser(args.source.read_text(encoding='utf-8')).parse())
+        program = load_program(args.source,args.project_root)
+        inputs = set(program.source_paths)
+        module = lower(program)
         if args.command == 'check':
             print(f'{args.source}: OK')
             return 0
         if args.command in ('emit-ir', 'emit-llvm'):
             text = dump(module) if args.command == 'emit-ir' else llvm(module)
             if args.output:
-                if args.output.resolve() == args.source.resolve():
+                if args.output.resolve() in inputs:
                     raise ValueError('output must not overwrite source')
                 args.output.write_text(text, encoding='utf-8')
             else:
@@ -39,11 +43,11 @@ def main():
             ir_file = Path(temporary) / 'module.ll'
             ir_file.write_text(llvm(module), encoding='utf-8')
             output = (args.output or Path('build') / args.source.stem).resolve() if args.command == 'build' else Path(temporary) / 'program'
-            if output == args.source.resolve():
+            if output in inputs:
                 raise ValueError('output must not overwrite source')
             if sys.platform == 'win32' and output.suffix.lower() != '.exe':
                 output = Path(str(output)+'.exe')
-            if output == args.source.resolve():
+            if output in inputs:
                 raise ValueError('output must not overwrite source')
             output.parent.mkdir(parents=True, exist_ok=True)
             compiled = subprocess.run([args.clang, '-Wno-override-module', f'-O{args.O}', str(ir_file), *link_flags(module), '-o', str(output)])
@@ -62,7 +66,7 @@ def main():
                 return 128 - code
             return code
     except CompileError as error:
-        print(f'{args.source}:{error}', file=sys.stderr)
+        print(str(error) if error.source else f'{args.source}:{error}', file=sys.stderr)
         return 1
     except (OSError, ValueError, UnicodeError) as error:
         print(f'liza: {error}', file=sys.stderr)

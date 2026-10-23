@@ -21,7 +21,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def source_for(capacity):
     if capacity not in (64, 4096, 16384):
         raise ValueError('supported capacities are 64, 4096 and 16384')
-    source = (ROOT/'examples/connection_table.liza').read_text()
+    source = (ROOT/'examples/tables/connections.liza').read_text()
+    source += 'fn main()'+(ROOT/'examples/connection_table.liza').read_text().split('fn main()',1)[1]
+    source = source.replace('pub ', '').replace('tables.connections.', '')
+    source = re.sub(r'\b(empty|get|add|edit|del)(?=\s*\()', lambda m: 'table_'+m[0], source)
     source = source.replace('[ConnectionSlot; 64]', f'[ConnectionSlot; {capacity}]')
     start = source.index('    return ConnectionTable([')
     end = source.index('\n', start)
@@ -49,7 +52,7 @@ int main(int argc, char **argv) {
 
 
 def function_body(text, name):
-    m = re.search(r'^define [^\n]*@liza_'+name+r'\([^\n]*\)[^\n]*\{\n(.*?)^}', text, re.M|re.S)
+    m = re.search(r'^define [^\n]*@liza_'+re.escape(name)+r'\([^\n]*\)[^\n]*\{\n(.*?)^}', text, re.M|re.S)
     if not m:
         raise AssertionError('missing function '+name)
     return m.group(0)

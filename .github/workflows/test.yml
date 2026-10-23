@@ -51,6 +51,12 @@ jobs:
         run: python tools/check_table_cost.py --output build/table-cost
       - name: Check owned edit storage and runtime cost
         run: python tools/check_edit_cost.py --output build/edit-cost
+      - name: Check module boundary preserves owned edit
+        run: python tools/check_edit_cost.py --modules --output build/module-edit-cost
+      - uses: actions/upload-artifact@v4
+        with:
+          name: module-edit-cost-${{ matrix.os }}
+          path: build/module-edit-cost/
       - uses: actions/upload-artifact@v4
         with:
           name: edit-cost-${{ matrix.os }}
@@ -81,6 +87,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/check_edit_cost.py --output build/edit-cost
           if errorlevel 1 exit /b 1
+          python tools/check_edit_cost.py --modules --output build/module-edit-cost
+          if errorlevel 1 exit /b 1
       - uses: actions/upload-artifact@v4
         with:
           name: console-cost-windows
@@ -97,3 +105,7 @@ jobs:
         with:
           name: edit-cost-windows
           path: build/edit-cost/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: module-edit-cost-windows
+          path: build/module-edit-cost/
