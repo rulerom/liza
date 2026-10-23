@@ -443,8 +443,37 @@
             {
               "type": "STRING",
               "value": "io"
+            },
+            {
+              "type": "STRING",
+              "value": "alloc"
             }
           ]
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": ","
+              },
+              {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": "io"
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "alloc"
+                  }
+                ]
+              }
+            ]
+          }
         }
       ]
     },
@@ -840,6 +869,10 @@
     "_statement": {
       "type": "CHOICE",
       "members": [
+        {
+          "type": "SYMBOL",
+          "name": "block"
+        },
         {
           "type": "SYMBOL",
           "name": "assignment"
@@ -1542,8 +1575,22 @@
             "type": "FIELD",
             "name": "field",
             "content": {
-              "type": "SYMBOL",
-              "name": "identifier"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "identifier"
+                },
+                {
+                  "type": "ALIAS",
+                  "content": {
+                    "type": "STRING",
+                    "value": "view"
+                  },
+                  "named": true,
+                  "value": "identifier"
+                }
+              ]
             }
           }
         ]

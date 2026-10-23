@@ -521,6 +521,10 @@
           "named": true
         },
         {
+          "type": "block",
+          "named": true
+        },
+        {
           "type": "break_statement",
           "named": true
         },
@@ -1988,6 +1992,10 @@
   },
   {
     "type": "^",
+    "named": false
+  },
+  {
+    "type": "alloc",
     "named": false
   },
   {

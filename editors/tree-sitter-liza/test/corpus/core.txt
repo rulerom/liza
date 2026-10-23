@@ -497,3 +497,58 @@ fn main()->u32 {
           (builtin_type)
           (arguments
             (identifier)))))))
+
+==================
+Regions, effects and lexical scopes
+==================
+fn work(buffer:memory.Buffer<u32>)->memory.Buffer<u32>:io,alloc {
+    { data=memory.view(buffer)
+      size=data.len }
+    return memory.set(move buffer,0,1)
+}
+---
+
+(source_file
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)
+        (generic_type
+          (type_identifier
+            (identifier)
+            (identifier))
+          (type_arguments
+            (builtin_type)))))
+    (generic_type
+      (type_identifier
+        (identifier)
+        (identifier))
+      (type_arguments
+        (builtin_type)))
+    (effect)
+    (block
+      (block
+        (assignment
+          (identifier)
+          (call_expression
+            (field_expression
+              (identifier)
+              (identifier))
+            (arguments
+              (identifier))))
+        (assignment
+          (identifier)
+          (field_expression
+            (identifier)
+            (identifier))))
+      (return_statement
+        (call_expression
+          (field_expression
+            (identifier)
+            (identifier))
+          (arguments
+            (unary_expression
+              (identifier))
+            (number)
+            (number)))))))
