@@ -552,3 +552,80 @@ fn work(buffer:memory.Buffer<u32>)->memory.Buffer<u32>:io,alloc {
               (identifier))
             (number)
             (number)))))))
+
+==================
+Linear result unpack and bounded vector
+==================
+fn pass<T>(value:T)->T { return move value }
+fn step(current:vec.Vec<u32>)->vec.Vec<u32> {
+  result = vec.pop(move current)
+  (next, item) = pass(move result)
+  { data = vec.view(next) }
+  return move next
+}
+---
+
+(source_file
+  (function_definition
+    (identifier)
+    (generic_parameters
+      (generic_parameter
+        (identifier)))
+    (parameters
+      (parameter
+        (identifier)
+        (type_identifier
+          (identifier))))
+    (type_identifier
+      (identifier))
+    (block
+      (return_statement
+        (unary_expression
+          (identifier)))))
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)
+        (generic_type
+          (type_identifier
+            (identifier)
+            (identifier))
+          (type_arguments
+            (builtin_type)))))
+    (generic_type
+      (type_identifier
+        (identifier)
+        (identifier))
+      (type_arguments
+        (builtin_type)))
+    (block
+      (assignment
+        (identifier)
+        (call_expression
+          (field_expression
+            (identifier)
+            (identifier))
+          (arguments
+            (unary_expression
+              (identifier)))))
+      (destructuring_assignment
+        (identifier)
+        (identifier)
+        (call_expression
+          (identifier)
+          (arguments
+            (unary_expression
+              (identifier)))))
+      (block
+        (assignment
+          (identifier)
+          (call_expression
+            (field_expression
+              (identifier)
+              (identifier))
+            (arguments
+              (identifier)))))
+      (return_statement
+        (unary_expression
+          (identifier))))))
