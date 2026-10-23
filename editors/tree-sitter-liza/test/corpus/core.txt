@@ -339,3 +339,83 @@ fn ops(x:u32, y:u32) -> u32 {
               (number)))))
       (return_statement
         (identifier)))))
+
+==================
+Modules, exported declarations and private fields
+==================
+import tables.connections
+pub struct Wrapper { hidden:u32, pub value:tables.connections.ConnectionId }
+pub enum State { Empty, Ready(Wrapper) }
+pub fn read(id:tables.connections.ConnectionId)->u32 {
+    match tables.connections.TableError.Full {
+        tables.connections.TableError.Full=>{return id.slot}
+        tables.connections.TableError.NotFound=>{return 0}
+    }
+}
+---
+
+(source_file
+  (import_declaration
+    (module_path
+      (identifier)
+      (identifier)))
+  (struct_definition
+    (type_identifier
+      (identifier))
+    (field_definition
+      (identifier)
+      (builtin_type))
+    (field_definition
+      (identifier)
+      (type_identifier
+        (identifier)
+        (identifier)
+        (identifier))))
+  (enum_definition
+    (type_identifier
+      (identifier))
+    (variant_definition
+      (identifier))
+    (variant_definition
+      (identifier)
+      (type_identifier
+        (identifier))))
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)
+        (type_identifier
+          (identifier)
+          (identifier)
+          (identifier))))
+    (builtin_type)
+    (block
+      (match_statement
+        (field_expression
+          (field_expression
+            (field_expression
+              (identifier)
+              (identifier))
+            (identifier))
+          (identifier))
+        (match_arm
+          (pattern
+            (identifier)
+            (identifier)
+            (identifier)
+            (identifier))
+          (block
+            (return_statement
+              (field_expression
+                (identifier)
+                (identifier)))))
+        (match_arm
+          (pattern
+            (identifier)
+            (identifier)
+            (identifier)
+            (identifier))
+          (block
+            (return_statement
+              (number))))))))
