@@ -161,6 +161,9 @@ def check_dependencies(records, structs, signatures, audit=None, expression_maps
                 if operation.startswith('vec.'): return EMPTY
                 if operation=='buffer.update': return arguments[0]
                 if operation in ('region.close','buffer.release','buffer.length','buffer.view'): return EMPTY
+                # Audited I/O boundary returns the exact consumed buffer, on Ok and Err.
+                # The stream has no region origin; the status contains no resource.
+                if node.token.text=='net.read': return Value(components=(arguments[1],EMPTY))
                 result=analyze(node.token.text)
                 def substitute(origin):
                     if origin[0]=='parameter':

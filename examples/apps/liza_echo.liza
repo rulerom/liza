@@ -1,0 +1,92 @@
+// One active client; a 2048-byte region buffer reused for every read.
+fn exchange(stream:net.Stream, initial:memory.Buffer<u8>)->u32:io {
+    var buffer=move initial
+    var running=true
+    var status:u32=0
+    while running {
+        (next,received)=net.read(stream,move buffer)
+        buffer=move next
+        match received {
+            Err(error)=>{status=3;running=false}
+            Ok(count)=>{
+                if count==0 {running=false}
+                else {
+                    data=memory.view(buffer)
+                    var offset:u32=0
+                    while offset<count && running {
+                        match net.write(stream,data,offset,count-offset) {
+                            Err(error)=>{status=3;running=false}
+                            Ok(written)=>{offset=offset+written}
+                        }
+                    }
+                }
+            }
+        }
+    }
+    released=memory.release(move buffer)
+    match net.close_stream(move stream) {Ok(done)=>{} Err(error)=>{status=3}}
+    return status
+}
+fn serve(stream:net.Stream)->u32:io,alloc {
+    match memory.create(2048) {
+        Err(error)=>{closed=net.close_stream(move stream);return 3}
+        Ok(region)=>{
+            match memory.alloc<u8>(region,2048,0) {
+                Err(error)=>{
+                    freed=memory.close(move region)
+                    closed=net.close_stream(move stream)
+                    return 3
+                }
+                Ok(buffer)=>{
+                    status=exchange(move stream,move buffer)
+                    freed=memory.close(move region)
+                    return status
+                }
+            }
+        }
+    }
+}
+fn main()->u32:io,alloc {
+    var once=false
+    var port:u16=9000
+    if cli.count()!=1 {
+        if cli.count()!=2 {message=console.err("Usage: liza-echo [--once | --ephemeral]\n");return 2}
+        match cli.arg(1) {
+            None=>{return 2}
+            Some(arg)=>{
+                if !cli.equals(arg,"--once") && !cli.equals(arg,"--ephemeral") {message=console.err("Usage: liza-echo [--once | --ephemeral]\n");return 2}
+                once=cli.equals(arg,"--once")
+                port=0
+            }
+        }
+    }
+    match net.listen(port) {
+        Err(error)=>{message=console.err("Cannot listen on loopback\n");return 3}
+        Ok(listener)=>{
+            var status:u32=0
+            var running=true
+            match net.local_port(listener) {
+                Err(error)=>{status=3;running=false}
+                Ok(actual)=>{
+                    match console.print_u64(u64(actual)) {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+                    match console.write("\n") {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+                }
+            }
+            while running {
+                match net.accept(listener) {
+                    Err(error)=>{status=3;running=false}
+                    Ok(stream)=>{
+                        result=serve(move stream)
+                        if result!=0 {
+                            match console.err("Connection I/O failed\n") {Ok(done)=>{} Err(error)=>{running=false}}
+                            status=3
+                        }
+                        if once {running=false}
+                    }
+                }
+            }
+            match net.close_listener(move listener) {Ok(done)=>{} Err(error)=>{status=3}}
+            return status
+        }
+    }
+}
