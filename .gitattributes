@@ -1,0 +1,2 @@
+# This sample's byte count and Unicode scalar count are part of the CLI examples.
+examples/data/utf8.txt text eol=lf
