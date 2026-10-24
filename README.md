@@ -199,3 +199,17 @@ overflowing prefix. Supported LLVM loop forms are checked independently.
 using LLVM refinement to validate generated/optimized IR pairs. Missed negative
 controls produce `unsuitable`; unsupported or incomplete checks remain `unknown`.
 It does not extend the V2 inductive or machine-code guarantees.
+
+## TCP echo · первый сетевой срез 0.0.26
+
+```sh
+python -m liza build examples/apps/liza_echo.liza -O 2 -o build/liza-echo
+./build/liza-echo --once
+```
+
+Сервер печатает выбранный loopback-порт, обслуживает одного клиента и закрывает
+ресурсы после EOF. Без флага работает последовательно на `127.0.0.1:9000`.
+Бинарные данные проходят через существующий `memory.Buffer<u8>` на 2048 байтов;
+короткие записи обрабатывает приложение. [Контракт TCP](docs/tcp.md).
+
+Сетевой runtime и машинный код не входят в гарантии Liza Verified V0–V4.

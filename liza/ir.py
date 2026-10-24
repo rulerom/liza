@@ -130,7 +130,7 @@ def structure_types(program):
             if not resolve(element_type(name), False)['copyable']:
                 raise ValueError('views of resource values are not supported')
             return {'copyable': True, 'implicit_copy': True}
-        if name in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path'):
+        if name in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path', 'net.Listener', 'net.Stream'):
             return value_properties(name)
         if name in result:
             return result[name].properties
@@ -703,7 +703,7 @@ def annotate_traps(module):
 
 def dump(module):
     structs = getattr(module, 'structs', {})
-    properties = {t: value_properties(t) for t in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path')}
+    properties = {t: value_properties(t) for t in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path', 'net.Listener', 'net.Stream')}
     properties.update({name: struct.properties for name, struct in structs.items()})
     variants = getattr(module, 'variants', {})
     properties.update({name: v.properties for name, v in variants.items()})

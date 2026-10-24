@@ -1,0 +1,44 @@
+// Blocking loopback TCP. Handles are opaque linear resources.
+enum NetError { AddressInUse; PermissionDenied; Interrupted; WouldBlock; Disconnected; InvalidRange; Other }
+struct __liza_NetListener { handle:net.Listener; error:u32 }
+struct __liza_NetStream { handle:net.Stream; error:u32 }
+fn __liza_net_error(code:u32)->NetError {
+    if code==1 {return NetError.AddressInUse}
+    if code==2 {return NetError.PermissionDenied}
+    if code==3 {return NetError.Interrupted}
+    if code==4 {return NetError.WouldBlock}
+    if code==5 {return NetError.Disconnected}
+    if code==6 {return NetError.InvalidRange}
+    return NetError.Other
+}
+fn net.listen(port:u16)->Result<net.Listener,NetError>:io {
+    raw=__liza_net_listen(port)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_net_error(raw.error))
+}
+fn net.accept(listener:net.Listener)->Result<net.Stream,NetError>:io {
+    raw=__liza_net_accept(listener)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_net_error(raw.error))
+}
+fn net.local_port(listener:net.Listener)->Result<u16,NetError>:io {
+    raw=__liza_net_port(listener)
+    if raw>>32==0 {return Ok(u16(raw))}
+    return Err(__liza_net_error(u32(raw>>32)))
+}
+fn net.close_listener(listener:net.Listener)->Result<u32,NetError>:io {
+    code=__liza_net_close_listener(listener)
+    if code==0 {return Ok(0)}
+    return Err(__liza_net_error(code))
+}
+fn net.close_stream(stream:net.Stream)->Result<u32,NetError>:io {
+    code=__liza_net_close_stream(stream)
+    if code==0 {return Ok(0)}
+    return Err(__liza_net_error(code))
+}
+// One send, no hidden write-all loop. Explicit range avoids new view syntax.
+fn net.write(stream:net.Stream,data:View<u8>,start:u32,count:u32)->Result<u32,NetError>:io {
+    raw=__liza_net_write(stream,data,start,count)
+    if raw>>32==0 {return Ok(u32.wrap(raw))}
+    return Err(__liza_net_error(u32(raw>>32)))
+}

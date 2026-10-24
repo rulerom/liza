@@ -5,7 +5,7 @@ from .frontend import Parser, Function, Token, Program, Expr
 
 
 def attach(program):
-    libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli') if getattr(program, 'uses_'+name, False)]
+    libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net') if getattr(program, 'uses_'+name, False)]
     if not libraries:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
@@ -16,7 +16,7 @@ def attach(program):
     for fn in library:
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
             fn.module = '__liza_utf8_stream'
-        if fn.name.text in ('file.read_chunk', 'file.write_chunk', 'file.flush'):
+        if fn.name.text in ('net.accept','net.local_port','net.write','file.read_chunk', 'file.write_chunk', 'file.flush'):
             fn.borrowed_params = [0]
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
@@ -66,6 +66,18 @@ def attach(program):
         Function(Token('__liza_file_flush',1,1), [(Token('handle',1,1),'File')], [], 'u32', 'io', borrowed_params=[0]),
         Function(Token('__liza_file_open_path',1,1), [(Token('path',1,1),'Path')], [], '__liza_FileOpen', 'io'),
     ])
+    from .types import product_type
+    net_externals = [
+        ('__liza_net_listen',['u16'],'__liza_NetListener',[]),
+        ('__liza_net_accept',['net.Listener'],'__liza_NetStream',[0]),
+        ('__liza_net_port',['net.Listener'],'u64',[0]),
+        ('__liza_net_close_listener',['net.Listener'],'u32',[]),
+        ('__liza_net_close_stream',['net.Stream'],'u32',[]),
+        ('__liza_net_write',['net.Stream','View<u8>','u32','u32'],'u64',[0]),
+        ('net.read',['net.Stream','memory.Buffer<u8>'],product_type('memory.Buffer<u8>','Result<u32,NetError>'),[0]),
+    ]
+    externals.extend(Function(Token(n,1,1),[(Token('p'+str(i),1,1),t) for i,t in enumerate(params)],[],result,'io',borrowed_params=borrowed)
+                     for n,params,result,borrowed in net_externals)
     return combined, [fn for fn in externals if fn.name.text in needed]
 
 
@@ -78,12 +90,14 @@ def link_flags(module):
     suffix = 'windows' if sys.platform == 'win32' else 'posix'
     names = {fn.name.text for fn in module.externals}
     file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk','__liza_file_open_path','__liza_file_create_path','__liza_file_write','__liza_file_flush'}
+    net_names = {n for n in names if n.startswith('__liza_net_') or n=='net.read'}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
-    libraries = (['console'] if names-file_names-cli_names else []) + (['file'] if names & file_names else [])
+    libraries = (['console'] if names-file_names-cli_names-net_names else []) + (['file'] if names & file_names else [])
+    if net_names: libraries.append('net')
     if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if sys.platform == 'win32':
-        return files
+        return files + (['ws2_32.lib'] if net_names else [])
     if sys.platform not in ('darwin','linux'):
         raise ValueError('console runtime currently supports Linux, macOS and Windows only')
     return files + ['-pthread']
