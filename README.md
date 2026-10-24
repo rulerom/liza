@@ -177,3 +177,11 @@ python3 -m liza build examples/apps/liza_copy.liza -o build/liza-copy
 
 На Windows запускайте `build/liza-copy.exe`.
 [Контракт записи и исходник](https://liza.rulerom.com/file-output.html).
+
+## Liza Verified (experimental)
+
+An optional Z3 experiment checks ten fixed `u8`/`i8` functions against independent
+contracts at Semantic IR and LLVM IR (generated, O0, O2) levels. It preserves
+mandatory traps and requires counterexamples for deliberately broken lowerings.
+This is not whole-compiler or binary verification; Z3 and the small IR models
+remain trusted. See [scope and reproduction](docs/verified.md).

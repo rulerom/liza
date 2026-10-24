@@ -61,6 +61,7 @@ nav:
   - Запись файлов и liza-copy: file-output.md
   - Редактор Zed: editor.md
   - Milestones: milestones.md
+  - Liza Verified (эксперимент): verified.md
   - Язык:
       - Модель и открытые решения: design.md
       - Исполняемое ядро: core.md

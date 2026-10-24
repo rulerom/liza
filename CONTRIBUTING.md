@@ -441,3 +441,14 @@ POSIX/Win32 short-write, partial-failure, zero-write and flush fault injection,
 checks pointer progression, and saves O0/O2 LLVM/assembly. POSIX tests exercise
 real RLIMIT_FSIZE failures and pending SIGXFSZ preservation. liza-copy tests
 verify close order, secondary failures and retaining a partial destination.
+
+## Optional verification experiment
+
+Install `verification/requirements.txt` in a separate environment, then run
+`python -m unittest verification.test_verifier -v` and
+`python verification/check.py --output build/verified`. The separate Verified
+workflow runs on all three platforms. New IR constructs must fail closed until
+modeled: never turn unsupported instructions or solver `unknown` into success.
+Keep the fixed reference contracts independent of compiler implementations;
+review specification changes separately from implementation fixes. SMT-LIB
+queries are not proof certificates.

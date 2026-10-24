@@ -1,0 +1,12 @@
+// Fixed verification subjects. Specifications live separately in reference.py.
+fn add_u8(x:u8,y:u8)->u8 { return x+y }
+fn sub_u8(x:u8,y:u8)->u8 { return x-y }
+fn mul_u8(x:u8,y:u8)->u8 { return x*y }
+fn add_i8(x:i8,y:i8)->i8 { return x+y }
+fn sub_i8(x:i8,y:i8)->i8 { return x-y }
+fn mul_i8(x:i8,y:i8)->i8 { return x*y }
+fn sequence_u8(x:u8)->u8 { return (x+1)-1 }
+fn sequence_i8(x:i8)->i8 { return (x+1)-1 }
+fn branch_u8(x:u8,take:bool)->u8 { if take {return x+1} return x }
+fn branch_i8(x:i8,take:bool)->i8 { if take {return x+1} return x }
+fn main()->u32 {return 0}
