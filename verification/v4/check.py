@@ -122,13 +122,27 @@ def run(output):
         reports[name]['mutated_analyzer_accepts'] = True
         (output / name / 'dependencies-mutant.py').write_bytes(analyzer.encode('utf-8'))
         reports[name]['artifacts']['dependencies-mutant.py'] = hashlib.sha256(analyzer.encode()).hexdigest()
+    from .summary_controls import CONTROLS, understate
+    for name,(source,mutation) in CONTROLS.items():
+        module,audit=compile_source(source)
+        baseline=check(module,audit)
+        original_ir=dump(module)
+        function=understate(module,mutation)
+        reports[name]=save(name,source,module,audit)
+        concrete=check(module,audit,concrete=True)
+        reports[name].update(baseline_status=baseline['status'],
+                             mutated_function=function, concrete_status=concrete['status'],
+                             concrete_summary_failures=concrete['summary_failures'])
+        original_bytes=original_ir.encode('utf-8')
+        (output/name/'original-semantic-ir.json').write_bytes(original_bytes)
+        reports[name]['artifacts']['original-semantic-ir.json']=hashlib.sha256(original_bytes).hexdigest()
     root = Path(__file__).resolve().parents[2]
     tool_files = ['liza/dependencies.py', 'liza/ir.py',
                   'verification/v4/model.py', 'verification/v4/check.py',
-                  'verification/v4/fixtures.py']
+                  'verification/v4/fixtures.py', 'verification/v4/summary_controls.py']
     result = {'stage': 'V4 resource graph: functions, CFG and inductive closure',
               'python': platform.python_version(), 'platform': platform.platform(),
-              'positive_cases':list(positive), 'tools': {name: hashlib.sha256((root/name).read_bytes()).hexdigest()
+              'positive_cases':list(positive), 'summary_controls':list(CONTROLS), 'tools': {name: hashlib.sha256((root/name).read_bytes()).hexdigest()
                         for name in tool_files}, 'results': reports}
     (output / 'report.json').write_bytes((json.dumps(result, indent=2, sort_keys=True)+'\n').encode('utf-8'))
     return result
@@ -144,6 +158,10 @@ def main():
     return 0 if (all(results[n]['status']=='verified_fragment' for n in report['positive_cases']) and
                  all(results[n]['status'] == 'model_violation' and
                      any(t.get('reproduced') for t in results[n]['traces']) for n in MUTATIONS) and
+                 all(results[n]['baseline_status']=='verified_fragment' and
+                     results[n]['status']=='summary_failure' and
+                     results[n]['concrete_status']=='summary_failure'
+                     for n in report['summary_controls']) and
                  results['lose_unresolved_result']['coverage_failures'] and
                  not results['bypass_region_guard']['coverage_failures']) else 1
 

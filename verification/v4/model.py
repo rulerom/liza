@@ -116,18 +116,19 @@ def audit_point(state, audit, operation, phase, function):
                                'phase': phase, 'missing_origins': sorted(map(repr, real-static))})
 
 
-def summary_check(state, value, description, fn, audit):
+def summary_check(state, value, description, fn, audit, path=()):
     """Check the selected returned shape, deriving actual origin from execution."""
     if isinstance(value, Variant):
         description = description.get('variants', {}).get(value.case, {})
-        return summary_check(state, value.payload, description, fn, audit)
+        return summary_check(state, value.payload, description, fn, audit, path+(value.case,))
     for resource in resources(value):
         key = 'regions' if resource.kind == 'region' else 'depends_on'
         advertised = {state.aliases.get(origin_label(raw,audit),origin_label(raw,audit))
                       for raw in description.get(key, [])}
         if state.origin(resource) not in advertised:
             state.summaries.append({'function': fn, 'reason': 'return origin not covered',
-                                    'actual': repr(state.origin(resource)), 'component': key})
+                                    'actual': repr(state.origin(resource)), 'component': key,
+                                    'return_path': list(path), 'advertised': sorted(map(repr,advertised))})
 
 
 def fingerprint(state, block, predecessor):
@@ -373,7 +374,13 @@ class Engine:
 def check(module,audit,entry='main',max_states=10000,*,concrete=False,replay=None):
     report={'status':'unknown','scope':'resource-abstract-reachability','states':0,
             'normal_paths':0,'coverage_failures':[],'guard_failures':[],
-            'summary_failures':[],'traces':[]}
+            'summary_failures':[],'traces':[],
+            'summary_scope': {
+                'checked': ['returns provenance on reachable returns',
+                            'normal-exit ownership obligations from execution'],
+                'not_certified': ['requires', 'consumes', 'effects', 'parameters',
+                                  'creation_sites', 'returned_buffer_storage',
+                                  'normal_exit annotation', 'trap_cleanup']}}
     engine=Engine(module,audit,max_states,concrete,replay)
     if entry not in engine.functions or entry not in audit:
         report['reason']='missing entry or analyzer observations';return report

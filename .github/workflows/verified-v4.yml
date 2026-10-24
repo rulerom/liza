@@ -14,7 +14,7 @@ jobs:
           python-version: '3.11'
       - name: Test independent resource model and fail-closed behavior
         run: python -m unittest verification.v4.test_model -v
-      - name: Check functions, CFG, inductive closure and seven mutations
+      - name: Check resource graph, analyzer mutations and understated summaries
         run: python -m verification.v4.check --output build/verified-v4
       - uses: actions/upload-artifact@v4
         if: always()

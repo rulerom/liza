@@ -1,4 +1,5 @@
 import unittest
+from copy import deepcopy
 import hashlib
 import tempfile
 from pathlib import Path
@@ -29,9 +30,13 @@ class ResourceModelTests(unittest.TestCase):
         self.assertEqual(result['status'], 'verified_fragment')
         self.assertEqual(result['normal_paths'], 3)
 
-    def test_summaries_are_not_axioms(self):
-        for fn in self.module:
-            fn.storage_contract = {'deliberately': 'false'}
+    def test_scalar_main_has_no_returned_resource_provenance_to_check(self):
+        self.assertEqual(len(self.module),1)
+        self.assertEqual(self.module[0].result_type,'u32')
+        self.assertEqual(self.module[0].storage_contract['returns']['depends_on'],[])
+        # This is a vacuous returned-resource check, not certification of the
+        # entire forged metadata dictionary. Normal-exit ownership still runs.
+        self.module[0].storage_contract = {'deliberately': 'false'}
         self.assertEqual(check(self.module, self.audit)['status'], 'verified_fragment')
 
     def test_original_rejects_unsafe_source(self):
@@ -211,6 +216,73 @@ closed=memory.close(move region)}''')
         report=check(module,audit)
         self.assertEqual(report['status'],'unknown',report)
         self.assertFalse(any(t['reproduced'] for t in report['traces']))
+
+
+class ReturnSummaryCompletenessTests(unittest.TestCase):
+    def test_understated_contracts_fail_without_changing_execution_or_audit(self):
+        from .summary_controls import CONTROLS,understate
+        for name,(source,mutation) in CONTROLS.items():
+            with self.subTest(control=name):
+                module,audit=compile_source(source)
+                original_report=check(module,audit)
+                self.assertEqual(original_report['status'],'verified_fragment')
+                original_ir=dump(module)
+                original_audit=deepcopy(audit)
+                contracts={f.name:deepcopy(f.storage_contract) for f in module}
+                helper=understate(module,mutation)
+                report=check(module,audit)
+                concrete=check(module,audit,concrete=True)
+                self.assertEqual(report['abstract_state_hashes'],original_report['abstract_state_hashes'])
+                self.assertEqual(report['normal_paths'],original_report['normal_paths'])
+                for result in (report,concrete):
+                    self.assertEqual(result['status'],'summary_failure',result)
+                    self.assertTrue(any(f['function']==helper for f in result['summary_failures']))
+                    self.assertFalse(result['traces'])
+                    self.assertFalse(result['coverage_failures'])
+                    self.assertFalse(result['guard_failures'])
+                self.assertEqual(audit,original_audit)
+                for f in module:f.storage_contract=contracts[f.name]
+                self.assertEqual(dump(module),original_ir)
+
+    def test_overstated_return_summary_is_conservative(self):
+        from .summary_controls import DISTINCT
+        module,audit=compile_source(DISTINCT)
+        helper=next(f for f in module if f.name=='choose')
+        helper.storage_contract['returns']['depends_on'].append("('parameter', '0')")
+        self.assertEqual(check(module,audit)['status'],'verified_fragment')
+
+    def test_swapped_parameters_with_same_origin_are_not_a_soundness_bug(self):
+        from .fixtures import TWO_BUFFERS
+        from .summary_controls import understate
+        module,audit=compile_source(TWO_BUFFERS)
+        understate(module,'wrong_parameter')
+        self.assertEqual(check(module,audit)['status'],'verified_fragment')
+
+    def test_claimed_normal_exit_does_not_hide_actual_resource_leak(self):
+        from .fixtures import TWO_BUFFERS
+        module,audit=compile_source(TWO_BUFFERS)
+        helper=next(f for f in module if f.name=='choose')
+        helper.storage_contract['normal_exit']='all resource obligations discharged'
+        for block in helper.blocks:
+            for op in block.operations:
+                if op.op=='buffer.release':op.op,op.args='constant',[0]
+        report=check(module,audit)
+        self.assertEqual(report['status'],'model_violation')
+        self.assertFalse(report['summary_failures'])
+        self.assertTrue(any(t['reproduced'] for t in report['traces']))
+
+    def test_report_lists_summary_coverage_and_negative_controls(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report=run(Path(temporary))
+            self.assertEqual(len(report['summary_controls']),8)
+            for name in report['summary_controls']:
+                result=report['results'][name]
+                self.assertEqual(result['baseline_status'],'verified_fragment')
+                self.assertEqual(result['status'],'summary_failure')
+                self.assertEqual(result['concrete_status'],'summary_failure')
+                self.assertIn('effects',result['summary_scope']['not_certified'])
+                self.assertIn('normal_exit annotation',result['summary_scope']['not_certified'])
+                self.assertIn('original-semantic-ir.json',result['artifacts'])
 
 
 if __name__ == '__main__':
