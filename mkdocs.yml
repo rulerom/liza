@@ -64,6 +64,7 @@ nav:
   - Liza Verified V0: verified.md
   - Liza Verified V1: verified-v1.md
   - Liza Verified V2: verified-v2.md
+  - Liza Verified V3: verified-v3.md
   - Язык:
       - Модель и открытые решения: design.md
       - Исполняемое ядро: core.md

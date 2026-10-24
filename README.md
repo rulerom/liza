@@ -194,3 +194,8 @@ V0 sources remain frozen; both suites run independently in CI.
 [Verified V2](docs/verified-v2.md) adds inductive proofs for symbolic-length
 readonly search and sequential `i32` sum, including termination and the first
 overflowing prefix. Supported LLVM loop forms are checked independently.
+
+[Verified V3](docs/verified-v3.md) calibrates Alive2 on mandatory traps before
+using LLVM refinement to validate generated/optimized IR pairs. Missed negative
+controls produce `unsuitable`; unsupported or incomplete checks remain `unknown`.
+It does not extend the V2 inductive or machine-code guarantees.
