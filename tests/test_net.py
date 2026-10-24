@@ -73,7 +73,8 @@ class NetNative(unittest.TestCase):
         for opt in ('0','2'):
             root=Path(cls.temp.name)/opt;root.mkdir();ir=root/'echo.ll';ir.write_text(cls.text)
             exe=root/'echo.exe'
-            subprocess.run(['clang','-Wno-override-module','-O'+opt,str(ir),*link_flags(cls.module),'-o',str(exe)],check=True,capture_output=True)
+            built=subprocess.run(['clang','-Wno-override-module','-O'+opt,str(ir),*link_flags(cls.module),'-o',str(exe)],capture_output=True)
+            if built.returncode:raise RuntimeError(built.stderr.decode(errors='replace'))
             cls.executables.append(exe)
 
     @classmethod
@@ -203,6 +204,6 @@ if(liza_rt_net_write(a,data,4,4,0)!=0)return 7;
 return liza_rt_net_close(a)?8:0;}
 '''
         root=Path(self.temp.name);source=root/'ranges.c';source.write_text(c);exe=root/'ranges.exe'
-        runtime=[f for f in link_flags(self.module) if 'net_' in f or f=='ws2_32.lib']
+        runtime=[f for f in link_flags(self.module) if 'net_' in f or f=='-lws2_32']
         subprocess.run(['clang',str(source),*runtime,'-o',str(exe)],check=True,capture_output=True)
         self.assertEqual(subprocess.run([str(exe)],timeout=10).returncode,0)

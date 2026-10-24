@@ -97,7 +97,7 @@ def link_flags(module):
     if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if sys.platform == 'win32':
-        return files + (['ws2_32.lib'] if net_names else [])
+        return files + (['-lws2_32'] if net_names else [])
     if sys.platform not in ('darwin','linux'):
         raise ValueError('console runtime currently supports Linux, macOS and Windows only')
     return files + ['-pthread']
