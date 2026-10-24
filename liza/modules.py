@@ -10,8 +10,9 @@ from .frontend import (Parser, Program, CompileError, Token, Expr, Statement,
 from .types import SCALAR_TYPES, is_array, is_view, element_type, array_length, generic_args, type_application
 
 BUILTINS = set(SCALAR_TYPES) | {'Text','File','IoError','IoFailure','FileError',
-    'FileFailure','FileBuffer','FileChunk','memory.Region','MemoryError','vec.Done','vec.Error'}
-RESERVED = {'console','file','memory','vec'}
+    'FileFailure','FileBuffer','FileChunk','memory.Region','MemoryError','vec.Done','vec.Error',
+    'Utf8ErrorKind','Utf8Error','Utf8Step','Utf8Range','Utf8Done'}
+RESERVED = {'console','file','memory','vec','utf8'}
 
 
 def load_program(source, project_root=None):

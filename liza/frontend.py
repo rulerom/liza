@@ -423,6 +423,9 @@ class Parser:
         functions.uses_file = any(t.text in ('File', 'FileError', 'FileFailure', 'FileBuffer', 'FileChunk') or
                                   (t.text == 'file' and self.tokens[i+1].text == '.')
                                   for i,t in enumerate(self.tokens[:-1]))
+        functions.uses_utf8 = any(t.text in ('Utf8ErrorKind', 'Utf8Error', 'Utf8Step', 'Utf8Range', 'Utf8Done') or
+                                  (t.text == 'utf8' and self.tokens[i+1].text == '.')
+                                  for i,t in enumerate(self.tokens[:-1]))
         functions.uses_vec = any(t.text == 'vec' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
         functions.uses_memory = any(t.text == 'MemoryError' or (t.text == 'memory' and self.tokens[i+1].text == '.')
                                     for i,t in enumerate(self.tokens[:-1]))

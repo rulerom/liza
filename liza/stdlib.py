@@ -5,7 +5,7 @@ from .frontend import Parser, Function, Token, Program, Expr
 
 
 def attach(program):
-    libraries = [name for name in ('console', 'file') if getattr(program, 'uses_'+name, False)]
+    libraries = [name for name in ('console', 'file', 'utf8') if getattr(program, 'uses_'+name, False)]
     if not libraries:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')

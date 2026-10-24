@@ -57,6 +57,9 @@ def check():
     # Existing pages must gain highlighting too, not only the new walkthrough.
     core = CodeBlocks(); core.feed((ROOT/'site/core.html').read_text(encoding='utf-8'))
     assert any({'k', 'kt', 'mi'} <= b['classes'] for b in core.blocks)
+    utf8 = CodeBlocks(); utf8.feed((ROOT/'site/utf8.html').read_text(encoding='utf-8'))
+    utf8_source = (ROOT/'examples/utf8_file.liza').read_text(encoding='utf-8').strip()
+    assert sum(b['text'].strip()==utf8_source for b in utf8.blocks)==1, 'UTF-8 example must match its source'
     print(f'{len(sources)} examples lexed; token categories, rendered source, numbered lines and existing pages verified.')
 
 

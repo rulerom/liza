@@ -1,0 +1,84 @@
+// UTF-8 scalar decoding; ordinary pure Liza functions over borrowed bytes.
+enum Utf8ErrorKind { InvalidEncoding; OutOfBounds; NotBoundary; ReversedRange }
+struct Utf8Error { kind:Utf8ErrorKind; offset:u32 }
+struct Utf8Step { value:u32; next:u32 }
+struct Utf8Range { start:u32; end:u32 }
+struct Utf8Done {}
+
+// Decode only the sequence at index, not the preceding or following bytes.
+// InvalidEncoding identifies the beginning of the ill-formed sequence.
+fn utf8.next(data:View<u8>, index:u32)->Result<Option<Utf8Step>,Utf8Error> {
+    if index > data.len { return Err(Utf8Error(Utf8ErrorKind.OutOfBounds,index)) }
+    if index == data.len { return Ok(None) }
+    first = data[index]
+    if first < 128 { return Ok(Some(Utf8Step(u32(first),index+1))) }
+    var width:u32 = 0
+    var value:u32 = 0
+    if first >= 194 && first <= 223 { width=2; value=u32(first & 31) }
+    if first >= 224 && first <= 239 { width=3; value=u32(first & 15) }
+    if first >= 240 && first <= 244 { width=4; value=u32(first & 7) }
+    if width == 0 || width > data.len-index {
+        return Err(Utf8Error(Utf8ErrorKind.InvalidEncoding,index))
+    }
+    second = data[index+1]
+    if (first==224 && second<160) || (first==237 && second>159) || (first==240 && second<144) || (first==244 && second>143) {
+        return Err(Utf8Error(Utf8ErrorKind.InvalidEncoding,index))
+    }
+    var j:u32 = 1
+    while j < width {
+        byte = data[index+j]
+        if byte < 128 || byte > 191 { return Err(Utf8Error(Utf8ErrorKind.InvalidEncoding,index)) }
+        value = (value << 6) | u32(byte & 63)
+        j=j+1
+    }
+    return Ok(Some(Utf8Step(value,index+width)))
+}
+
+fn utf8.count(data:View<u8>)->Result<u32,Utf8Error> {
+    var index:u32=0
+    var count:u32=0
+    while index < data.len {
+        match utf8.next(data,index) {
+            Err(error)=>{ return Err(error) }
+            Ok(item)=>{ match item {
+                Some(step)=>{ index=step.next; count=count+1 }
+                None=>{ return Ok(count) }
+            } }
+        }
+    }
+    return Ok(count)
+}
+
+fn utf8.validate(data:View<u8>)->Result<Utf8Done,Utf8Error> {
+    match utf8.count(data) {
+        Ok(count)=>{ return Ok(Utf8Done()) }
+        Err(error)=>{ return Err(error) }
+    }
+}
+
+// Call only after validating the whole view and checking index <= len.
+fn __liza_utf8_boundary(data:View<u8>, index:u32)->bool {
+    if index==data.len { return true }
+    return (data[index] & 192) != 128
+}
+
+fn utf8.is_boundary(data:View<u8>, index:u32)->Result<bool,Utf8Error> {
+    if index > data.len { return Err(Utf8Error(Utf8ErrorKind.OutOfBounds,index)) }
+    match utf8.validate(data) {
+        Err(error)=>{ return Err(error) }
+        Ok(done)=>{ return Ok(__liza_utf8_boundary(data,index)) }
+    }
+}
+
+fn utf8.range(data:View<u8>, start:u32, end:u32)->Result<Utf8Range,Utf8Error> {
+    if start > end { return Err(Utf8Error(Utf8ErrorKind.ReversedRange,start)) }
+    if end > data.len { return Err(Utf8Error(Utf8ErrorKind.OutOfBounds,end)) }
+    match utf8.validate(data) {
+        Err(error)=>{ return Err(error) }
+        Ok(done)=>{
+            if !__liza_utf8_boundary(data,start) { return Err(Utf8Error(Utf8ErrorKind.NotBoundary,start)) }
+            if !__liza_utf8_boundary(data,end) { return Err(Utf8Error(Utf8ErrorKind.NotBoundary,end)) }
+            return Ok(Utf8Range(start,end))
+        }
+    }
+}

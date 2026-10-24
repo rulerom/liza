@@ -1,0 +1,27 @@
+// Run from the repository root. file.read accepts at most 2048 bytes.
+fn main()->u32:io {
+    match file.read("examples/data/utf8.txt") {
+        Err(error)=>{
+            match console.println("Cannot read text file") {Ok(n)=>{} Err(e)=>{return 3}}
+            return 1
+        }
+        Ok(buffer)=>{
+            bytes=buffer.data
+            data=view bytes[0..buffer.len]
+            match utf8.count(data) {
+                Err(error)=>{
+                    match console.write("Invalid UTF-8 at byte: ") {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.print_u64(u64(error.offset)) {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.println("") {Ok(n)=>{} Err(e)=>{return 3}}
+                    return 2
+                }
+                Ok(count)=>{
+                    match console.write("Code points: ") {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.print_u64(u64(count)) {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.println("") {Ok(n)=>{} Err(e)=>{return 3}}
+                    return 0
+                }
+            }
+        }
+    }
+}

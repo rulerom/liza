@@ -127,3 +127,15 @@ python3 -m liza run examples/vec_reserve.liza
 ```
 
 [Контракт и стоимость](https://liza.rulerom.com/vec-reserve.html).
+
+## UTF-8 · 0.0.22
+
+Проверка и декодирование `View<u8>`, подсчёт кодовых точек и проверка
+текстовых диапазонов — чистые функции на Liza без аллокаций и копирования
+входа. Некорректный UTF-8 возвращает `Result` с байтовым смещением ошибки.
+
+```sh
+python3 -m liza run examples/utf8_file.liza
+```
+
+[Контракт и разбор примера](https://liza.rulerom.com/utf8.html).

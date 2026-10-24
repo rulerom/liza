@@ -403,3 +403,12 @@ The runtime-input cost harness counts heap allocations and copied bytes, checks
 unused-tail sentinels, alignment, overflow, no-ops and retry after failure.
 O0/O2 LLVM and assembly are preserved as CI artifacts. The previous bounded
 vector cost gate still checks allocation-free set/pop/push paths.
+
+## UTF-8 acceptance (0.0.22)
+
+`liza/stdlib/utf8.liza` uses ordinary pure functions; Semantic IR remains v19.
+`tests/test_utf8.py` compares runtime inputs against Python's strict decoder
+at O0/O2, including every one/two-byte input and a stream of all Unicode scalars.
+`python tools/check_utf8_cost.py --output build/utf8-cost` saves LLVM and assembly
+and rejects heap calls and bulk copies in the generated library path.
+The C/LLVM bridge is test infrastructure, not a public FFI.

@@ -71,6 +71,12 @@ jobs:
         with:
           name: reserve-cost-${{ matrix.os }}
           path: build/reserve-cost/
+      - name: UTF-8 byte access cost
+        run: python tools/check_utf8_cost.py --output build/utf8-cost
+      - uses: actions/upload-artifact@v4
+        with:
+          name: utf8-cost-${{ matrix.os }}
+          path: build/utf8-cost/
       - name: Generic table storage cost
         run: python tools/check_edit_cost.py --generics --output build/generic-edit-cost
       - uses: actions/upload-artifact@v4
@@ -119,6 +125,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/check_reserve_cost.py --output build/reserve-cost
           if errorlevel 1 exit /b 1
+          python tools/check_utf8_cost.py --output build/utf8-cost
+          if errorlevel 1 exit /b 1
           python tools/check_region_cost.py --output build/region-cost
           if errorlevel 1 exit /b 1
       - uses: actions/upload-artifact@v4
@@ -157,3 +165,7 @@ jobs:
         with:
           name: reserve-cost-windows
           path: build/reserve-cost/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: utf8-cost-windows
+          path: build/utf8-cost/
