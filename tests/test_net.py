@@ -176,6 +176,46 @@ uint32_t liza_rt_net_close(uint64_t h){if(h!=(closes?10:11))_Exit(94);closes++;r
                     self.assertEqual(r.returncode,exitcode,r.stderr)
                     self.assertEqual(r.stdout,b'12345\n')
 
+    def test_nonempty_write_requires_progress_at_os_boundary(self):
+        # Replace only send, keeping the real runtime's zero/progress handling.
+        c=r'''#include <stdint.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+static int calls, outcome;
+static int fake_send(SOCKET s,const char *p,int n,int flags) {
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+static int calls, outcome;
+static ssize_t fake_send(int s,const void *p,size_t n,int flags) {
+#endif
+    (void)s;(void)p;(void)flags;
+    if(n!=4)return -1;
+    calls++;return outcome;
+}
+#define send fake_send
+#include "net_common.h"
+int main(void) {
+    uint8_t data[8]={0};
+    if(liza_rt_net_write(1,data,8,2,0)!=0 || calls!=0)return 1;
+    outcome=0;
+    if(liza_rt_net_write(1,data,8,2,4)!=((uint64_t)5<<32) || calls!=1)return 2;
+    outcome=2;
+    if(liza_rt_net_write(1,data,8,2,4)!=2 || calls!=2)return 3;
+    outcome=4;
+    if(liza_rt_net_write(1,data,8,2,4)!=4 || calls!=3)return 4;
+    return 0;
+}
+'''
+        root=Path(self.temp.name);source=root/'progress.c';source.write_text(c)
+        libraries=[f for f in link_flags(self.module) if f=='-lws2_32']
+        for opt in ('0','2'):
+            exe=root/('progress-'+opt+'.exe')
+            built=subprocess.run(['clang','-O'+opt,'-I',str(ROOT/'liza/runtime'),str(source),*libraries,'-o',str(exe)],capture_output=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            self.assertEqual(subprocess.run([str(exe)],timeout=10).returncode,0)
+
     def test_native_read_write_do_not_allocate_or_copy_payload(self):
         import re
         runtime=next(f for f in link_flags(self.module) if 'net_' in f)
