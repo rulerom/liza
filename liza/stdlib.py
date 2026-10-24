@@ -5,12 +5,17 @@ from .frontend import Parser, Function, Token, Program, Expr
 
 
 def attach(program):
-    libraries = [name for name in ('console', 'file', 'utf8') if getattr(program, 'uses_'+name, False)]
+    libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream') if getattr(program, 'uses_'+name, False)]
     if not libraries:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
                                for name in libraries), internal=True).parse()
+    for structure in library.structs:
+        if structure.name.text == 'Utf8StreamState':
+            structure.module = '__liza_utf8_stream'
     for fn in library:
+        if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
+            fn.module = '__liza_utf8_stream'
         if fn.name.text == 'file.read_chunk':
             fn.borrowed_params = [0]
     combined = Program()

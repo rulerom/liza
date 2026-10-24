@@ -65,6 +65,7 @@ nav:
       - Числовая модель: numeric-model.md
       - Минимальный I/O: io-model.md
       - UTF-8 текст: utf8.md
+      - Потоковый UTF-8: utf8-stream.md
       - Пользовательские модули: modules.md
       - Generics: generics.md
       - Регионы и память: regions.md

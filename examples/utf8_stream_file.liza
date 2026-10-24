@@ -1,0 +1,51 @@
+// Run from the repository root. Each read is bounded, the file is not.
+// Exit codes: 1 open, 2 read, 3 output, 4 close, 5 UTF-8, 6 size overflow.
+fn report(state:Utf8StreamState)->u32:io {
+    match utf8_stream.finish(state) {
+        Ok(count)=>{
+            match console.write("Code points: ") {Ok(n)=>{} Err(e)=>{return 3}}
+            match console.print_u64(count) {Ok(n)=>{} Err(e)=>{return 3}}
+            match console.println("") {Ok(n)=>{} Err(e)=>{return 3}}
+            return 0
+        }
+        Err(error)=>{
+            match error.kind {
+                Utf8StreamErrorKind.SizeOverflow=>{return 6}
+                Utf8StreamErrorKind.InvalidEncoding=>{
+                    match console.write("Invalid UTF-8 at byte: ") {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.print_u64(error.offset) {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.println("") {Ok(n)=>{} Err(e)=>{return 3}}
+                    return 5
+                }
+            }
+        }
+    }
+}
+
+fn main()->u32:io {
+    match file.open("examples/data/utf8.txt") {
+        Err(error)=>{return 1}
+        Ok(input)=>{
+            var state=utf8_stream.create()
+            var status:u32=0
+            while true {
+                match file.read_chunk(input) {
+                    Err(error)=>{status=2;break}
+                    Ok(chunk)=>{
+                        if chunk.eof {break}
+                        bytes=chunk.data
+                        data=view bytes[0..chunk.len]
+                        state=utf8_stream.feed(state,data)
+                    }
+                }
+            }
+            // Close before reporting, including on a read failure.
+            match file.close(move input) {
+                Err(error)=>{if status==0 {return 4}}
+                Ok(closed)=>{}
+            }
+            if status!=0 {return status}
+            return report(state)
+        }
+    }
+}

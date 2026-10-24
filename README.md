@@ -139,3 +139,15 @@ python3 -m liza run examples/utf8_file.liza
 ```
 
 [Контракт и разбор примера](https://liza.rulerom.com/utf8.html).
+
+## Потоковый UTF-8 · 0.0.23
+
+Проверка файлов до EOF через `file.read_chunk`, независимо от разбиения
+кодировок между чанками. Малое копируемое состояние, абсолютные `u64`
+смещения ошибок, без аллокаций и копирования входных чанков.
+
+```sh
+python3 -m liza run examples/utf8_stream_file.liza
+```
+
+[Контракт и пример](https://liza.rulerom.com/utf8-stream.html).

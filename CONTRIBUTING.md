@@ -412,3 +412,11 @@ at O0/O2, including every one/two-byte input and a stream of all Unicode scalars
 `python tools/check_utf8_cost.py --output build/utf8-cost` saves LLVM and assembly
 and rejects heap calls and bulk copies in the generated library path.
 The C/LLVM bridge is test infrastructure, not a public FFI.
+
+## Streaming UTF-8 (0.0.23)
+
+`utf8_stream.liza` uses existing value and visibility semantics; IR stays v19.
+The stdlib loader assigns its private state and functions the same reserved
+module identity. Boundary-counter tests alone construct trusted internal states.
+`python tools/check_utf8_stream_cost.py --output build/utf8-stream-cost`
+saves runtime-input LLVM/assembly checks at O0/O2. The C bridge is test-only.
