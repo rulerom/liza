@@ -200,7 +200,7 @@ Z3_PREFIX=/opt/homebrew/opt/z3 sh verification/v3/build.sh
 `verification/v3/toolchain-lock.json` фиксирует проверенную сборку macOS
 ARM64: LLVM 23.1.4, Z3 5.3.1 и используемую библиотеку zstd. Проверяются
 SHA-256 Clang, opt, llvm-config, библиотек LLVM/Clang, Z3 и zstd. Отдельно
-зафиксированы digest и адреса исходных Homebrew bottles LLVM/Z3.
+зафиксированы digest и адреса исходных Homebrew bottles LLVM/Z3/zstd.
 
 CI устанавливает пакеты-кандидаты, затем **до сборки Alive2** проверяет
 их байты по lock-файлу. Обновление Homebrew, совпадающее имя версии с

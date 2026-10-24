@@ -20,7 +20,7 @@
       "lib/libz3.5.3.dylib": "181f649aff7768bc9821cecd3d49769d1ca395d2a89a545779441dfc2ab488c2"
     },
     "zstd": {
-      "lib/libzstd.1.dylib": "69d8dee81bccdee425d167300d11431f3c5ecc34a3011400e536aa89f7756189"
+      "lib/libzstd.1.dylib": "602d50cbe6fad0f0da6d1b73284ae3f75316015aea482ebd55614b6df2406b43"
     }
   },
   "bottles": {
@@ -33,6 +33,11 @@
       "filename": "z3--5.3.1.arm64_tahoe.bottle.tar.gz",
       "sha256": "71608b10f9abefecfe5f2f023442f0820a253e62b3e1980c0adef9f749948709",
       "url": "https://ghcr.io/v2/homebrew/core/z3/blobs/sha256:71608b10f9abefecfe5f2f023442f0820a253e62b3e1980c0adef9f749948709"
+    },
+    "zstd": {
+      "filename": "zstd--1.5.7_1.arm64_tahoe.bottle.tar.gz",
+      "sha256": "628a4ef53428d0078e3d76d297171ce8d0294f5ec1de3f20305e08c4dd333565",
+      "url": "https://ghcr.io/v2/homebrew/core/zstd/blobs/sha256:628a4ef53428d0078e3d76d297171ce8d0294f5ec1de3f20305e08c4dd333565"
     }
   },
   "limits": [

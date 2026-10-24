@@ -45,6 +45,9 @@ jobs:
           name: v3-inputs-${{ matrix.platform }}
           path: build/v3-inputs
       - name: Install proof toolchain candidates
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: |
           brew update
           brew install llvm@23 z3 re2c cmake ninja
