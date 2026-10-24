@@ -16,13 +16,21 @@ def main():
     for command in ('check', 'emit-ir', 'emit-llvm', 'build', 'run'):
         p = sub.add_parser(command)
         p.add_argument('source', type=Path)
+        if command == 'run':
+            p.epilog = 'Pass program arguments after --: liza run source.liza -- arg1 arg2'
         p.add_argument('--project-root', type=Path, help='explicit import root (default: entry source directory)')
         if command in ('emit-ir', 'emit-llvm', 'build'):
             p.add_argument('-o', '--output', type=Path)
         if command in ('build', 'run'):
             p.add_argument('--clang', default='clang')
             p.add_argument('-O', choices=('0', '2'), default='2')
-    args = parser.parse_args()
+    arguments = sys.argv[1:]
+    program_args = []
+    separated = bool(arguments) and arguments[0] == 'run' and '--' in arguments
+    if separated:
+        split = arguments.index('--')
+        arguments, program_args = arguments[:split], arguments[split+1:]
+    args = parser.parse_args(arguments)
     try:
         program = load_program(args.source,args.project_root)
         inputs = set(program.source_paths)
@@ -56,7 +64,7 @@ def main():
             if args.command == 'build':
                 print(output)
                 return 0
-            code = subprocess.run([str(output)]).returncode
+            code = subprocess.run([str(output), *program_args]).returncode
             if sys.platform == 'win32':
                 # Python's sys.exit uses a signed C long on Windows. Preserve
                 # all 32 bits, including exception statuses and u32 main results.

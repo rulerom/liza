@@ -23,6 +23,7 @@ def llvm(module):
     types = LLVMTypes({name: f'i{width(name)}' for name in INTEGER_TYPES})
     types['bool'] = 'i1'
     types['memory.Region'] = 'ptr'
+    types['Arg'] = types['Path'] = 'i32'  # Opaque indices into immutable process arguments.
     types['File'] = 'i64'  # Private runtime token, never a source-level integer.
     types['Text'] = '{ ptr, i32 }'
     types['integer'] = None  # Only a compile-time conversion literal, never a runtime type.
@@ -73,8 +74,15 @@ def llvm(module):
         lines.extend(['declare i64 @liza_rt_write(ptr, i32)',
                       'declare i64 @liza_rt_write_text(ptr, i32)',
                       'declare i64 @liza_rt_print_u64(i64)',
-                      'declare i64 @liza_rt_print_i64(i64)'])
+                      'declare i64 @liza_rt_print_i64(i64)',
+                      'declare i64 @liza_rt_err_text(ptr, i32)',
+                      'declare i64 @liza_rt_err(ptr, i32)',
+                      'declare i64 @liza_rt_err_print_u64(i64)',
+                      'declare i64 @liza_rt_err_print_i64(i64)'])
         for fn in module.externals:
+            from .cli_backend import external
+            if external(fn, lines):
+                continue
             t = fn.params[0][1]
             name = fn.name.text
             if name in ('__liza_read_file', '__liza_read_chunk'):
@@ -114,9 +122,9 @@ def llvm(module):
             if t in ('Text','View<u8>'):
                 lines.extend(['  %data = extractvalue { ptr, i32 } %value, 0',
                               '  %length = extractvalue { ptr, i32 } %value, 1',
-                              f'  %result = call i64 @liza_rt_write{"_text" if t == "Text" else ""}(ptr %data, i32 %length)'])
+                              f'  %result = call i64 @liza_rt_{"err" if name.startswith("__liza_err") else "write"}{"_text" if t == "Text" else ""}(ptr %data, i32 %length)'])
             else:
-                symbol = 'liza_rt_print_'+t
+                symbol = 'liza_rt_'+('err_' if name.startswith('__liza_err') else '')+'print_'+t
                 lines.append(f'  %result = call i64 @{symbol}(i64 %value)')
             lines.extend(['  ret i64 %result','}'])
     intrinsics = sorted({(op.type, op.op) for fn in module for block in fn.blocks
@@ -598,8 +606,8 @@ def llvm(module):
                 transfer(op.type,f'%{op.result}_next',refs[op.result])
             lines.append(f'  br label %{target}')
         lines.append('}')
-    lines.extend(['define i32 @main() {', 'entry:', '  %result = call i32 @liza_main()',
-                  '  ret i32 %result', '}'])
+    from .cli_backend import entry
+    lines.extend(entry(module))
     for intrinsic in ('memmove.p0.p0.i64', 'memset.p0.i64'):
         if not any('call void @llvm.'+intrinsic in line for line in lines):
             lines = [line for line in lines if not line.startswith('declare void @llvm.'+intrinsic)]

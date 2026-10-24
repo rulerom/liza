@@ -100,12 +100,16 @@ def structure_types(program):
             return {'copyable': False, 'implicit_copy': False}
         if is_vec(name):
             element = vec_element(name)
+            if resolve(element, False).get('process_borrow'):
+                raise ValueError('process arguments and paths cannot be stored in vectors')
             if not resolve(element, False)['copyable']:
                 raise ValueError('vectors require copyable elements')
             from .memory import validate_element_layout
             validate_element_layout(element, result)
             return {'copyable': False, 'implicit_copy': False}
         if is_buffer(name):
+            if resolve(buffer_element(name), False).get('process_borrow'):
+                raise ValueError('process arguments and paths cannot be stored in buffers')
             if not resolve(buffer_element(name), False)["copyable"]:
                 raise ValueError("region buffers require copyable elements")
             from .memory import validate_element_layout
@@ -113,16 +117,20 @@ def structure_types(program):
             return {"copyable": False, "implicit_copy": False}
         if is_array(name):
             member = resolve(element_type(name), False)
+            if member.get('process_borrow'):
+                raise ValueError('process arguments and paths cannot be stored in arrays')
             if not member['copyable']:
                 raise ValueError('resource values cannot be stored in arrays yet')
             return member
         if is_view(name):
+            if resolve(element_type(name), False).get('process_borrow'):
+                raise ValueError('process arguments and paths cannot be view elements')
             if not allow_view:
                 raise ValueError('views cannot be stored in aggregates or returned')
             if not resolve(element_type(name), False)['copyable']:
                 raise ValueError('views of resource values are not supported')
             return {'copyable': True, 'implicit_copy': True}
-        if name in SCALAR_TYPES + ('Text', 'File'):
+        if name in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path'):
             return value_properties(name)
         if name in result:
             return result[name].properties
@@ -153,7 +161,11 @@ def structure_types(program):
                 member = resolve(type_name, False)
                 if not variant and not name.startswith('__liza_') and not member['copyable']:
                     raise ValueError('resource fields require destructuring, which is not supported yet')
-                for key in properties:
+                if member.get('process_borrow'):
+                    if decl is not None:
+                        raise ValueError('process arguments and paths cannot be stored in user aggregates')
+                    properties['process_borrow'] = True
+                for key in ('copyable', 'implicit_copy'):
                     properties[key] = properties[key] and member[key]
         visiting.remove(name)
         if variant:
@@ -682,7 +694,7 @@ def annotate_traps(module):
 
 def dump(module):
     structs = getattr(module, 'structs', {})
-    properties = {t: value_properties(t) for t in SCALAR_TYPES + ('Text', 'File')}
+    properties = {t: value_properties(t) for t in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path')}
     properties.update({name: struct.properties for name, struct in structs.items()})
     variants = getattr(module, 'variants', {})
     properties.update({name: v.properties for name, v in variants.items()})
@@ -717,7 +729,7 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 19, 'type_properties': properties,
+    return json.dumps({'version': 20, 'type_properties': properties,
                        'modules': getattr(module,'modules',[]),
                        'specializations': getattr(module,'specializations',[]),
                        'declarations': getattr(module,'declarations',[]),

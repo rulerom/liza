@@ -1,0 +1,90 @@
+// Build: python3 -m liza build examples/apps/liza_text.liza -o build/liza-text
+fn diagnostic(message:Text, code:u32)->u32:io {
+    match console.errln(message) {Ok(n)=>{return code} Err(e)=>{return 3}}
+}
+
+fn add_bytes(total:u64, length:u32)->Option<u64> {
+    if u64(length)>18446744073709551615-total {return None}
+    return Some(total+u64(length))
+}
+
+fn report(mode:u32, total:u64, result:Result<u64,Utf8StreamError>)->u32:io {
+    match result {
+        Err(error)=>{
+            match error.kind {
+                Utf8StreamErrorKind.SizeOverflow=>{return diagnostic("Input exceeds supported size",4)}
+                Utf8StreamErrorKind.InvalidEncoding=>{
+                    match console.err("Invalid UTF-8 at byte ") {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.err_u64(error.offset) {Ok(n)=>{} Err(e)=>{return 3}}
+                    match console.errln("") {Ok(n)=>{} Err(e)=>{return 3}}
+                    return 1
+                }
+            }
+        }
+        Ok(count)=>{
+            if mode==0 {
+                match console.println("OK") {Ok(n)=>{return 0} Err(e)=>{return 3}}
+            }
+            if mode==2 {
+                match console.write("Bytes: ") {Ok(n)=>{} Err(e)=>{return 3}}
+                match console.print_u64(total) {Ok(n)=>{} Err(e)=>{return 3}}
+                match console.println("") {Ok(n)=>{} Err(e)=>{return 3}}
+                match console.write("Code points: ") {Ok(n)=>{} Err(e)=>{return 3}}
+            }
+            match console.print_u64(count) {Ok(n)=>{} Err(e)=>{return 3}}
+            match console.println("") {Ok(n)=>{} Err(e)=>{return 3}}
+            return 0
+        }
+    }
+}
+
+fn run(mode:u32, path:Path)->u32:io {
+    match file.open_path(path) {
+        Err(error)=>{return diagnostic("Cannot open file",3)}
+        Ok(input)=>{
+            var state=utf8_stream.create()
+            var total:u64=0
+            var status:u32=0
+            while true {
+                match file.read_chunk(input) {
+                    Err(error)=>{status=3;break}
+                    Ok(chunk)=>{
+                        if chunk.eof {break}
+                        match add_bytes(total,chunk.len) {
+                            None=>{status=4;break}
+                            Some(next)=>{total=next}
+                        }
+                        bytes=chunk.data
+                        data=view bytes[0..chunk.len]
+                        state=utf8_stream.feed(state,data)
+                    }
+                }
+            }
+            match file.close(move input) {
+                Err(error)=>{if status==0 {return diagnostic("Cannot close file",3)}}
+                Ok(closed)=>{}
+            }
+            if status==3 {return diagnostic("Cannot read file",3)}
+            if status==4 {return diagnostic("Input exceeds supported size",4)}
+            return report(mode,total,utf8_stream.finish(state))
+        }
+    }
+}
+
+fn usage()->u32:io {return diagnostic("Usage: liza-text <check|count|info> <file>",2)}
+
+fn main()->u32:io {
+    if cli.count()!=3 {return usage()}
+    match cli.arg(1) {
+        None=>{return usage()}
+        Some(command)=>{
+            var mode:u32=0
+            if cli.equals(command,"check") {mode=0}
+            else {
+                if cli.equals(command,"count") {mode=1}
+                else {if cli.equals(command,"info") {mode=2} else {return usage()}}
+            }
+            match cli.path_arg(2) {None=>{return usage()} Some(path)=>{return run(mode,path)}}
+        }
+    }
+}

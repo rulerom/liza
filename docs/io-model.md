@@ -228,8 +228,8 @@ python3 -m liza run examples/rtp_file.liza -O 2
 ```
 
 Коды завершения примера: 0 — успех, 1 — ошибка чтения, 2 — некорректный RTP,
-3 — ошибка консольного вывода. Путь пока задан литералом; аргументы программы
-не входят в этот API.
+3 — ошибка консольного вывода. В этом примере путь задан литералом. В 0.0.24 добавлены
+[аргументы процесса, платформенный Path и file.open_path](cli.md).
 
 Платформенные основания: [POSIX read](https://man7.org/linux/man-pages/man2/read.2.html),
 [close](https://man7.org/linux/man-pages/man2/close.2.html) и
@@ -385,3 +385,12 @@ UTF-16 surrogate-пары, неполный символ может уже пр�
 Разделение консоли и перенаправления следует контрактам
 [WriteConsole](https://learn.microsoft.com/en-us/windows/console/writeconsole)
 и [WriteFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile).
+
+## stderr и платформенные пути (0.0.24)
+
+`console.err/errln/err_u64/err_i64/err_bytes` возвращают прежний
+`Result<u64,IoFailure>`, записывая в stderr независимо от stdout.
+`file.open_path(Path)` принимает заимствованный путь из аргументов процесса
+без перекодирования платформенного представления. Ограничение 4095 байтов
+литерального `file.open(Text)` к этому API не применяется: ограничения
+имени определяет ОС. [Контракт и приложение liza-text](cli.md).

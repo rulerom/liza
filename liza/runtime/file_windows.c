@@ -69,3 +69,12 @@ uint64_t liza_rt_read_chunk(uint64_t handle, uint8_t *out) {
     }
     return got;
 }
+
+uint32_t liza_rt_file_open_native(const WCHAR *path,uint64_t *handle) {
+    *handle=0;
+    if(!path || !*path)return 4;
+    HANDLE file=CreateFileW(path,GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+                            NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL);
+    if(file==INVALID_HANDLE_VALUE)return file_error(GetLastError());
+    *handle=(uint64_t)(uintptr_t)file;return 0;
+}

@@ -5,7 +5,7 @@ from .frontend import Parser, Function, Token, Program, Expr
 
 
 def attach(program):
-    libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream') if getattr(program, 'uses_'+name, False)]
+    libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli') if getattr(program, 'uses_'+name, False)]
     if not libraries:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
@@ -47,11 +47,21 @@ def attach(program):
     externals = [Function(Token(name,1,1), [(Token('value',1,1),t)], [], 'u64', 'io')
                  for name,t in [('__liza_write_text','Text'), ('__liza_write_bytes','View<u8>'),
                                 ('__liza_print_u64','u64'), ('__liza_print_i64','i64')]]
+    externals.extend(Function(Token(name,1,1), [(Token('value',1,1),t)], [], 'u64', 'io')
+                     for name,t in [('__liza_err_text','Text'),('__liza_err_bytes','View<u8>'),
+                                    ('__liza_err_print_u64','u64'),('__liza_err_print_i64','i64')])
     externals.append(Function(Token('__liza_read_file',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileRead', 'io'))
     externals.extend([
         Function(Token('__liza_file_open',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileOpen', 'io'),
         Function(Token('__liza_file_close',1,1), [(Token('handle',1,1),'File')], [], 'u32', 'io'),
         Function(Token('__liza_read_chunk',1,1), [(Token('handle',1,1),'File')], [], '__liza_FileRead', 'io', borrowed_params=[0]),
+    ])
+    externals.extend([
+        Function(Token('__liza_cli_count',1,1), [], [], 'u32', 'io'),
+        Function(Token('__liza_cli_arg',1,1), [(Token('index',1,1),'u32')], [], 'Arg', 'io'),
+        Function(Token('__liza_cli_path',1,1), [(Token('index',1,1),'u32')], [], 'Path', 'io'),
+        Function(Token('__liza_cli_equals',1,1), [(Token('arg',1,1),'Arg'),(Token('text',1,1),'Text')], [], 'bool', 'pure'),
+        Function(Token('__liza_file_open_path',1,1), [(Token('path',1,1),'Path')], [], '__liza_FileOpen', 'io'),
     ])
     return combined, [fn for fn in externals if fn.name.text in needed]
 
@@ -64,8 +74,10 @@ def link_flags(module):
     import sys
     suffix = 'windows' if sys.platform == 'win32' else 'posix'
     names = {fn.name.text for fn in module.externals}
-    file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk'}
-    libraries = (['console'] if names-file_names else []) + (['file'] if names & file_names else [])
+    file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk','__liza_file_open_path'}
+    cli_names = {n for n in names if n.startswith('__liza_cli_')}
+    libraries = (['console'] if names-file_names-cli_names else []) + (['file'] if names & file_names else [])
+    if cli_names or '__liza_file_open_path' in names: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if sys.platform == 'win32':
         return files

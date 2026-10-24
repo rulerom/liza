@@ -420,3 +420,14 @@ The stdlib loader assigns its private state and functions the same reserved
 module identity. Boundary-counter tests alone construct trusted internal states.
 `python tools/check_utf8_stream_cost.py --output build/utf8-stream-cost`
 saves runtime-input LLVM/assembly checks at O0/O2. The C bridge is test-only.
+
+## CLI acceptance (0.0.24)
+
+Semantic IR v20 adds opaque `Arg`/`Path` value capabilities with `process_borrow`.
+Aggregates and collection elements reject this capability transitively, while
+Option/Result and function boundaries preserve it. Native entry initialization
+uses argc/argv on POSIX and wmain on Windows only when CLI externals are used.
+The CRT's wide argv setup is outside the library's per-call allocation policy.
+`python tools/check_cli_cost.py --output build/cli-cost` records O0/O2 artifacts.
+Tests include raw POSIX paths, Windows UTF-16 paths, exact output/exit status,
+failed read/close with resource verification, and independently redirected streams.

@@ -22,7 +22,7 @@ static uint32_t error_kind(int e) {
     }
 }
 
-uint64_t liza_rt_write(const uint8_t *data, uint32_t length) {
+static uint64_t write_stream(int fd, const uint8_t *data, uint32_t length) {
     if (!length) return 0;
     sigset_t blocked, old, pending;
     sigemptyset(&blocked);
@@ -38,7 +38,7 @@ uint64_t liza_rt_write(const uint8_t *data, uint32_t length) {
         /* Bounded request fits ssize_t on every supported host. */
         uint32_t chunk=length-done;
         if (chunk>1048576) chunk=1048576;
-        ssize_t n=write(STDOUT_FILENO, data+done, chunk);
+        ssize_t n=write(fd, data+done, chunk);
         if (n>0) {done+=(uint32_t)n; continue;}
         if (n<0 && errno==EINTR) continue;
         int e=n<0 ? errno : EIO;
@@ -58,19 +58,26 @@ uint64_t liza_rt_write(const uint8_t *data, uint32_t length) {
     return ((uint64_t)error<<32)|done;
 }
 
-static uint64_t number(uint64_t magnitude, int negative) {
+uint64_t liza_rt_write(const uint8_t *data,uint32_t length) {return write_stream(STDOUT_FILENO,data,length);}
+uint64_t liza_rt_err(const uint8_t *data,uint32_t length) {return write_stream(STDERR_FILENO,data,length);}
+uint64_t liza_rt_err_text(const uint8_t *data,uint32_t length) {return liza_rt_err(data,length);}
+
+static uint64_t number(int fd, uint64_t magnitude, int negative) {
     uint8_t buffer[21];
     unsigned start=sizeof buffer;
     do {buffer[--start]=(uint8_t)('0'+magnitude%10); magnitude/=10;} while(magnitude);
     if (negative) buffer[--start]='-';
-    return liza_rt_write(buffer+start,(uint32_t)(sizeof buffer-start));
+    return write_stream(fd,buffer+start,(uint32_t)(sizeof buffer-start));
 }
-uint64_t liza_rt_print_u64(uint64_t value) {return number(value,0);}
+uint64_t liza_rt_print_u64(uint64_t value) {return number(STDOUT_FILENO,value,0);}
 uint64_t liza_rt_print_i64(int64_t value) {
     /* Unsigned negation includes INT64_MIN without signed overflow. */
-    return number(value<0 ? UINT64_C(0)-(uint64_t)value : (uint64_t)value,value<0);
+    return number(STDOUT_FILENO,value<0 ? UINT64_C(0)-(uint64_t)value : (uint64_t)value,value<0);
 }
 
 uint64_t liza_rt_write_text(const uint8_t *data, uint32_t length) {
     return liza_rt_write(data, length);
 }
+
+uint64_t liza_rt_err_print_u64(uint64_t value) {return number(STDERR_FILENO,value,0);}
+uint64_t liza_rt_err_print_i64(int64_t value) {return number(STDERR_FILENO,value<0?UINT64_C(0)-(uint64_t)value:(uint64_t)value,value<0);}

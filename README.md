@@ -151,3 +151,16 @@ python3 -m liza run examples/utf8_stream_file.liza
 ```
 
 [Контракт и пример](https://liza.rulerom.com/utf8-stream.html).
+
+## liza-text · 0.0.24
+
+Первое CLI-приложение: `check`, `count`, `info` для произвольного пути к файлу.
+Платформенные `Arg`/`Path`, потоковая проверка UTF-8, stdout/stderr и коды ошибок.
+
+```sh
+python3 -m liza build examples/apps/liza_text.liza -o build/liza-text
+./build/liza-text info examples/data/utf8.txt
+```
+
+На Windows запускайте `build/liza-text.exe`.
+[Команды и контракт](https://liza.rulerom.com/cli.html).

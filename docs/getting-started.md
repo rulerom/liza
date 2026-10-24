@@ -268,3 +268,15 @@ python3 -m liza run examples/file_stream.liza > packet-copy.bin
 Путь входного файла в примере — `examples/data/rtp.bin` относительно рабочей
 директории. На Windows запустите через `python` в `cmd.exe`, чтобы перенаправление
 сохранило бинарные байты. [Владение и закрытие](io-model.md#0014).
+
+## Приложение с аргументами
+
+`liza-text` проверяет UTF-8 файлов, считает байты и кодовые точки:
+
+```sh
+python3 -m liza run examples/apps/liza_text.liza -- info examples/data/utf8.txt
+```
+
+Аргументы после `--` передаются программе. Для независимого нативного
+инструмента используйте `build` с `-o build/liza-text`.
+[Команды, пути и коды ошибок](cli.md).

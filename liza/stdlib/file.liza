@@ -46,3 +46,9 @@ fn file.read_chunk(handle:File)->Result<FileChunk,FileFailure>:io {
     if code==0 {return Ok(FileChunk(raw.data,count,count==0))}
     return Err(FileFailure(__liza_file_error(code),count))
 }
+
+fn file.open_path(path:Path)->Result<File,FileError>:io {
+    raw=__liza_file_open_path(path)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_file_error(raw.error))
+}

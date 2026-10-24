@@ -1,0 +1,10 @@
+fn cli.count()->u32:io {return __liza_cli_count()}
+fn cli.arg(index:u32)->Option<Arg>:io {
+    if index>=cli.count() {return None}
+    return Some(__liza_cli_arg(index))
+}
+fn cli.path_arg(index:u32)->Option<Path>:io {
+    if index>=cli.count() {return None}
+    return Some(__liza_cli_path(index))
+}
+fn cli.equals(arg:Arg, text:Text)->bool {return __liza_cli_equals(arg,text)}

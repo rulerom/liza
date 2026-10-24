@@ -66,7 +66,7 @@ class ReserveTypes(unittest.TestCase):
             fn=next(f for f in module if f.name==name)
             self.assertIn('vec.reserve',fn.storage_contract['effects'])
             self.assertEqual(fn.storage_contract['returned_buffer_storage'],'may_relocate_within_origin')
-        self.assertEqual(json.loads(dump(module))['version'],19)
+        self.assertEqual(json.loads(dump(module))['version'],20)
 
 
 @unittest.skipUnless(shutil.which('clang'),'clang required')

@@ -34,3 +34,27 @@ fn console.print_u64(value:u64)->Result<u64,IoFailure>:io {
 fn console.print_i64(value:i64)->Result<u64,IoFailure>:io {
     return __liza_decode(__liza_print_i64(value))
 }
+
+fn console.err(text:Text)->Result<u64,IoFailure>:io {
+    return __liza_decode(__liza_err_text(text))
+}
+fn console.err_bytes(data:View<u8>)->Result<u64,IoFailure>:io {
+    return __liza_decode(__liza_err_bytes(data))
+}
+fn console.errln(text:Text)->Result<u64,IoFailure>:io {
+    match console.err(text) {
+        Err(e)=>{return Err(e)}
+        Ok(count)=>{
+            match console.err("\n") {
+                Ok(n)=>{return Ok(count+n)}
+                Err(e)=>{return Err(IoFailure(e.kind,count+e.written))}
+            }
+        }
+    }
+}
+fn console.err_u64(value:u64)->Result<u64,IoFailure>:io {
+    return __liza_decode(__liza_err_print_u64(value))
+}
+fn console.err_i64(value:i64)->Result<u64,IoFailure>:io {
+    return __liza_decode(__liza_err_print_i64(value))
+}

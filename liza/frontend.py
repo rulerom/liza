@@ -166,7 +166,7 @@ class Parser:
         self.tokens = lex(source, filename)
         self.index = 0
         self.generic_scope = {}
-        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError", "FileError", "MemoryError"}
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError", "FileError", "MemoryError", "Utf8ErrorKind", "Utf8StreamErrorKind"}
 
     @property
     def current(self):
@@ -185,7 +185,7 @@ class Parser:
         token = self.current
         if token.text.startswith('__liza_') and not self.internal:
             raise CompileError(token, 'reserved implementation name')
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'import', 'pub', 'fn', 'return', 'pure', 'io', 'Text', 'File', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'import', 'pub', 'fn', 'return', 'pure', 'io', 'Text', 'File', 'Arg', 'Path', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -249,7 +249,7 @@ class Parser:
             if len(args) != (2 if name == 'Result' else 1):
                 raise CompileError(self.current,'wrong number of type arguments')
             return name+'<'+','.join(args)+'>'
-        if self.current.text in SCALAR_TYPES + ('Text','File'):
+        if self.current.text in SCALAR_TYPES + ('Text','File','Arg','Path'):
             return self.take().text
         name = self.qualified_name().text
         if self.current.text == '<': name += '<'+','.join(self.type_arguments())+'>'
@@ -417,6 +417,8 @@ class Parser:
 
     def parse(self):
         functions = Program()
+        functions.uses_cli = any(t.text in ('Arg', 'Path') or (t.text == 'cli' and self.tokens[i+1].text == '.')
+                                 for i,t in enumerate(self.tokens[:-1]))
         functions.uses_console = any(t.text in ('IoError', 'IoFailure') or
                                      (t.text == 'console' and self.tokens[i+1].text == '.')
                                      for i,t in enumerate(self.tokens[:-1]))

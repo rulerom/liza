@@ -65,3 +65,12 @@ uint64_t liza_rt_read_chunk(uint64_t handle, uint8_t *out) {
     if (n < 0) return (uint64_t)file_error(errno) << 32;
     return (uint64_t)n;
 }
+
+uint32_t liza_rt_file_open_native(const char *path,uint64_t *handle) {
+    *handle=0;
+    if(!path || !*path)return 4;
+    int fd;
+    do {fd=open(path,O_RDONLY|O_CLOEXEC);} while(fd<0 && errno==EINTR);
+    if(fd<0)return file_error(errno);
+    *handle=(uint64_t)fd;return 0;
+}

@@ -16,9 +16,9 @@ static uint32_t error_kind(DWORD e) {
     }
 }
 static uint64_t result(uint32_t error,uint32_t done) {return ((uint64_t)error<<32)|done;}
-uint64_t liza_rt_write(const uint8_t *data,uint32_t length) {
+static uint64_t write_stream(DWORD stream,const uint8_t *data,uint32_t length) {
     if(!length)return 0;
-    HANDLE out=GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE out=GetStdHandle(stream);
     if(!out || out==INVALID_HANDLE_VALUE)return result(1,0);
     uint32_t done=0;
     while(done<length) {
@@ -31,12 +31,12 @@ uint64_t liza_rt_write(const uint8_t *data,uint32_t length) {
     }
     return done;
 }
-uint64_t liza_rt_write_text(const uint8_t *data,uint32_t length) {
+static uint64_t text_stream(DWORD stream,const uint8_t *data,uint32_t length) {
     if(!length)return 0;
-    HANDLE out=GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE out=GetStdHandle(stream);
     if(!out || out==INVALID_HANDLE_VALUE)return result(1,0);
     DWORD mode;
-    if(!GetConsoleMode(out,&mode))return liza_rt_write(data,length);
+    if(!GetConsoleMode(out,&mode))return write_stream(stream,data,length);
     uint32_t done=0;
     while(done<length) {
         WCHAR wide[512];
@@ -71,11 +71,18 @@ uint64_t liza_rt_write_text(const uint8_t *data,uint32_t length) {
     }
     return done;
 }
-static uint64_t number(uint64_t value,int negative) {
+static uint64_t number(DWORD stream,uint64_t value,int negative) {
     uint8_t buffer[21];unsigned start=sizeof buffer;
     do{buffer[--start]=(uint8_t)('0'+value%10);value/=10;}while(value);
     if(negative)buffer[--start]='-';
-    return liza_rt_write_text(buffer+start,(uint32_t)(sizeof buffer-start));
+    return text_stream(stream,buffer+start,(uint32_t)(sizeof buffer-start));
 }
-uint64_t liza_rt_print_u64(uint64_t value){return number(value,0);}
-uint64_t liza_rt_print_i64(int64_t value){return number(value<0?UINT64_C(0)-(uint64_t)value:(uint64_t)value,value<0);}
+uint64_t liza_rt_print_u64(uint64_t value){return number(STD_OUTPUT_HANDLE,value,0);}
+uint64_t liza_rt_print_i64(int64_t value){return number(STD_OUTPUT_HANDLE,value<0?UINT64_C(0)-(uint64_t)value:(uint64_t)value,value<0);}
+
+uint64_t liza_rt_write(const uint8_t *p,uint32_t n){return write_stream(STD_OUTPUT_HANDLE,p,n);}
+uint64_t liza_rt_write_text(const uint8_t *p,uint32_t n){return text_stream(STD_OUTPUT_HANDLE,p,n);}
+uint64_t liza_rt_err(const uint8_t *p,uint32_t n){return write_stream(STD_ERROR_HANDLE,p,n);}
+uint64_t liza_rt_err_text(const uint8_t *p,uint32_t n){return text_stream(STD_ERROR_HANDLE,p,n);}
+uint64_t liza_rt_err_print_u64(uint64_t n){return number(STD_ERROR_HANDLE,n,0);}
+uint64_t liza_rt_err_print_i64(int64_t n){return number(STD_ERROR_HANDLE,n<0?UINT64_C(0)-(uint64_t)n:(uint64_t)n,n<0);}

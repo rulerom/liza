@@ -61,6 +61,7 @@ class WindowsNative(unittest.TestCase):
         #include <stdint.h>
         extern uint64_t liza_rt_write(const uint8_t*,uint32_t);
         extern uint64_t liza_rt_write_text(const uint8_t*,uint32_t);
+        extern uint64_t liza_rt_err_text(const uint8_t*,uint32_t);
         int main(void){
             HANDLE read,write;DWORD count;
             if(!CreatePipe(&read,&write,NULL,0))return 1;
@@ -84,6 +85,11 @@ class WindowsNative(unittest.TestCase):
             if(!ReadConsoleOutputCharacterW(screen,chars,4,zero,&count)||count!=4)return 10;
             if(chars[0]!=0x41b||chars[1]!=0x438||chars[2]!=0x437||chars[3]!=0x430)return 11;
             if(GetConsoleOutputCP()!=437)return 12;
+            SetStdHandle(STD_ERROR_HANDLE,screen);
+            if(liza_rt_err_text(text,8)!=8)return 13;
+            COORD four={4,0};
+            if(!ReadConsoleOutputCharacterW(screen,chars,4,four,&count)||count!=4)return 14;
+            if(chars[0]!=0x41b||chars[1]!=0x438||chars[2]!=0x437||chars[3]!=0x430)return 15;
             SetConsoleOutputCP(old);CloseHandle(screen);FreeConsole();return 0;
         }'''
         for opt in ('-O0','-O2'):
@@ -100,6 +106,6 @@ def load_tests(loader,tests,pattern):
                         ('test_conversions','ConversionTypeTests'),('test_division','DivisionTypeTests'),
                         ('test_loops','LoopTypeTests'),('test_mutable','MutableTypeTests'),
                         ('test_numbers','NumericTypeTests'),('test_ownership','OwnershipTests'),
-                        ('test_structures','StructureTests'),('test_variants','VariantTypes'),('test_io','Effects'),('test_file','FileTypes'),('test_file','FileNative'),('test_resources','ResourceTypes'),('test_resources','ResourceNative'),('test_updates','UpdateTypes'),('test_updates','UpdateNative'),('test_table','TableTypes'),('test_table','TableStorageNative'),('test_table','StorageProofs'),('test_table','StorageReuseNative'),('test_utf8_stream','StreamTypes'),('test_utf8_stream','StreamNative'),('test_utf8','Utf8Types'),('test_utf8','Utf8Native'),('test_vec_reserve','ReserveTypes'),('test_vec_reserve','ReserveNative'),('test_vectors','VectorTypes'),('test_vectors','VectorNative'),('test_regions','RegionTypes'),('test_regions','RegionNative'),('test_generics','GenericTests'),('test_modules','ModuleTests'),('test_modules','ModuleNativeTests')]:
+                        ('test_structures','StructureTests'),('test_variants','VariantTypes'),('test_io','Effects'),('test_file','FileTypes'),('test_file','FileNative'),('test_resources','ResourceTypes'),('test_resources','ResourceNative'),('test_updates','UpdateTypes'),('test_updates','UpdateNative'),('test_table','TableTypes'),('test_table','TableStorageNative'),('test_table','StorageProofs'),('test_table','StorageReuseNative'),('test_cli','CliTypes'),('test_cli','CliNative'),('test_utf8_stream','StreamTypes'),('test_utf8_stream','StreamNative'),('test_utf8','Utf8Types'),('test_utf8','Utf8Native'),('test_vec_reserve','ReserveTypes'),('test_vec_reserve','ReserveNative'),('test_vectors','VectorTypes'),('test_vectors','VectorNative'),('test_regions','RegionTypes'),('test_regions','RegionNative'),('test_generics','GenericTests'),('test_modules','ModuleTests'),('test_modules','ModuleNativeTests')]:
         tests.addTests(loader.loadTestsFromTestCase(getattr(importlib.import_module(module),name)))
     return tests

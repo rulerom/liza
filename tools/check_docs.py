@@ -61,6 +61,9 @@ def check():
         utf8 = CodeBlocks(); utf8.feed((ROOT/'site'/(page+'.html')).read_text(encoding='utf-8'))
         utf8_source = (ROOT/'examples'/(example+'.liza')).read_text(encoding='utf-8').strip()
         assert sum(b['text'].strip()==utf8_source for b in utf8.blocks)==1, 'UTF-8 example must match its source'
+    cli = CodeBlocks(); cli.feed((ROOT/'site/cli.html').read_text(encoding='utf-8'))
+    app_source = (ROOT/'examples/apps/liza_text.liza').read_text(encoding='utf-8').strip()
+    assert sum(b['text'].strip()==app_source for b in cli.blocks)==1, 'CLI source include mismatch'
     print(f'{len(sources)} examples lexed; token categories, rendered source, numbered lines and existing pages verified.')
 
 

@@ -57,6 +57,7 @@ nav:
   - Liza: index.md
   - Быстрый старт: getting-started.md
   - Основы языка: basics.md
+  - CLI-приложение liza-text: cli.md
   - Редактор Zed: editor.md
   - Milestones: milestones.md
   - Язык:
