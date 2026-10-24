@@ -61,6 +61,7 @@ nav:
   - Запись файлов и liza-copy: file-output.md
   - Редактор Zed: editor.md
   - Milestones: milestones.md
+  - Verification pipeline: verification-pipeline.md
   - Liza Verified V0: verified.md
   - Liza Verified V1: verified-v1.md
   - Liza Verified V2: verified-v2.md
