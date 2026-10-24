@@ -1,0 +1,70 @@
+name: Liza Verified V3
+on:
+  push:
+    paths: ['liza/**', 'verification/**', 'tests/test_target.py', '.github/workflows/verified-v3.yml']
+  pull_request:
+    paths: ['liza/**', 'verification/**', 'tests/test_target.py', '.github/workflows/verified-v3.yml']
+  workflow_dispatch:
+jobs:
+  generate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test reporting and native target agreement
+        run: python -m unittest verification.v3.test_verifier tests.test_target -v
+      - name: Generate native platform artifacts without rewriting
+        run: python verification/v3/prepare.py --output build/v3-inputs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3-inputs-${{ matrix.os }}
+          path: build/v3-inputs/
+  validate:
+    needs: generate
+    # Alive2 runs on a proof worker. It validates untouched IR produced by all
+    # three native runners; this is not native machine-code verification.
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-latest, macos-latest, windows-latest]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: v3-inputs-${{ matrix.platform }}
+          path: build/v3-inputs
+      - name: Install proof toolchain (versions recorded in report)
+        run: brew install llvm@23 z3 re2c cmake ninja
+      - name: Build pinned unmodified Alive2
+        run: |
+          git clone https://github.com/AliveToolkit/alive2 "$RUNNER_TEMP/alive2"
+          git -C "$RUNNER_TEMP/alive2" checkout --detach a68009c9e81575bdcc249d3cc534514a76112221
+          ALIVE_SOURCE="$RUNNER_TEMP/alive2" LLVM_PREFIX="$(brew --prefix llvm@23)" Z3_PREFIX="$(brew --prefix z3)" sh verification/v3/build.sh
+      - name: Calibrate and validate every recorded pair
+        run: |
+          llvm_prefix="$(brew --prefix llvm@23)"
+          python verification/v3/check.py \
+            --alive-tv "$RUNNER_TEMP/alive2/build/alive-tv" \
+            --alive-source "$RUNNER_TEMP/alive2" \
+            --clang "$llvm_prefix/bin/clang" \
+            --llvm-config "$llvm_prefix/bin/llvm-config" \
+            --opt "$llvm_prefix/bin/opt" \
+            --llvm-revision "Homebrew-$($llvm_prefix/bin/llvm-config --version)" \
+            --z3 "$(brew --prefix z3)/bin/z3" \
+            --inputs build/v3-inputs --actual --output build/verified-v3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verified-v3-${{ matrix.platform }}
+          path: build/verified-v3/

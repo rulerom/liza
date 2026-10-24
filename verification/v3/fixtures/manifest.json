@@ -1,0 +1,72 @@
+[
+  {
+    "name": "checked_identity",
+    "negative": false,
+    "phase": "traps",
+    "source": "checked_identity.source.ll",
+    "target": "checked_identity.target.ll"
+  },
+  {
+    "name": "checked_rewrite",
+    "negative": false,
+    "phase": "traps",
+    "source": "checked_rewrite.source.ll",
+    "target": "checked_rewrite.target.ll"
+  },
+  {
+    "name": "removed_check",
+    "negative": true,
+    "phase": "traps",
+    "source": "removed_check.source.ll",
+    "target": "removed_check.target.ll"
+  },
+  {
+    "name": "cancelled_sequence",
+    "negative": true,
+    "phase": "traps",
+    "source": "cancelled_sequence.source.ll",
+    "target": "cancelled_sequence.target.ll"
+  },
+  {
+    "name": "trap_to_unreachable",
+    "negative": true,
+    "phase": "traps",
+    "source": "trap_to_unreachable.source.ll",
+    "target": "trap_to_unreachable.target.ll"
+  },
+  {
+    "name": "poison_return",
+    "negative": true,
+    "phase": "traps",
+    "source": "poison_return.source.ll",
+    "target": "poison_return.target.ll"
+  },
+  {
+    "name": "poison_branch",
+    "negative": true,
+    "phase": "traps",
+    "source": "poison_branch.source.ll",
+    "target": "poison_branch.target.ll"
+  },
+  {
+    "name": "trap_then_return",
+    "negative": false,
+    "phase": "traps",
+    "source": "trap_then_return.source.ll",
+    "target": "trap_then_return.target.ll"
+  },
+  {
+    "name": "wrong_bounds",
+    "negative": true,
+    "phase": "memory",
+    "source": "wrong_bounds.source.ll",
+    "target": "wrong_bounds.target.ll"
+  },
+  {
+    "name": "damaged_snapshot",
+    "negative": true,
+    "phase": "memory",
+    "source": "damaged_snapshot.source.ll",
+    "target": "damaged_snapshot.target.ll"
+  }
+]

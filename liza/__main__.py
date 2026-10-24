@@ -7,6 +7,7 @@ from .frontend import CompileError
 from .modules import load_program
 from .ir import lower, dump
 from .backend import llvm
+from .target import resolve as resolve_target
 from .stdlib import link_flags
 
 
@@ -21,8 +22,10 @@ def main():
         p.add_argument('--project-root', type=Path, help='explicit import root (default: entry source directory)')
         if command in ('emit-ir', 'emit-llvm', 'build'):
             p.add_argument('-o', '--output', type=Path)
-        if command in ('build', 'run'):
+        if command in ('emit-llvm', 'build', 'run'):
             p.add_argument('--clang', default='clang')
+            p.add_argument('--target', help='Clang target triple (default: host)')
+        if command in ('build', 'run'):
             p.add_argument('-O', choices=('0', '2'), default='2')
     arguments = sys.argv[1:]
     program_args = []
@@ -38,8 +41,9 @@ def main():
         if args.command == 'check':
             print(f'{args.source}: OK')
             return 0
+        target = resolve_target(args.clang, args.target) if args.command != 'emit-ir' else None
         if args.command in ('emit-ir', 'emit-llvm'):
-            text = dump(module) if args.command == 'emit-ir' else llvm(module)
+            text = dump(module) if args.command == 'emit-ir' else llvm(module, target)
             if args.output:
                 if args.output.resolve() in inputs:
                     raise ValueError('output must not overwrite source')
@@ -49,7 +53,7 @@ def main():
             return 0
         with tempfile.TemporaryDirectory(prefix='liza-') as temporary:
             ir_file = Path(temporary) / 'module.ll'
-            ir_file.write_text(llvm(module), encoding='utf-8')
+            ir_file.write_text(llvm(module, target), encoding='utf-8')
             output = (args.output or Path('build') / args.source.stem).resolve() if args.command == 'build' else Path(temporary) / 'program'
             if output in inputs:
                 raise ValueError('output must not overwrite source')
@@ -58,7 +62,7 @@ def main():
             if output in inputs:
                 raise ValueError('output must not overwrite source')
             output.parent.mkdir(parents=True, exist_ok=True)
-            compiled = subprocess.run([args.clang, '-Wno-override-module', f'-O{args.O}', str(ir_file), *link_flags(module), '-o', str(output)])
+            compiled = subprocess.run([args.clang, *target.flags, '-Werror=override-module', f'-O{args.O}', str(ir_file), *link_flags(module), '-o', str(output)])
             if compiled.returncode:
                 return 1
             if args.command == 'build':
