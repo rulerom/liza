@@ -133,6 +133,10 @@ class NetNative(unittest.TestCase):
         for exe in self.executables:
             p,port=self.start(exe)
             with socket.create_connection(('127.0.0.1',port),timeout=10) as s:
+                # Confirm accept completed before reset; otherwise the OS may
+                # report an accept error rather than a stream read error.
+                s.sendall(b"x")
+                self.assertEqual(s.recv(1),b"x")
                 # Abort the stream instead of sending EOF.
                 import os
                 linger=struct.pack('HH' if os.name=='nt' else 'ii',1,0)
