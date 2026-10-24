@@ -1,2 +1,4 @@
 # This sample's byte count and Unicode scalar count are part of the CLI examples.
 examples/data/utf8.txt text eol=lf
+# Verification baselines bind exact source bytes across all CI platforms.
+verification/** text eol=lf

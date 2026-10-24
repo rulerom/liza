@@ -1,0 +1,8 @@
+{
+  "verification/arithmetic.liza": "55ce656834e61aa3c0a64893be9c176d9029a3f48b170e2a5daafcef005a854b",
+  "verification/check.py": "1d12a0fac009921f2cc26b477b6c6e3066b9fa527ffac3e61381506a19637d91",
+  "verification/model.py": "08bd3ceaaf26e53f17538c66f765d0ddb3d3cb31737060fb38f37d5067e8c395",
+  "verification/reference.py": "65137ba646ecf0521c50e0af10708e941f471bed0168968c9d973630f0c122e9",
+  "verification/requirements.txt": "2bc40e2fcd7a609ec720d16ae245d16061a265276184c9c9bb7460cc5a0e6d56",
+  "verification/test_verifier.py": "511d156c5027579d66cd3bc00785c2d9e987f010fb2bdddfe815c43d26416c12"
+}

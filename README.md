@@ -185,3 +185,8 @@ contracts at Semantic IR and LLVM IR (generated, O0, O2) levels. It preserves
 mandatory traps and requires counterexamples for deliberately broken lowerings.
 This is not whole-compiler or binary verification; Z3 and the small IR models
 remain trusted. See [scope and reproduction](docs/verified.md).
+
+[Verified V1](docs/verified-v1.md) separately checks fixed four-byte arrays,
+full-width `u32` indices, snapshot independence and short-circuit control flow.
+Its bounded LLVM memory model tracks object origins and initialized bytes.
+V0 sources remain frozen; both suites run independently in CI.

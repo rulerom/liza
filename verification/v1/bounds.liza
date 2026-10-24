@@ -1,0 +1,39 @@
+fn read(a:u8,b:u8,c:u8,d:u8,index:u32)->u8 {
+ data:[u8;4]=[a,b,c,d]
+ return data[index]
+}
+fn update(a:u8,b:u8,c:u8,d:u8,index:u32,value:u8,observe:u32)->u8 {
+ var data:[u8;4]=[a,b,c,d]
+ data[index]=value
+ return data[observe & 3]
+}
+fn snapshot(a:u8,b:u8,c:u8,d:u8,index:u32,value:u8,observe:u32)->u16 {
+ original:[u8;4]=[a,b,c,d]
+ var updated=copy original
+ updated[index]=value
+ j=observe & 3
+ return u16(original[j]) | (u16(updated[j]) << 8)
+}
+fn short_and(a:u8,b:u8,c:u8,d:u8,index:u32,take:bool)->bool {
+ data:[u8;4]=[a,b,c,d]
+ return take && data[index]==a
+}
+fn short_or(a:u8,b:u8,c:u8,d:u8,index:u32,take:bool)->bool {
+ data:[u8;4]=[a,b,c,d]
+ return take || data[index]==a
+}
+fn branch(a:u8,b:u8,c:u8,d:u8,index:u32,take:bool)->u8 {
+ data:[u8;4]=[a,b,c,d]
+ if take {return data[index]}
+ return a
+}
+fn constant_read(a:u8,b:u8,c:u8,d:u8,index:u32)->u8 {
+ data:[u8;4]=[a,b,c,d]
+ return data[2]
+}
+fn choose(a:u8,b:u8,c:u8,d:u8,index:u32,take:bool)->u8 {
+ var result=a
+ if take {result=b}
+ return result
+}
+fn main()->u32{return 0}

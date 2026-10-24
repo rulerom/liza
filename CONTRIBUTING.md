@@ -452,3 +452,10 @@ modeled: never turn unsupported instructions or solver `unknown` into success.
 Keep the fixed reference contracts independent of compiler implementations;
 review specification changes separately from implementation fixes. SMT-LIB
 queries are not proof certificates.
+
+V1 uses `python -m unittest verification.v1.test_verifier -v` and
+`python verification/v1/check.py --output build/verified-v1`. Keep V0 files
+unchanged against `verification/v1/v0-baseline.json`; do not regenerate the
+baseline to make an unintended V0 edit pass. V1 LLVM memory and Semantic IR
+value models must remain separate. Uninitialized or invalid accesses are
+model violations; unsupported semantics must remain `unknown`.
