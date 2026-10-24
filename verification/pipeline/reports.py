@@ -1,5 +1,21 @@
 """Versioned adapters for the existing experiments. Never discard raw results."""
 STAGES = ('v0','v1','v2','v3','v4')
+COVERAGE = {
+    'v0': {'subjects':'ten fixed acyclic u8/i8 functions', 'obligations':40,
+           'negative_controls':8, 'excludes':['memory','user calls','machine code']},
+    'v1': {'subjects':'eight fixed array/control-flow functions; four u8 elements and symbolic u32 indices',
+           'obligations':32, 'negative_controls':9, 'excludes':['arbitrary memory','loops','machine code']},
+    'v2': {'subjects':'readonly-view search and sequential i32 sum with symbolic u32 length',
+           'obligations':74, 'negative_controls':8,
+           'excludes':['invalid input views','allocation','aliasing/mutation/freeing','arbitrary LLVM loops','machine code']},
+    'v3': {'subjects':'concrete V0/V1 LLVM pairs; defined inputs; calibrated LLVM refinement',
+           'actual_pairs':90, 'calibration_pairs':10,
+           'excludes':['Semantic IR to LLVM proof','loops','interprocedural optimization','machine code']},
+    'v4': {'subjects':'eleven selected whole programs in the abstract resource model',
+           'positive_programs':11, 'analyzer_mutations':7, 'summary_controls':8,
+           'excludes':['all source programs','all storage_contract fields','termination',
+                       'readonly views','recursion','Vec','allocator','LLVM','machine code']},
+}
 V4_POSITIVE = {'safe','call','result_call','update','factory','cfg','loop','live_loop',
                'wrap','two_buffers','two_regions_safe'}
 V4_MUTATIONS = {'lose_ok_payload','wrong_call_origin','lose_phi_dependency','conflate_regions',

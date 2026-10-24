@@ -12,7 +12,7 @@ import signal
 import subprocess
 import sys
 import time
-from .reports import STAGES, validate, observations
+from .reports import STAGES, COVERAGE, validate, observations
 from .artifacts import verify
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -143,7 +143,7 @@ def run(args):
         directory=output/'stages'/stage
         directory.mkdir(parents=True)
         child_output=directory/'artifacts'
-        item={'status':'unknown','raw_report':f'stages/{stage}/artifacts/report.json',
+        item={'status':'unknown','coverage_contract':COVERAGE[stage],'raw_report':f'stages/{stage}/artifacts/report.json',
               'specification':('source/docs/verified.md' if stage=='v0' else f'source/docs/verified-{stage}.md')}
         try:
             cmd=commands(args,source,stage,child_output)
