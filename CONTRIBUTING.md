@@ -381,3 +381,25 @@ wheel, а не в editable-режиме. `check_docs.py` проверяет ка
 все примеры и наличие подсветки в готовом HTML. Построчный разбор Vec включает
 исходный файл через Snippets; проверка сравнивает отображённый код с файлом
 и проверяет нумерацию строк. При изменении примера обновляйте пояснения к строкам.
+
+## Explicit reserve (0.0.21)
+
+Semantic IR version 19 adds `vec.reserve`. Its contract consumes vector argument
+0, borrows region argument 1 and preserves the origin in product component 0.
+Storage dependency analysis requires origin equality even for a no-op.
+`returned_buffer_storage` becomes `may_relocate_within_origin` for functions
+whose transitive storage effects include reserve.
+
+The runtime reserves new capacity before copying the initialized prefix.
+Failures leave the region cursor and the descriptor unchanged. Old allocations
+are not reclaimed. No user syntax or descriptor representation changes.
+
+```sh
+python3 -m unittest discover -s tests -p test_vec_reserve.py -v
+python3 tools/check_reserve_cost.py --output build/reserve-cost
+```
+
+The runtime-input cost harness counts heap allocations and copied bytes, checks
+unused-tail sentinels, alignment, overflow, no-ops and retry after failure.
+O0/O2 LLVM and assembly are preserved as CI artifacts. The previous bounded
+vector cost gate still checks allocation-free set/pop/push paths.

@@ -46,7 +46,8 @@ def llvm(module):
     if memory_used:
         lines.extend(['declare ptr @liza_rt_region_create(i64, ptr)',
                       'declare ptr @liza_rt_region_alloc(ptr, i64, i64, i32, ptr)',
-                      'declare void @liza_rt_region_close(ptr)'])
+                      'declare void @liza_rt_region_close(ptr)',
+                      'declare ptr @liza_rt_vec_reserve(ptr, ptr, i64, i64, i32, i32, i32, ptr)'])
     def size(t):
         return f'ptrtoint (ptr getelementptr ({types[t]}, ptr null, i32 1) to i64)'
     def transfer(t, source, dest):
@@ -256,7 +257,7 @@ def llvm(module):
                 for operation in (op for b in fn.blocks for op in b.operations):
                     if operation.op in ('vec.get','vec.pop','vec.push','vec.set') and not large(operation.type):
                         lines.append(f'  %{operation.result}_scratch = alloca {types[operation.type]}')
-                    if operation.op in ('region.create','region.alloc','vec.create'):
+                    if operation.op in ('region.create','region.alloc','vec.create','vec.reserve'):
                         lines.append(f'  %{operation.result}_error = alloca i32')
                     if large(operation.type) and operation.op in materialized:
                         if operation.result not in aliases:

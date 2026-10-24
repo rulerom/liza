@@ -260,6 +260,7 @@ class Lowerer:
                     'buffer.update': 'preserve_argument_0', 'buffer.view': 'borrow_argument_0',
                     'buffer.length': 'read_argument_0', 'buffer.release': 'end_dependency_0',
                     'region.close': 'end_origin_0', 'vec.create': 'depends_on_argument_0',
+                    'vec.reserve': 'preserve_origin_0_may_relocate_component_0',
                     'vec.push': 'preserve_argument_0_in_component_0',
                     'vec.pop': 'preserve_argument_0_in_component_0',
                     'vec.set': 'preserve_argument_0_in_component_0',
@@ -716,7 +717,7 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 18, 'type_properties': properties,
+    return json.dumps({'version': 19, 'type_properties': properties,
                        'modules': getattr(module,'modules',[]),
                        'specializations': getattr(module,'specializations',[]),
                        'declarations': getattr(module,'declarations',[]),

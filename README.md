@@ -114,3 +114,16 @@ python3 -m liza run examples/bounded_vec.liza
 ```
 
 [Контракт и ограничения](https://liza.rulerom.com/bounded-vec.html).
+
+## Явный рост Vec · 0.0.21
+
+`vec.reserve(move current, region, capacity)` увеличивает вместимость в исходном
+регионе и возвращает владельца со статусом операции. Отказ сохраняет состояние;
+рост копирует только инициализированный префикс. Старое размещение остаётся
+занятым до закрытия региона. `push` сам не растёт.
+
+```sh
+python3 -m liza run examples/vec_reserve.liza
+```
+
+[Контракт и стоимость](https://liza.rulerom.com/vec-reserve.html).

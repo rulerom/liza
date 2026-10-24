@@ -38,7 +38,7 @@ class Effects(unittest.TestCase):
                 compile_source(source)
         m=compile_source('fn f()->u32:io{x=console.write("x");return 0} fn main()->u32:io{return f()}')
         data=json.loads(dump(m))
-        self.assertEqual(data['version'],18)
+        self.assertEqual(data['version'],19)
         self.assertTrue(data['externals'])
         calls=[op for f in m for b in f.blocks for op in b.operations if op.op=='call']
         self.assertTrue(any(op.callee=='console.write' and op.effect_contract=='io' for op in calls))

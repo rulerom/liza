@@ -125,6 +125,11 @@ def check_dependencies(records, structs, signatures):
                     region=arguments[0].all_regions()
                     if len(region)!=1: raise CompileError(node.token,'allocation requires one proven region origin')
                     return Value(cases={'Ok':Value(buffers=region),'Err':EMPTY})
+                if operation == 'vec.reserve':
+                    origin = arguments[0].all_buffers()
+                    if len(origin) != 1 or origin != arguments[1].all_regions():
+                        raise CompileError(node.token, 'vec.reserve requires the vector original region')
+                    return Value(components=(arguments[0], EMPTY))
                 if operation in ('vec.push','vec.pop','vec.set'): return Value(components=(arguments[0],EMPTY))
                 if operation.startswith('vec.'): return EMPTY
                 if operation=='buffer.update': return arguments[0]
@@ -227,3 +232,7 @@ def check_dependencies(records, structs, signatures):
                         effects.update(records[op.callee][3].storage_contract['effects'])
             if effects != set(ir.storage_contract['effects']):
                 ir.storage_contract['effects']=sorted(effects);changed=True
+
+    for _,_,_,ir in records.values():
+        if 'vec.reserve' in ir.storage_contract['effects']:
+            ir.storage_contract['returned_buffer_storage'] = 'may_relocate_within_origin'

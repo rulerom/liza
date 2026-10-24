@@ -71,4 +71,5 @@ nav:
   - Таблица соединений: connection-table.md
   - План разработки: roadmap.md
   - Линейные результаты и Vec: bounded-vec.md
+  - Явный рост Vec: vec-reserve.md
   - Разбор программы Vec: bounded-vec-walkthrough.md

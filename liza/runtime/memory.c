@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <string.h>
 
 typedef struct {
     size_t capacity;
@@ -47,3 +48,19 @@ void *liza_rt_region_alloc(void *handle, uint64_t element_size,
 }
 
 void liza_rt_region_close(void *handle) { free(handle); }
+
+/* The compiler proves origin equality and exclusive ownership of the vector.
+   Length <= capacity is an invariant of its private descriptor. */
+void *liza_rt_vec_reserve(void *region, void *data, uint64_t element_size,
+                          uint64_t alignment, uint32_t length, uint32_t capacity,
+                          uint32_t requested, uint32_t *error) {
+    *error = 0;
+    if (requested <= capacity) return data;
+    void *next = liza_rt_region_alloc(region, element_size, alignment, requested, error);
+    if (*error) return data;
+    /* Success proved requested * element_size fits size_t, hence so does
+       length * element_size. Old and new nonempty allocations are disjoint. */
+    size_t initialized = (size_t)length * (size_t)element_size;
+    if (initialized) memcpy(next, data, initialized);
+    return next;
+}

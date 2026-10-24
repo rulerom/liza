@@ -1,0 +1,35 @@
+// Growth is explicit. Old storage stays reserved until the region closes.
+fn main() -> u32 : alloc {
+    match memory.create(4096) {
+        Err(error) => { return 1 }
+        Ok(region) => {
+            var result: u32 = 0
+            match vec.with_capacity<u32>(region, 1) {
+                Err(error) => { result = 2 }
+                Ok(initial) => {
+                    (full, pushed) = vec.push(move initial, 42)
+                    match pushed { Ok(done) => {} Err(error) => { result = 3 } }
+                    (larger, reserved) = vec.reserve(move full, region, 4)
+                    match reserved {
+                        Err(error) => {
+                            released = vec.release(move larger)
+                            result = 4
+                        }
+                        Ok(done) => {
+                            (next, status) = vec.push(move larger, 7)
+                            match status { Ok(push_done) => {} Err(error) => { result = 5 } }
+                            {
+                                values = vec.view(next)
+                                if values.len != 2 || values[0] != 42 || values[1] != 7 { result = 6 }
+                            }
+                            if vec.capacity(next) != 4 { result = 7 }
+                            released = vec.release(move next)
+                        }
+                    }
+                }
+            }
+            closed = memory.close(move region)
+            return result
+        }
+    }
+}

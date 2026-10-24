@@ -100,11 +100,11 @@ def inspect(output,clang='clang'):
             subprocess.run([clang,'-Wno-override-module',f'-O{opt}',*flags,str(ir),'-o',str(dest)],check=True,capture_output=True,timeout=120)
         body=re.search(r'^define [^\n]*@liza_cycle\([^\n]*\)[^\n]*\{\n(.*?)^}',optimized.read_text(),re.M|re.S)
         assert body,'cycle LLVM body'
-        assert not re.search(r'@(?:llvm.mem(?:cpy|move)|liza_rt_region_|malloc|calloc|realloc)',body.group())
+        assert not re.search(r'@(?:llvm.mem(?:cpy|move)|liza_rt_region_|liza_rt_vec_reserve|malloc|calloc|realloc)',body.group())
         (output/f'cycle.O{opt}.ll').write_text(body.group()+'\n')
         machine=re.search(r'^_?liza_cycle:.*?\n(.*?)(?=^\s*\.cfi_endproc|^\s*\.seh_endproc|^\s*\.size|^[ \t]*[;#] -- End function)',assembly.read_text(),re.M|re.S)
         assert machine,'cycle assembly'
-        assert not re.search(r'\b_?(?:memcpy|memmove|malloc|calloc|realloc|liza_rt_region_alloc)\b',machine.group())
+        assert not re.search(r'\b_?(?:memcpy|memmove|malloc|calloc|realloc|liza_rt_region_alloc|liza_rt_vec_reserve)\b',machine.group())
         (output/f'cycle.O{opt}.s').write_text(machine.group()+'\n')
         exe=output/(f'vectors.O{opt}'+('.exe' if sys.platform=='win32' else ''))
         subprocess.run([clang,'-Wno-override-module',f'-O{opt}',str(ir),str(harness),'-o',str(exe)],check=True,capture_output=True,timeout=120)

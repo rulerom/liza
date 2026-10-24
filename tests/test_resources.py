@@ -74,7 +74,7 @@ class ResourceTypes(unittest.TestCase):
     def test_variants_and_borrow_metadata(self):
         source='enum Owner { Empty; Open(File) } fn pass(f:File)->Owner{return Owner.Open(move f)} '+with_file('o=pass(move f);match move o {Owner.Empty=>{return 1}Owner.Open(g)=>{r=file.read_chunk(g);c=file.close(move g);return 0}}')
         m=compile_source(source);data=json.loads(dump(m))
-        self.assertEqual(data['version'],18)
+        self.assertEqual(data['version'],19)
         for t in ('File','Owner','Result<File,FileError>'):
             self.assertEqual(data['type_properties'][t],{'copyable':False,'implicit_copy':False})
         calls=[o for f in m for b in f.blocks for o in b.operations if o.op=='call']

@@ -96,7 +96,7 @@ class VectorTypes(unittest.TestCase):
         identity=next(f for f in module if f.name.startswith('liza$function$'))
         self.assertTrue(identity.storage_contract['returns']['components'][0]['depends_on'])
         self.assertFalse(identity.storage_contract['returns']['components'][1]['depends_on'])
-        self.assertEqual(json.loads(dump(module))['version'],18)
+        self.assertEqual(json.loads(dump(module))['version'],19)
         self.assertEqual(dump(module),dump(compile_source((ROOT/'examples/bounded_vec.liza').read_text())))
 
     def test_universal_product_components_and_conditional_resource(self):

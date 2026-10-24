@@ -1,10 +1,36 @@
-"""Native lowering of initialized-prefix operations; no allocation or relocation."""
+"""Native lowering of vector operations; only explicit reserve can relocate."""
 from .types import product_args
 
 
 def emit(op, args, refs, types, large, size, write, lines):
     name, ty, operation = op.result, types[op.type], op.op
     descriptor = '{ ptr, i32, i32 }'
+    if operation == 'vec.reserve':
+        element = types[op.source_type]
+        alignment = f'ptrtoint (ptr getelementptr ({{ i8, {element} }}, ptr null, i32 0, i32 1) to i64)'
+        status_type = types[product_args(op.type)[1]]
+        error_type = types['MemoryError']
+        lines.extend([
+            f'  %{name}_ptr = extractvalue {descriptor} {args[0]}, 0',
+            f'  %{name}_len = extractvalue {descriptor} {args[0]}, 1',
+            f'  %{name}_cap = extractvalue {descriptor} {args[0]}, 2',
+            f'  %{name}_next_ptr = call ptr @liza_rt_vec_reserve(ptr {args[1]}, ptr %{name}_ptr, i64 {size(op.source_type)}, i64 {alignment}, i32 %{name}_len, i32 %{name}_cap, i32 {args[2]}, ptr %{name}_error)',
+            f'  %{name}_code = load i32, ptr %{name}_error',
+            f'  %{name}_failed = icmp ne i32 %{name}_code, 0',
+            f'  %{name}_grow = icmp ugt i32 {args[2]}, %{name}_cap',
+            f'  %{name}_wanted = select i1 %{name}_grow, i32 {args[2]}, i32 %{name}_cap',
+            f'  %{name}_capacity = select i1 %{name}_failed, i32 %{name}_cap, i32 %{name}_wanted',
+            f'  %{name}_base = insertvalue {descriptor} {args[0]}, ptr %{name}_next_ptr, 0',
+            f'  %{name}_vector = insertvalue {descriptor} %{name}_base, i32 %{name}_capacity, 2',
+            f'  %{name}_tag = zext i1 %{name}_failed to i32',
+            f'  %{name}_error_tag = sub i32 %{name}_code, 1',
+            f'  %{name}_err = insertvalue {error_type} zeroinitializer, i32 %{name}_error_tag, 0',
+            f'  %{name}_status0 = insertvalue {status_type} zeroinitializer, i32 %{name}_tag, 0',
+            f'  %{name}_status = insertvalue {status_type} %{name}_status0, {error_type} %{name}_err, 2',
+            f'  %{name}_result = insertvalue {ty} zeroinitializer, {descriptor} %{name}_vector, 0',
+            f'  %{name} = insertvalue {ty} %{name}_result, {status_type} %{name}_status, 1',
+        ])
+        return
     if operation in ('vec.len', 'vec.capacity'):
         index = 1 if operation == 'vec.len' else 2
         lines.append(f'  %{name} = extractvalue {descriptor} {args[0]}, {index}')

@@ -1,4 +1,4 @@
-"""Bounded vector library signatures. Calls use ordinary argument evaluation."""
+"""Vector library signatures with explicit region-local growth. Calls use ordinary argument evaluation."""
 from dataclasses import replace
 import hashlib
 from .frontend import Function, Token, CompileError, Struct, Enum
@@ -12,7 +12,7 @@ def declarations():
 
 def signature(node, actuals, mono):
     operation = node.token.text.removeprefix('vec.')
-    if operation not in ('with_capacity', 'push', 'pop', 'get', 'set', 'len', 'capacity', 'view', 'release'):
+    if operation not in ('with_capacity', 'push', 'pop', 'get', 'set', 'len', 'capacity', 'view', 'release', 'reserve'):
         raise CompileError(node.token, 'unknown vec operation')
     if operation == 'with_capacity':
         if len(node.type_args) != 1:
@@ -30,6 +30,7 @@ def signature(node, actuals, mono):
     status = 'Result<vec.Done,vec.Error>'
     parameters, result, borrowed, effect = {
         'with_capacity': (['memory.Region', 'u32'], 'Result<'+vector+',MemoryError>', [0], 'alloc'),
+        'reserve': ([vector, 'memory.Region', 'u32'], product_type(vector, 'Result<vec.Done,MemoryError>'), [1], 'alloc'),
         'push': ([vector, element], product_type(vector, status), [], 'pure'),
         'pop': ([vector], product_type(vector, 'Option<'+element+'>'), [], 'pure'),
         'get': ([vector, 'u32'], 'Option<'+element+'>', [0], 'pure'),

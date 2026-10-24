@@ -65,6 +65,12 @@ jobs:
         with:
           name: vec-cost-${{ matrix.os }}
           path: build/vec-cost/
+      - name: Explicit Vec reserve cost
+        run: python tools/check_reserve_cost.py --output build/reserve-cost
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reserve-cost-${{ matrix.os }}
+          path: build/reserve-cost/
       - name: Generic table storage cost
         run: python tools/check_edit_cost.py --generics --output build/generic-edit-cost
       - uses: actions/upload-artifact@v4
@@ -111,6 +117,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/check_vec_cost.py --output build/vec-cost
           if errorlevel 1 exit /b 1
+          python tools/check_reserve_cost.py --output build/reserve-cost
+          if errorlevel 1 exit /b 1
           python tools/check_region_cost.py --output build/region-cost
           if errorlevel 1 exit /b 1
       - uses: actions/upload-artifact@v4
@@ -145,3 +153,7 @@ jobs:
         with:
           name: vec-cost-windows
           path: build/vec-cost/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reserve-cost-windows
+          path: build/reserve-cost/
