@@ -11,7 +11,7 @@ import unittest
 
 from liza.frontend import CompileError
 from liza.modules import load_program
-from liza.ir import lower
+from liza.ir import lower, dump
 from liza.backend import llvm
 from liza.stdlib import link_flags
 import test_io
@@ -24,7 +24,9 @@ class NetTypes(unittest.TestCase):
     def test_resource_and_effect_contracts(self):
         source='''fn main()->u32:io {match net.listen(0){Err(e)=>{return 1} Ok(l)=>{
 p=net.local_port(l);x=net.close_listener(move l);return 0}}}'''
-        test_io.compile_source(source)
+        import json
+        properties=json.loads(dump(test_io.compile_source(source)))['type_properties']
+        self.assertFalse(properties['net.Listener']['copyable'])
         for bad in (source.replace('x=net.close_listener(move l);',''),
                     source.replace('move l','copy l'),
                     source.replace('move l','l'),

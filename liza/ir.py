@@ -703,14 +703,14 @@ def annotate_traps(module):
 
 def dump(module):
     structs = getattr(module, 'structs', {})
-    properties = {t: value_properties(t) for t in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path', 'net.Listener', 'net.Stream')}
+    properties = {t: value_properties(t) for t in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path')}
     properties.update({name: struct.properties for name, struct in structs.items()})
     variants = getattr(module, 'variants', {})
     properties.update({name: v.properties for name, v in variants.items()})
     def describe(t):
         if t in properties or t == 'integer':
             return
-        if t == 'memory.Region':
+        if t in ('memory.Region','net.Listener','net.Stream'):
             properties[t] = {'copyable': False, 'implicit_copy': False}
         elif is_product(t):
             for component in product_args(t): describe(component)
