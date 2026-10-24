@@ -166,7 +166,7 @@ class Parser:
         self.tokens = lex(source, filename)
         self.index = 0
         self.generic_scope = {}
-        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError", "FileError", "MemoryError", "Utf8ErrorKind", "Utf8StreamErrorKind"}
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"IoError", "FileError", "MemoryError", "FileCreateError", "FileWriteError", "Utf8ErrorKind", "Utf8StreamErrorKind"}
 
     @property
     def current(self):
@@ -422,7 +422,7 @@ class Parser:
         functions.uses_console = any(t.text in ('IoError', 'IoFailure') or
                                      (t.text == 'console' and self.tokens[i+1].text == '.')
                                      for i,t in enumerate(self.tokens[:-1]))
-        functions.uses_file = any(t.text in ('File', 'FileError', 'FileFailure', 'FileBuffer', 'FileChunk') or
+        functions.uses_file = any(t.text in ('File', 'FileError', 'FileFailure', 'FileBuffer', 'FileChunk', 'FileCreateError', 'FileWriteError', 'FileWriteFailure') or
                                   (t.text == 'file' and self.tokens[i+1].text == '.')
                                   for i,t in enumerate(self.tokens[:-1]))
         functions.uses_utf8_stream = any(t.text in ('Utf8StreamState', 'Utf8StreamError', 'Utf8StreamErrorKind') or

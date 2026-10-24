@@ -64,6 +64,9 @@ def check():
     cli = CodeBlocks(); cli.feed((ROOT/'site/cli.html').read_text(encoding='utf-8'))
     app_source = (ROOT/'examples/apps/liza_text.liza').read_text(encoding='utf-8').strip()
     assert sum(b['text'].strip()==app_source for b in cli.blocks)==1, 'CLI source include mismatch'
+    copy = CodeBlocks(); copy.feed((ROOT/'site/file-output.html').read_text(encoding='utf-8'))
+    copy_source = (ROOT/'examples/apps/liza_copy.liza').read_text(encoding='utf-8').strip()
+    assert sum(b['text'].strip()==copy_source for b in copy.blocks)==1, 'Copy source include mismatch'
     print(f'{len(sources)} examples lexed; token categories, rendered source, numbered lines and existing pages verified.')
 
 

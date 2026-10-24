@@ -89,6 +89,12 @@ jobs:
         with:
           name: cli-cost-${{ matrix.os }}
           path: build/cli-cost/
+      - name: File write partial effects and cost
+        run: python tools/check_file_write_cost.py --output build/file-write-cost
+      - uses: actions/upload-artifact@v4
+        with:
+          name: file-write-cost-${{ matrix.os }}
+          path: build/file-write-cost/
       - name: Generic table storage cost
         run: python tools/check_edit_cost.py --generics --output build/generic-edit-cost
       - uses: actions/upload-artifact@v4
@@ -143,6 +149,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/check_cli_cost.py --output build/cli-cost
           if errorlevel 1 exit /b 1
+          python tools/check_file_write_cost.py --output build/file-write-cost
+          if errorlevel 1 exit /b 1
           python tools/check_region_cost.py --output build/region-cost
           if errorlevel 1 exit /b 1
       - uses: actions/upload-artifact@v4
@@ -193,3 +201,7 @@ jobs:
         with:
           name: cli-cost-windows
           path: build/cli-cost/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: file-write-cost-windows
+          path: build/file-write-cost/

@@ -5,6 +5,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <signal.h>
+#include <pthread.h>
 #define CAPACITY 2048u
 static uint32_t file_error(int e) {
     if (e == ENOENT || e == ENOTDIR) return 1;
@@ -73,4 +75,56 @@ uint32_t liza_rt_file_open_native(const char *path,uint64_t *handle) {
     do {fd=open(path,O_RDONLY|O_CLOEXEC);} while(fd<0 && errno==EINTR);
     if(fd<0)return file_error(errno);
     *handle=(uint64_t)fd;return 0;
+}
+
+uint32_t liza_rt_file_create_native(const char *path,uint64_t *handle) {
+    *handle=0;
+    if(!path || !*path)return 4;
+    int fd;
+    do {fd=open(path,O_WRONLY|O_CREAT|O_EXCL|O_CLOEXEC,0666);} while(fd<0 && errno==EINTR);
+    if(fd<0)return errno==EEXIST?8:file_error(errno);
+    *handle=(uint64_t)fd;return 0;
+}
+static uint32_t write_error(int e) {
+    if(e==EBADF)return 1;
+    if(e==EACCES || e==EPERM || e==EROFS)return 2;
+    if(e==ENOSPC || e==EDQUOT)return 3;
+    if(e==EAGAIN || e==EWOULDBLOCK)return 4;
+    if(e==EFBIG)return 6;
+    return 7;
+}
+uint64_t liza_rt_file_write(uint64_t handle,const uint8_t *data,uint32_t length) {
+    if(!length)return 0;
+    sigset_t blocked,old,pending;
+    sigemptyset(&blocked);sigaddset(&blocked,SIGPIPE);sigaddset(&blocked,SIGXFSZ);
+    if(pthread_sigmask(SIG_BLOCK,&blocked,&old))return (uint64_t)7<<32;
+    if(sigpending(&pending)) {
+        pthread_sigmask(SIG_SETMASK,&old,0);return (uint64_t)7<<32;
+    }
+    uint32_t done=0,error=0;
+    while(done<length) {
+        uint32_t chunk=length-done;
+        if(chunk>1048576)chunk=1048576;
+        ssize_t n=write((int)handle,data+done,chunk);
+        if(n>0){done+=(uint32_t)n;continue;}
+        if(n<0 && errno==EINTR)continue;
+        int e=n<0?errno:0;
+        error=n==0?5:write_error(e);
+        int signal=e==EPIPE?SIGPIPE:e==EFBIG?SIGXFSZ:0;
+        if(signal && !sigismember(&pending,signal)) {
+            sigset_t now,one;
+            if(!sigpending(&now) && sigismember(&now,signal)) {
+                sigemptyset(&one);sigaddset(&one,signal);
+                int caught;sigwait(&one,&caught);
+            }
+        }
+        break;
+    }
+    if(pthread_sigmask(SIG_SETMASK,&old,0) && !error)error=7;
+    return ((uint64_t)error<<32)|done;
+}
+uint32_t liza_rt_file_flush(uint64_t handle) {
+    int result;
+    do {result=fsync((int)handle);} while(result<0 && errno==EINTR);
+    return result<0?write_error(errno):0;
 }

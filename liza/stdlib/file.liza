@@ -52,3 +52,39 @@ fn file.open_path(path:Path)->Result<File,FileError>:io {
     if raw.error==0 {return Ok(raw.handle)}
     return Err(__liza_file_error(raw.error))
 }
+
+// Separate domains preserve existing exhaustive FileError matches.
+enum FileCreateError { AlreadyExists; Failure(FileError) }
+enum FileWriteError { InvalidHandle; PermissionDenied; NoSpace; WouldBlock; WriteZero; TooLarge; Other }
+struct FileWriteFailure { kind:FileWriteError; written:u32 }
+
+fn file.create_path(path:Path)->Result<File,FileCreateError>:io {
+    raw=__liza_file_create_path(path)
+    if raw.error==0 {return Ok(raw.handle)}
+    if raw.error==8 {return Err(FileCreateError.AlreadyExists)}
+    return Err(FileCreateError.Failure(__liza_file_error(raw.error)))
+}
+
+fn __liza_file_write_error(code:u32)->FileWriteError {
+    if code==1 {return FileWriteError.InvalidHandle}
+    if code==2 {return FileWriteError.PermissionDenied}
+    if code==3 {return FileWriteError.NoSpace}
+    if code==4 {return FileWriteError.WouldBlock}
+    if code==5 {return FileWriteError.WriteZero}
+    if code==6 {return FileWriteError.TooLarge}
+    return FileWriteError.Other
+}
+
+fn file.write_chunk(handle:File, data:View<u8>)->Result<u32,FileWriteFailure>:io {
+    raw=__liza_file_write(handle,data)
+    written=u32.wrap(raw)
+    code=u32(raw >> 32)
+    if code==0 {return Ok(written)}
+    return Err(FileWriteFailure(__liza_file_write_error(code),written))
+}
+
+fn file.flush(handle:File)->Result<u32,FileWriteError>:io {
+    code=__liza_file_flush(handle)
+    if code==0 {return Ok(0)}
+    return Err(__liza_file_write_error(code))
+}

@@ -431,3 +431,13 @@ The CRT's wide argv setup is outside the library's per-call allocation policy.
 `python tools/check_cli_cost.py --output build/cli-cost` records O0/O2 artifacts.
 Tests include raw POSIX paths, Windows UTF-16 paths, exact output/exit status,
 failed read/close with resource verification, and independently redirected streams.
+
+## File output acceptance (0.0.25)
+
+IR remains v20: new trusted library signatures use existing io effects and
+borrowed File parameters. FileCreateError keeps old FileError matches exhaustive.
+`python tools/check_file_write_cost.py --output build/file-write-cost` runs
+POSIX/Win32 short-write, partial-failure, zero-write and flush fault injection,
+checks pointer progression, and saves O0/O2 LLVM/assembly. POSIX tests exercise
+real RLIMIT_FSIZE failures and pending SIGXFSZ preservation. liza-copy tests
+verify close order, secondary failures and retaining a partial destination.

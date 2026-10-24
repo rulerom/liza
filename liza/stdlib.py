@@ -16,7 +16,7 @@ def attach(program):
     for fn in library:
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
             fn.module = '__liza_utf8_stream'
-        if fn.name.text == 'file.read_chunk':
+        if fn.name.text in ('file.read_chunk', 'file.write_chunk', 'file.flush'):
             fn.borrowed_params = [0]
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
@@ -61,6 +61,9 @@ def attach(program):
         Function(Token('__liza_cli_arg',1,1), [(Token('index',1,1),'u32')], [], 'Arg', 'io'),
         Function(Token('__liza_cli_path',1,1), [(Token('index',1,1),'u32')], [], 'Path', 'io'),
         Function(Token('__liza_cli_equals',1,1), [(Token('arg',1,1),'Arg'),(Token('text',1,1),'Text')], [], 'bool', 'pure'),
+        Function(Token('__liza_file_create_path',1,1), [(Token('path',1,1),'Path')], [], '__liza_FileOpen', 'io'),
+        Function(Token('__liza_file_write',1,1), [(Token('handle',1,1),'File'),(Token('data',1,1),'View<u8>')], [], 'u64', 'io', borrowed_params=[0]),
+        Function(Token('__liza_file_flush',1,1), [(Token('handle',1,1),'File')], [], 'u32', 'io', borrowed_params=[0]),
         Function(Token('__liza_file_open_path',1,1), [(Token('path',1,1),'Path')], [], '__liza_FileOpen', 'io'),
     ])
     return combined, [fn for fn in externals if fn.name.text in needed]
@@ -74,10 +77,10 @@ def link_flags(module):
     import sys
     suffix = 'windows' if sys.platform == 'win32' else 'posix'
     names = {fn.name.text for fn in module.externals}
-    file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk','__liza_file_open_path'}
+    file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk','__liza_file_open_path','__liza_file_create_path','__liza_file_write','__liza_file_flush'}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
     libraries = (['console'] if names-file_names-cli_names else []) + (['file'] if names & file_names else [])
-    if cli_names or '__liza_file_open_path' in names: libraries.append('cli')
+    if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if sys.platform == 'win32':
         return files

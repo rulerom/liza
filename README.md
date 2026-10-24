@@ -164,3 +164,16 @@ python3 -m liza build examples/apps/liza_text.liza -o build/liza-text
 
 На Windows запускайте `build/liza-text.exe`.
 [Команды и контракт](https://liza.rulerom.com/cli.html).
+
+## liza-copy · 0.0.25
+
+Бинарное копирование чанками: создание без перезаписи, частичные результаты
+записи, явные flush и close. При отказе destination сохраняется для проверки.
+
+```sh
+python3 -m liza build examples/apps/liza_copy.liza -o build/liza-copy
+./build/liza-copy source.bin destination.bin
+```
+
+На Windows запускайте `build/liza-copy.exe`.
+[Контракт записи и исходник](https://liza.rulerom.com/file-output.html).

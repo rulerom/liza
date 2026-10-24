@@ -58,6 +58,7 @@ nav:
   - Быстрый старт: getting-started.md
   - Основы языка: basics.md
   - CLI-приложение liza-text: cli.md
+  - Запись файлов и liza-copy: file-output.md
   - Редактор Zed: editor.md
   - Milestones: milestones.md
   - Язык:

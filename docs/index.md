@@ -1,12 +1,12 @@
 ---
 social_title: "Liza — нативный системный язык для Linux, macOS и Windows"
-description: "Системный язык для переносимых вычислений с определённой семантикой. Liza 0.0.24: нативные бинарники для Linux, macOS и Windows, значения, readonly views, Result и проверяемый I/O."
+description: "Системный язык для переносимых вычислений с определённой семантикой. Liza 0.0.25: нативные бинарники для Linux, macOS и Windows, значения, readonly views, Result и проверяемый I/O."
 hide:
   - toc
 ---
 
 <div class="liza-hero">
-  <p class="liza-eyebrow">LIZA 0.0.24 · ЭКСПЕРИМЕНТАЛЬНЫЙ ЯЗЫК</p>
+  <p class="liza-eyebrow">LIZA 0.0.25 · ЭКСПЕРИМЕНТАЛЬНЫЙ ЯЗЫК</p>
   <h1>Liza</h1>
   <p class="liza-definition">Системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций.</p>
   <p class="liza-lead">От вычисления над значениями — к нативной программе.<br>Уже на Linux, macOS и Windows.</p>
@@ -126,10 +126,11 @@ build\hello.exe
 [Все milestones и критерии достижения](milestones.md).
 
 <div class="liza-next">
-  <p class="liza-eyebrow">РУБЕЖ 0.0.24 · LIZA-TEXT</p>
-  <h2>Первое пользовательское CLI-приложение</h2>
-  <p>Liza-text проверяет файлы, считает байты и кодовые точки. Аргументы процесса и пути сохраняют платформенное представление; результаты и диагностика разделены между stdout и stderr.</p>
-  <a href="cli.html">Сборка, команды и контракт liza-text →</a>
+  <p class="liza-eyebrow">РУБЕЖ 0.0.25 · LIZA-COPY</p>
+  <h2>Бинарное копирование с явными ошибками</h2>
+  <p>Liza-copy переносит файл небольшими чанками, не перезаписывает существующий destination и явно сообщает частичный результат. Запись, синхронизация и закрытие имеют отдельные контракты.</p>
+  <a href="file-output.html">Запись файлов и приложение liza-copy →</a>
+  <p><a href="cli.html">Liza-text: проверка и подсчёт UTF-8</a></p>
   <p><a href="vec-reserve.html">Явный рост Vec и стоимость размещения</a></p>
   <p><a href="bounded-vec-walkthrough.html">Первый пример Vec: построчный разбор</a></p>
 </div>

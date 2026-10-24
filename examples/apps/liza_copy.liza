@@ -1,0 +1,91 @@
+// A new destination only. Never overwrite or silently remove a partial output.
+fn note(text:Text)->u32:io {
+    match console.errln(text) {Ok(n)=>{return 0} Err(e)=>{return 3}}
+}
+
+fn transfer(input:File, output:File)->u32:io {
+    var stage:u32=0
+    var written:u32=0
+    while true {
+        match file.read_chunk(input) {
+            Err(error)=>{stage=1;break}
+            Ok(chunk)=>{
+                if chunk.eof {break}
+                bytes=chunk.data
+                data=view bytes[0..chunk.len]
+                match file.write_chunk(output,data) {
+                    Ok(count)=>{}
+                    Err(error)=>{stage=2;written=error.written;break}
+                }
+            }
+        }
+    }
+    if stage==0 {
+        match file.flush(output) {Ok(done)=>{} Err(error)=>{stage=3}}
+    }
+    var output_close_failed=false
+    var input_close_failed=false
+    match file.close(move output) {
+        Ok(done)=>{}
+        Err(error)=>{output_close_failed=true;if stage==0 {stage=4}}
+    }
+    match file.close(move input) {
+        Ok(done)=>{}
+        Err(error)=>{input_close_failed=true;if stage==0 {stage=5}}
+    }
+    // Both resources are consumed before diagnostics, even if stderr fails.
+    if stage==0 {return 0}
+    if stage==1 {reported=note("Cannot read source")}
+    if stage==2 {
+        a=console.err("Cannot write destination; bytes written in current chunk: ")
+        b=console.err_u64(u64(written))
+        c=console.errln("")
+    }
+    if stage==3 {reported=note("Cannot flush destination")}
+    if stage==4 {reported=note("Cannot close destination")}
+    if stage==5 {reported=note("Cannot close source")}
+    if output_close_failed && stage!=4 {reported=note("Also failed to close destination")}
+    if input_close_failed && stage!=5 {reported=note("Also failed to close source")}
+    reported=note("Destination may be incomplete; it has not been removed")
+    return 3
+}
+
+fn copy_file(source:Path, destination:Path)->u32:io {
+    match file.open_path(source) {
+        Err(error)=>{reported=note("Cannot open source");return 3}
+        Ok(input)=>{
+            match file.create_path(destination) {
+                Ok(output)=>{return transfer(move input,move output)}
+                Err(error)=>{
+                    var close_failed=false
+                    match file.close(move input) {Ok(done)=>{} Err(e)=>{close_failed=true}}
+                    match error {
+                        FileCreateError.AlreadyExists=>{reported=note("Destination already exists")}
+                        FileCreateError.Failure(cause)=>{reported=note("Cannot create destination")}
+                    }
+                    if close_failed {reported=note("Also failed to close source")}
+                    return 3
+                }
+            }
+        }
+    }
+}
+
+fn usage()->u32:io {
+    result=note("Usage: liza-copy <source> <destination>")
+    if result!=0 {return result}
+    return 2
+}
+
+fn main()->u32:io {
+    if cli.count()!=3 {return usage()}
+    match cli.path_arg(1) {
+        None=>{return usage()}
+        Some(source)=>{
+            match cli.path_arg(2) {
+                None=>{return usage()}
+                Some(destination)=>{return copy_file(source,destination)}
+            }
+        }
+    }
+}

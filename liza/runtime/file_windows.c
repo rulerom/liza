@@ -78,3 +78,38 @@ uint32_t liza_rt_file_open_native(const WCHAR *path,uint64_t *handle) {
     if(file==INVALID_HANDLE_VALUE)return file_error(GetLastError());
     *handle=(uint64_t)(uintptr_t)file;return 0;
 }
+
+uint32_t liza_rt_file_create_native(const WCHAR *path,uint64_t *handle) {
+    *handle=0;
+    if(!path || !*path)return 4;
+    HANDLE file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,NULL,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,NULL);
+    if(file==INVALID_HANDLE_VALUE) {
+        DWORD e=GetLastError();
+        return e==ERROR_FILE_EXISTS || e==ERROR_ALREADY_EXISTS?8:file_error(e);
+    }
+    *handle=(uint64_t)(uintptr_t)file;return 0;
+}
+static uint32_t write_error(DWORD e) {
+    if(e==ERROR_INVALID_HANDLE)return 1;
+    if(e==ERROR_ACCESS_DENIED || e==ERROR_WRITE_PROTECT)return 2;
+    if(e==ERROR_DISK_FULL || e==ERROR_HANDLE_DISK_FULL || e==ERROR_DISK_QUOTA_EXCEEDED)return 3;
+    if(e==ERROR_PIPE_BUSY || e==ERROR_IO_PENDING)return 4;
+    if(e==ERROR_FILE_TOO_LARGE)return 6;
+    return 7;
+}
+uint64_t liza_rt_file_write(uint64_t handle,const uint8_t *data,uint32_t length) {
+    uint32_t done=0;
+    while(done<length) {
+        DWORD chunk=length-done,written=0;
+        if(chunk>1048576)chunk=1048576;
+        BOOL ok=WriteFile((HANDLE)(uintptr_t)handle,data+done,chunk,&written,NULL);
+        if(written>chunk)return ((uint64_t)7<<32)|done;
+        done+=written;
+        if(!ok)return ((uint64_t)write_error(GetLastError())<<32)|done;
+        if(!written)return ((uint64_t)5<<32)|done;
+    }
+    return done;
+}
+uint32_t liza_rt_file_flush(uint64_t handle) {
+    return FlushFileBuffers((HANDLE)(uintptr_t)handle)?0:write_error(GetLastError());
+}
