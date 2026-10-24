@@ -196,6 +196,28 @@ def run(args):
     report['llvm_build_revision'] = args.llvm_revision
     clang_exe = shutil.which(args.clang)
     report['clang_binary_sha256'] = sha(clang_exe) if clang_exe else None
+    report['toolchain_lock'] = {'status': 'not_requested'}
+    if args.toolchain_lock:
+        sys.path.insert(0, str(ROOT))
+        from verification.v3.toolchain import verify
+        locked = json.loads(Path(args.toolchain_lock).read_text())
+        prefixes = locked['prefixes']
+        audit = verify(args.toolchain_lock, prefixes)
+        for tool, package, relative in ((args.clang, 'llvm', 'bin/clang'),
+                                        (args.opt, 'llvm', 'bin/opt'),
+                                        (args.llvm_config, 'llvm', 'bin/llvm-config'),
+                                        (args.z3, 'z3', 'bin/z3')):
+            found = shutil.which(tool)
+            if not found or Path(found).resolve() != (Path(prefixes[package])/relative).resolve():
+                audit.update(status='unknown', reason='command is outside the locked toolchain')
+        if report['alive2_commit'] != locked['alive2_commit']:
+            audit.update(status='unknown', reason='Alive2 revision differs from toolchain lock')
+        report['toolchain_lock'] = audit
+        if audit['status'] != 'verified':
+            report['calibration_status'] = 'unknown'
+            report['counts'] = {'calibration': {}, 'actual': {}}
+            (output/'report.json').write_text(json.dumps(report, indent=2)+'\n')
+            return report
     manifest = json.loads((HERE/'fixtures/manifest.json').read_text())
     report['manifest_sha256'] = sha(HERE/'fixtures/manifest.json')
     for phase in ('traps', 'memory'):
@@ -250,6 +272,7 @@ def main():
     parser.add_argument('--output', default='build/verified-v3')
     parser.add_argument('--actual', action='store_true')
     parser.add_argument('--target', help='explicit Clang target')
+    parser.add_argument('--toolchain-lock', help='require the audited proof-worker binary digests')
     parser.add_argument('--inputs', help='validate hashed artifacts prepared on another platform')
     args = parser.parse_args()
     report = run(args)

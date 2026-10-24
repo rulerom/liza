@@ -1,0 +1,47 @@
+{
+  "system": "Darwin",
+  "machine": "arm64",
+  "versions": {
+    "llvm": "23.1.4",
+    "z3": "5.3.1",
+    "zstd": "1.5.7_1"
+  },
+  "alive2_commit": "a68009c9e81575bdcc249d3cc534514a76112221",
+  "files": {
+    "llvm": {
+      "bin/clang": "5c51770b83a5407e507ad19fcfe1ec141deeb15f0d86312568915f3637f31f5a",
+      "bin/opt": "534ddc15551edb51790a69f42f47e41cdc03129aa44e77faaa08d57b5bb536a6",
+      "bin/llvm-config": "8ec7387905bd5507d6e9647ac6010a8931fe6ad34124ceeb9effc0d83a7d3880",
+      "lib/libLLVM.23.1.dylib": "330350c483df28104ac600fa2d1514b81f8a3aab7fc9850ca33ad7f08ac2efe0",
+      "lib/libclang-cpp.23.1.dylib": "99fd45ee5e6f7dd59056f00ead838f4f5c833eaa24b7105d316427faef902ded"
+    },
+    "z3": {
+      "bin/z3": "ee1d23627943517d1db7b65a5bb0883cc261ade84536d9ddf1f7acb58b5628d2",
+      "lib/libz3.5.3.dylib": "181f649aff7768bc9821cecd3d49769d1ca395d2a89a545779441dfc2ab488c2"
+    },
+    "zstd": {
+      "lib/libzstd.1.dylib": "69d8dee81bccdee425d167300d11431f3c5ecc34a3011400e536aa89f7756189"
+    }
+  },
+  "bottles": {
+    "llvm": {
+      "filename": "llvm--23.1.4.arm64_tahoe.bottle.tar.gz",
+      "sha256": "a5c46d2e124d1df2edae4a0f304a0af28f2bad257b6077c18cf93987048fb45f",
+      "url": "https://ghcr.io/v2/homebrew/core/llvm/blobs/sha256:a5c46d2e124d1df2edae4a0f304a0af28f2bad257b6077c18cf93987048fb45f"
+    },
+    "z3": {
+      "filename": "z3--5.3.1.arm64_tahoe.bottle.tar.gz",
+      "sha256": "71608b10f9abefecfe5f2f023442f0820a253e62b3e1980c0adef9f749948709",
+      "url": "https://ghcr.io/v2/homebrew/core/z3/blobs/sha256:71608b10f9abefecfe5f2f023442f0820a253e62b3e1980c0adef9f749948709"
+    }
+  },
+  "limits": [
+    "OS, SDK, build tools and system libraries are not pinned by this binary lock.",
+    "These hashes detect drift; archive availability is not guaranteed."
+  ],
+  "prefixes": {
+    "llvm": "/opt/homebrew/opt/llvm",
+    "z3": "/opt/homebrew/opt/z3",
+    "zstd": "/opt/homebrew/opt/zstd"
+  }
+}

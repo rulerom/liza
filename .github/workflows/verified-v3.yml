@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test reporting and native target agreement
-        run: python -m unittest verification.v3.test_verifier tests.test_target -v
+        run: python -m unittest verification.v3.test_verifier verification.v3.test_toolchain tests.test_target -v
       - name: Generate native platform artifacts without rewriting
         run: python verification/v3/prepare.py --output build/v3-inputs
       - uses: actions/upload-artifact@v4
@@ -44,8 +44,17 @@ jobs:
         with:
           name: v3-inputs-${{ matrix.platform }}
           path: build/v3-inputs
-      - name: Install proof toolchain (versions recorded in report)
-        run: brew install llvm@23 z3 re2c cmake ninja
+      - name: Install proof toolchain candidates
+        run: |
+          brew update
+          brew install llvm@23 z3 re2c cmake ninja
+          brew upgrade llvm@23 z3
+      - name: Reject toolchain drift before building Alive2
+        run: |
+          python verification/v3/toolchain.py \
+            --llvm-prefix "$(brew --prefix llvm@23)" \
+            --z3-prefix "$(brew --prefix z3)" \
+            --zstd-prefix "$(brew --prefix zstd)"
       - name: Build pinned unmodified Alive2
         run: |
           git clone https://github.com/AliveToolkit/alive2 "$RUNNER_TEMP/alive2"
@@ -62,6 +71,7 @@ jobs:
             --opt "$llvm_prefix/bin/opt" \
             --llvm-revision "Homebrew-$($llvm_prefix/bin/llvm-config --version)" \
             --z3 "$(brew --prefix z3)/bin/z3" \
+            --toolchain-lock verification/v3/toolchain-lock.json \
             --inputs build/v3-inputs --actual --output build/verified-v3
       - uses: actions/upload-artifact@v4
         if: always()
