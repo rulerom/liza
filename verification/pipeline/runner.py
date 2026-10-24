@@ -104,6 +104,15 @@ def aggregate(stages):
     return 'passed' if len(selected)==len(STAGES) else 'partial'
 
 
+def update_outcome(report):
+    status=aggregate(report['stages'])
+    if report.get('source_unchanged') is False or report.get('tools_unchanged') is False:
+        status='incomplete'
+    report['pipeline_status']=status
+    report['status']=status  # Compatibility alias for existing report consumers.
+    report['end_to_end_verified']=False
+
+
 def run(args):
     output=Path(args.output).resolve()
     for protected in (ROOT/'liza',ROOT/'verification',ROOT/'docs',ROOT/'.git'):
@@ -123,6 +132,11 @@ def run(args):
     tools_before=tool_metadata(args)
     report={'schema_version':1,'purpose':'orchestration of selected fixed experiments; no new proof scope',
             'certificate':'none; this report and its hashes are not a proof certificate',
+            'verification_scope':{
+                'kind':'selected fixed experimental matrices; no composed proof',
+                'properties':'stages.<stage>.coverage_contract',
+                'assumptions_and_exclusions':'stages.<stage>.scope and specification',
+                'interpretation':'coverage_contract describes requested scope; only passed stages confirm their matrix'},
             'machine_code_verified':False,'arbitrary_user_programs_verified':False,
             'started_at':datetime.now(timezone.utc).isoformat(),'host':platform.platform(),
             'selected_stages':args.stages,'required_stages':list(STAGES),'tools':tools_before,
@@ -166,13 +180,12 @@ def run(args):
         except (OSError,ValueError,KeyError,TypeError) as error:item.update(status='unknown',reason=str(error))
         item['artifacts']=inventory(directory)
         report['stages'][stage]=item
-        report['status']=aggregate(report['stages'])
+        update_outcome(report)
         write(output/'report.json',report)
         print(stage,item['status'],flush=True)
     report['source_unchanged']=inventory(source)==sources
     report['tools_unchanged']=tool_metadata(args)==tools_before
-    report['status']=aggregate(report['stages'])
-    if not report['source_unchanged'] or not report['tools_unchanged']:report['status']='incomplete'
+    update_outcome(report)
     report['finished_at']=datetime.now(timezone.utc).isoformat()
     write(output/'report.json',report)
     # Report is included in the manifest; the manifest cannot hash itself.
@@ -186,7 +199,8 @@ def verify_bundle(path):
     actual=inventory(root)
     actual.pop('manifest.json',None)
     if actual!=manifest:raise ValueError('bundle integrity mismatch: missing, changed or extra artifacts')
-    return json.loads((root/'report.json').read_text(encoding='utf-8'))['status']
+    report=json.loads((root/'report.json').read_text(encoding='utf-8'))
+    return report['pipeline_status'] if 'pipeline_status' in report else report['status']
 
 
 def parser():
@@ -223,8 +237,8 @@ def main(argv=None):
         if value and shutil.which(value):setattr(args,name,str(Path(shutil.which(value)).absolute()))
     try:report=run(args)
     except (OSError,ValueError) as error:print(str(error),file=sys.stderr);return 1
-    print('pipeline:',report['status'])
-    return {'passed':0,'partial':2,'incomplete':1}[report['status']]
+    print('pipeline:',report['pipeline_status'])
+    return {'passed':0,'partial':2,'incomplete':1}[report['pipeline_status']]
 
 
 if __name__=='__main__':raise SystemExit(main())

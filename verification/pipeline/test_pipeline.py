@@ -54,6 +54,23 @@ class ReportTests(unittest.TestCase):
     def test_unsuitable_is_preserved(self):
         self.assertEqual(observations({'status':'unsuitable'},'v3')[0]['category'],'unsuitable')
 
+    def test_pipeline_success_never_claims_end_to_end_verification(self):
+        for stage_status,expected in (('passed','passed'),('unknown','incomplete'),('failed','incomplete')):
+            with self.subTest(stage_status=stage_status):
+                report={'stages':{s:{'status':stage_status} for s in runner.STAGES}}
+                runner.update_outcome(report)
+                self.assertEqual(report['pipeline_status'],expected)
+                self.assertEqual(report['status'],expected)
+                self.assertIs(report['end_to_end_verified'],False)
+
+    def test_integrity_failure_overrides_passed_matrices(self):
+        for field in ('source_unchanged','tools_unchanged'):
+            report={'stages':{s:{'status':'passed'} for s in runner.STAGES},field:False}
+            runner.update_outcome(report)
+            self.assertEqual(report['pipeline_status'],'incomplete')
+            self.assertEqual(report['status'],'incomplete')
+            self.assertIs(report['end_to_end_verified'],False)
+
     def test_partial_selection_never_becomes_full_success(self):
         stages={s:{'status':'not_selected'} for s in runner.STAGES}
         stages['v4']={'status':'passed'}
@@ -80,8 +97,17 @@ class RunnerTests(unittest.TestCase):
     def test_zero_exit_without_report_is_not_success(self):
         with tempfile.TemporaryDirectory() as tmp:
             args=runner.parser().parse_args(['--output',str(Path(tmp)/'bundle'),'--stages','v4'])
-            with patch.object(runner,'commands',return_value=[sys.executable,'-c','pass']):
+            checkpoints=[]
+            original_write=runner.write
+            def capture(path,value):
+                if path.name=='report.json':checkpoints.append(copy.deepcopy(value))
+                original_write(path,value)
+            with patch.object(runner,'commands',return_value=[sys.executable,'-c','pass']), patch.object(runner,'write',side_effect=capture):
                 report=runner.run(args)
+            self.assertGreaterEqual(len(checkpoints),2)
+            for checkpoint in checkpoints:
+                self.assertEqual(checkpoint['pipeline_status'],'incomplete')
+                self.assertIs(checkpoint['end_to_end_verified'],False)
             self.assertEqual(report['status'],'incomplete')
             self.assertEqual(report['stages']['v4']['status'],'unknown')
 
@@ -110,6 +136,10 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(code,2)
             report=json.loads((root/'report.json').read_text())
             self.assertEqual(report['status'],'partial')
+            self.assertEqual(report['pipeline_status'],'partial')
+            self.assertIs(report['end_to_end_verified'],False)
+            self.assertIn('verification_scope',report)
+            self.assertIn('coverage_contract',report['stages']['v4'])
             self.assertTrue(report['source_unchanged'])
             self.assertTrue(report['stages']['v4']['declared_artifacts_verified'])
             self.assertEqual(runner.verify_bundle(root),'partial')
