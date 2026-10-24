@@ -1,0 +1,23 @@
+name: Liza Verified V4 (resource graph)
+on: [push, pull_request]
+jobs:
+  resources:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test independent resource model and fail-closed behavior
+        run: python -m unittest verification.v4.test_model -v
+      - name: Check functions, CFG, inductive closure and seven mutations
+        run: python -m verification.v4.check --output build/verified-v4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verified-v4-${{ matrix.os }}
+          path: build/verified-v4/

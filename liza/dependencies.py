@@ -42,8 +42,13 @@ class Value:
 EMPTY = Value()
 
 
-def check_dependencies(records, structs, signatures):
-    """records: function name -> (AST, expression types, match types, FunctionIR)."""
+def check_dependencies(records, structs, signatures, audit=None, expression_maps=None):
+    """Analyze records; optional audit publishes facts at expression checkpoints.
+
+    records maps function names to (AST, expression types, match types, IR).
+    expression_maps supplies the lowering correspondence only when auditing.
+    Audit data is evidence for a separate checker, never input to decisions.
+    """
     summaries, active = {}, set()
 
     def shape(t, origin):
@@ -91,13 +96,34 @@ def check_dependencies(records, structs, signatures):
         returned=[]
         origins=[]
         sites={}
+        observation = {'points': {}, 'sites': {}}
+        if audit is not None:
+            audit[name] = observation
+        def capture(node, phase, state, temporary=(), result=None):
+            if audit is None or node.kind == 'name': return
+            value_id = expression_maps[name].get(id(node))
+            if value_id is None: return
+            values = list(state.values()) + list(temporary)
+            if result is not None: values.append(result)
+            observation['points'].setdefault(value_id, {})[phase] = {
+                'dependencies': sorted({str(o) for v in values for o in v.all_buffers()}),
+                'result': result.describe() if result is not None else None}
+
         def site(node):
             if id(node) not in sites: sites[id(node)] = str(len(sites))
+            if audit is not None:
+                observation['sites'][sites[id(node)]] = expression_maps[name][id(node)]
             return sites[id(node)]
 
         def expression(node,state,temporary=()):
+            result = expression_impl(node,state,temporary)
+            capture(node, 'after', state, temporary, result)
+            return result
+
+        def expression_impl(node,state,temporary=()):
             if node.kind=='name': return state.get(node.token.text,EMPTY)
             if node.kind=='move':
+                capture(node, 'before', state, temporary)
                 value=state.get(node.args[0].token.text,EMPTY)
                 dependencies=frozenset(o for v in list(state.values())+list(temporary) for o in v.all_buffers())
                 if value.all_regions() & dependencies:
@@ -112,6 +138,7 @@ def check_dependencies(records, structs, signatures):
             arguments=[]
             for arg in node.args:
                 arguments.append(expression(arg,state,tuple(temporary)+tuple(arguments)))
+            capture(node, 'before', state, tuple(temporary)+tuple(arguments))
             if node.kind=='variant':
                 return Value(cases={node.token.text.rsplit('.',1)[-1]:arguments[0] if arguments else EMPTY})
             if node.kind=='call':

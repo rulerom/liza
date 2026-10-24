@@ -197,7 +197,7 @@ class LoopContext:
 
 
 class Lowerer:
-    def __init__(self, fn, signatures, structs):
+    def __init__(self, fn, signatures, structs, record_expressions=False):
         self.fn = fn
         self.signatures = signatures
         self.structs = structs
@@ -208,6 +208,7 @@ class Lowerer:
         self.loops = []
         self.expression_types = {}
         self.match_types = {}
+        self.expression_values = {} if record_expressions else None
 
     def new_block(self):
         block = Block(f'b{len(self.blocks)}')
@@ -245,6 +246,12 @@ class Lowerer:
         return self.emit_expression(expr, names, inferred)
 
     def emit_expression(self, expr, names, inferred):
+        result = self._emit_expression(expr, names, inferred)
+        if self.expression_values is not None:
+            self.expression_values[id(expr)] = result
+        return result
+
+    def _emit_expression(self, expr, names, inferred):
         text, type_name = expr.token.text, inferred[id(expr)]
         if expr.kind == 'text':
             if len(text.encode('utf-8')) > 4294967295:
@@ -598,7 +605,7 @@ class Lowerer:
         return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type, self.fn.effect_contract)
 
 
-def lower(functions):
+def lower(functions, dependency_audit=None):
     if getattr(functions,"imports",[]):
         raise CompileError(functions.imports[0], "imports require file-based module loading")
     from .memory import error_declaration
@@ -638,6 +645,7 @@ def lower(functions):
         raise CompileError(signatures['main'].name, 'main must return u32')
     lowered = []
     dependency_records = {}
+    expression_maps = {}
     index = 0
     while index < len(mono.functions):
         fn = mono.functions[index]
@@ -645,9 +653,10 @@ def lower(functions):
         try:
             for token, type_name in fn.params + [(fn.name, fn.result_type)]:
                 validate_type(type_name, structs, token is not fn.name)
-            lowerer = Lowerer(fn, signatures, structs)
+            lowerer = Lowerer(fn, signatures, structs, record_expressions=dependency_audit is not None)
             lowered.append(lowerer.lower())
             dependency_records[fn.name.text] = (fn, lowerer.expression_types, lowerer.match_types, lowered[-1])
+            expression_maps[fn.name.text] = lowerer.expression_values
             check_ownership(fn)
         except ValueError as error:
             raise mono.trace(CompileError(fn.name, str(error))) from None
@@ -655,7 +664,7 @@ def lower(functions):
             raise mono.trace(error) from None
         index += 1
     from .dependencies import check_dependencies
-    check_dependencies(dependency_records, structs, signatures)
+    check_dependencies(dependency_records, structs, signatures, audit=dependency_audit, expression_maps=expression_maps)
     module = ModuleIR(lowered, structs)
     module.specializations = mono.instances
     module.externals = externals
