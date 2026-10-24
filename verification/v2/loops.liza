@@ -1,0 +1,19 @@
+// A missing match is represented by data.len (outside valid indices).
+fn search(data:View<u8>,needle:u8)->u32 {
+    var i:u32=0
+    while i<data.len {
+        if data[i]==needle {return i}
+        i=i+1
+    }
+    return data.len
+}
+fn sum(data:View<i32>)->i32 {
+    var i:u32=0
+    var acc:i32=0
+    while i<data.len {
+        acc=acc+data[i]
+        i=i+1
+    }
+    return acc
+}
+fn main()->u32 {return 0}

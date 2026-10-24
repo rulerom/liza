@@ -190,3 +190,7 @@ remain trusted. See [scope and reproduction](docs/verified.md).
 full-width `u32` indices, snapshot independence and short-circuit control flow.
 Its bounded LLVM memory model tracks object origins and initialized bytes.
 V0 sources remain frozen; both suites run independently in CI.
+
+[Verified V2](docs/verified-v2.md) adds inductive proofs for symbolic-length
+readonly search and sequential `i32` sum, including termination and the first
+overflowing prefix. Supported LLVM loop forms are checked independently.

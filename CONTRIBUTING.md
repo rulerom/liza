@@ -459,3 +459,10 @@ unchanged against `verification/v1/v0-baseline.json`; do not regenerate the
 baseline to make an unintended V0 edit pass. V1 LLVM memory and Semantic IR
 value models must remain separate. Uninitialized or invalid accesses are
 model violations; unsupported semantics must remain `unknown`.
+
+V2: `python -m unittest verification.v2.test_verifier -v`, then
+`python verification/v2/check.py --output build/verified-v2`. V0/V1 are frozen
+against `verification/v2/baseline.json`. Do not accept an invariant without
+entry/back-edge/exit checks, or claim total correctness without the ranking
+obligation. Distinguish counterexamples to induction obligations from reachable
+program defects; mutation replays are recorded separately.
