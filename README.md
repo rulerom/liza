@@ -83,7 +83,7 @@ python3 -m unittest discover -s tests -v
 Сейчас Clang связывает обычную host-программу с системным startup-кодом;
 freestanding-сборка ещё не реализована.
 
-- [Модель языка и открытые решения](docs/design.md)
+- [Модель вычислений и памяти](docs/design.md)
 - [Точная семантика работающего подмножества](docs/core.md)
 - [Этапы и критерии готовности](docs/roadmap.md)
 

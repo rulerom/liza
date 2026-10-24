@@ -65,8 +65,9 @@ nav:
   - Liza Verified V1: verified-v1.md
   - Liza Verified V2: verified-v2.md
   - Liza Verified V3: verified-v3.md
+  - Liza Verified V4 (в разработке): verified-v4.md
   - Язык:
-      - Модель и открытые решения: design.md
+      - Модель вычислений и памяти: design.md
       - Исполняемое ядро: core.md
       - Числовая модель: numeric-model.md
       - Минимальный I/O: io-model.md
