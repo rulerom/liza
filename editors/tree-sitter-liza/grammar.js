@@ -30,7 +30,7 @@ module.exports = grammar({
     generic_type: $ => seq(choice('View', 'Option', 'Result', $.type_identifier), $.type_arguments),
     block: $ => seq('{', repeat(choice($._statement, ';')), '}'),
     _statement: $ => choice($.block, $.destructuring_assignment, $.assignment, $.return_statement, $.if_statement, $.while_statement, $.match_statement, $.break_statement, $.continue_statement),
-    destructuring_assignment: $ => seq('(', field('first', $.identifier), ',', field('second', $.identifier), ')', '=', field('value', $._expression)),
+    destructuring_assignment: $ => seq('(', field('binding', $.identifier), ',', optional(seq(field('binding', $.identifier), repeat(seq(',', field('binding', $.identifier))), optional(','))), ')', '=', field('value', $._expression)),
     assignment: $ => seq(optional('var'), field('target', $._target), optional(seq(':', $._type)), '=', field('value', $._expression)),
     _target: $ => choice($.identifier, $.field_expression, $.index_expression),
     return_statement: $ => seq('return', $._expression),

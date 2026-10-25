@@ -35,7 +35,7 @@ class ResourceTypes(unittest.TestCase):
             'fn main()->u32:io{r=file.open("x");match r {Ok(f)=>{c=file.close(move f);return 0}Err(e)=>{return 1}}}',
             'fn identity(f:File)->File{return f} fn main()->u32{return 0}',
             'fn bad(f:File)->u32{return 0} fn main()->u32{return 0}',
-            'struct S {file:File} fn main()->u32{return 0}',
+            'struct S {file:File} fn bad(s:S)->u32{return 0} fn main()->u32{return 0}',
             'fn bad(f:[File;0])->u32{return 0} fn main()->u32{return 0}',
             'fn bad(f:View<File>)->u32{return 0} fn main()->u32{return 0}',
             with_file('n=u64(f);c=file.close(move f);return 0'),

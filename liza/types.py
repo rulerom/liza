@@ -135,3 +135,12 @@ def is_product(t):
 
 def product_args(t):
     return type_application(t)[1]
+
+
+def consumed_components(t, structs):
+    """Positional whole-value decomposition; never partial field moves."""
+    if is_product(t):
+        return product_args(t)
+    if t in structs and not structs[t].properties['copyable']:
+        return tuple(member for _, member in structs[t].fields)
+    raise ValueError('unpack requires a linear product or resource structure')

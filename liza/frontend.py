@@ -270,12 +270,15 @@ class Parser:
         while self.current.text != '}':
             if self.current.text == '(':
                 token = self.take('(')
-                first = self.identifier()
+                names = [self.identifier()]
                 self.take(',')
-                second = self.identifier()
+                while self.current.text != ')':
+                    names.append(self.identifier())
+                    if self.current.text != ',': break
+                    self.take(',')
                 self.take(')')
                 self.take('=')
-                body.append(Destructure(token, [first, second], self.expression()))
+                body.append(Destructure(token, names, self.expression()))
                 if self.current.text not in ('\n', ';', '}'):
                     raise CompileError(self.current, 'expected statement separator')
             elif self.current.text == '{':

@@ -166,6 +166,19 @@ python3 -m liza run examples/utf8_stream_file.liza
 
 [Контракт и пример](https://liza.rulerom.com/utf8-stream.html).
 
+## Владеющий UTF-8 · T1
+
+[Ресурсные структуры](https://liza.rulerom.com/resource-structures.html) позволяют
+собрать String обычным модулем Liza поверх `memory.Buffer<u8>`. Append проверяет
+UTF-8 и вместимость до записи; ошибка сохраняет прежнюю строку. Память выделяется
+явно, автоматического роста нет. Срезы и StringBuilder остаются следующими этапами.
+
+```sh
+python3 -m liza run examples/owned_string.liza
+```
+
+[Контракт и ограничения API](https://liza.rulerom.com/owned-string.html).
+
 ## liza-json · Text & Compiler Foundations
 
 Потоковая проверка JSON на самой Liza: UTF-8, escapes и surrogate pairs,

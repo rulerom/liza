@@ -1,0 +1,29 @@
+import text.string
+
+fn main()->u32:io,alloc {
+    match memory.create(64) {
+        Err(error)=>{return 1}
+        Ok(region)=>{
+            var status:u32=0
+            match memory.alloc<u8>(region,64,0) {
+                Err(error)=>{status=2}
+                Ok(storage)=>{
+                    initial=text.string.from_buffer(move storage)
+                    // UTF-8 for "Liza 🚀"; dynamic input may equally come from a file.
+                    bytes:[u8;9]=[76,105,122,97,32,240,159,154,128]
+                    input=view bytes[0..9]
+                    (appended,result)=text.string.append(move initial,input)
+                    match result {Err(error)=>{status=3} Ok(done)=>{}}
+                    (current,length,capacity)=text.string.inspect(move appended)
+                    if length!=9 || capacity!=64 {status=4}
+                    match console.print_u64(u64(length)) {Err(error)=>{status=5} Ok(n)=>{}}
+                    match console.println(" UTF-8 bytes") {Err(error)=>{status=5} Ok(n)=>{}}
+                    empty=text.string.clear(move current)
+                    released=text.string.release(move empty)
+                }
+            }
+            closed=memory.close(move region)
+            return status
+        }
+    }
+}

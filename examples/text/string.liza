@@ -1,0 +1,61 @@
+// Ordinary source module: no String-specific compiler or runtime support.
+// Only this module can construct or unpack String.
+pub struct String {storage:memory.Buffer<u8>;length:u32}
+pub struct Done {}
+pub enum Error {InvalidUtf8(Utf8Error);Full}
+pub struct Appended {pub text:String;pub status:Result<Done,Error>}
+pub struct Info {pub text:String;pub length:u32;pub capacity:u32}
+pub struct Byte {pub text:String;pub value:Option<u8>}
+
+// Takes an already allocated buffer; its old contents are not text.
+// The logical string starts empty, with exactly the supplied capacity.
+pub fn from_buffer(storage:memory.Buffer<u8>)->String {
+    return String(move storage,0)
+}
+
+// Validate all input and capacity before modifying even one byte.
+// Invalid UTF-8 has priority over Full. Each append is a complete UTF-8 value.
+pub fn append(text:String,data:View<u8>)->Appended {
+    (initial,length)=move text
+    match utf8.validate(data) {
+        Err(error)=>{return Appended(String(move initial,length),Err(Error.InvalidUtf8(error)))}
+        Ok(done)=>{}
+    }
+    capacity=memory.len(initial)
+    if data.len>capacity-length {return Appended(String(move initial,length),Err(Error.Full))}
+    var storage=move initial
+    var i:u32=0
+    while i<data.len {
+        storage=memory.set(move storage,length+i,data[i])
+        i=i+1
+    }
+    return Appended(String(move storage,length+data.len),Ok(Done()))
+}
+
+pub fn clear(text:String)->String {
+    (storage,length)=move text
+    return String(move storage,0)
+}
+
+// Until borrowed user parameters exist, even observations return the owner.
+pub fn inspect(text:String)->Info {
+    (storage,length)=move text
+    capacity=memory.len(storage)
+    return Info(String(move storage,length),length,capacity)
+}
+
+// Byte index, not code-point index. Out-of-range access is an expected None.
+pub fn byte_at(text:String,index:u32)->Byte {
+    (storage,length)=move text
+    var value:Option<u8> = None
+    if index<length {
+        data=memory.view(storage)
+        value=Some(data[index])
+    }
+    return Byte(String(move storage,length),value)
+}
+
+pub fn release(text:String)->u32 {
+    (storage,length)=move text
+    return memory.release(move storage)
+}
