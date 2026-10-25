@@ -19,3 +19,11 @@ status/finish included), with ~256 KiB inputs, 2048-byte chunks and a warmup.
 Report tools, commits, raw samples and artifact hashes. Counter builds instrument
 optimized LLVM memcpy/memmove at O0 and are never timed; scalar/register copies
 are not counted. There is no timing threshold or universal performance claim.
+
+
+The first Apple M4 run is saved in `results/apple-m4`: candidate `c5d5ec8`,
+360 core samples, 6785 partitioned cases and 861 CLI checks. M0 reaches
+170–272 MiB/s (2.22–3.49× A3); C++ in-place/Rust remain faster. `evidence.tar.gz`
+contains 29 IR/assembly/stack/target files; `manifest.json` hashes these files,
+the archive and report. These are reproducible measurement artifacts, not proof
+certificates. See `docs/mutable-performance.md` for the complete comparison.

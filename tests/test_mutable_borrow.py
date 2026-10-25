@@ -163,7 +163,7 @@ fn main()->u32 {var s=Small(0);match fail(borrow mut s){Ok(v)=>{return 1} Err(e)
         main=next(f for f in module if f.name=='main')
         snapshot=next(o for b in main.blocks for o in b.operations if o.op=='storage.read' and o.type=='Large')
         snapshot.op='loan.begin'
-        with patch('test_mutable_borrow.compile_ir',return_value=module):
+        with patch.object(sys.modules[__name__], 'compile_ir', return_value=module):
             self.run_source(source,expected_exit=1)
 
     def test_mutant_disabled_exclusivity_replays_alias_violation(self):

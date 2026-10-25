@@ -100,6 +100,9 @@ sticky-код ошибки (`0` при успехе). `json.status` и `json.fin
 UTF-8 helper пока остаётся value-based. M0 не подразумевает автоматического
 ускорения всех функций или паритета с C++/Rust.
 
+[Первый результат на Apple M4](mutable-performance.md): 170–272 МиБ/с,
+2,22–3,49× относительно A3; паритет с C++/Rust пока не достигнут.
+
 Отдельный `benchmarks/mutable/run.py` сравнивает A0, закреплённый A3, M0,
 C++ in-place/by-value и Rust. Он сначала проверяет общий корпус и границы чанков,
 а затем сохраняет сырые серии, Semantic IR, LLVM IR, assembly, frame и отдельные
