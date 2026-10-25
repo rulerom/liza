@@ -62,6 +62,8 @@ nav:
   - Ресурсные структуры: resource-structures.md
   - Владеющий UTF-8 (T1): owned-string.md
   - Readonly-доступ (T2-A): readonly-access.md
+  - "T2-B: local subviews (plan)": local-subviews.md
+  - "JSON performance (plan)": json-performance.md
   - Запись файлов и liza-copy: file-output.md
   - TCP echo server: tcp.md
   - TCP message server: message-server.md
