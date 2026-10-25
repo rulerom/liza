@@ -109,6 +109,55 @@ class ReadonlyTypes(unittest.TestCase):
         extra='fn keep(borrow h:Holder,n:u32)->u32:alloc{return n}'
         self.reject(program('n=keep(h,memory.close(move r));x=release(move h);return n',extra),'dependent buffer or Result')
 
+    def test_nested_generic_reborrow_keeps_region_origin(self):
+        extra = """struct Box<T> {value:T}
+        fn leaf(borrow h:Holder,n:u32)->u32{return capacity(h)+n}
+        fn middle<T>(borrow x:Box<T>,n:u32)->u32{return leaf(x.value,n)}
+        fn outer<T>(borrow x:Box<Box<T>>,n:u32)->u32{return middle(x.value,n)}
+        fn discard<T>(x:Box<Box<T>>)->u32 {
+          (inner,)=move x;(h,)=move inner;return release(move h)
+        }
+        """
+        # The same generic projection chain is well typed before the bad argument
+        # is introduced. Closing an unrelated region is allowed while x is lent.
+        body = """x=Box<Box<Holder>>(Box<Holder>(move h))
+        match memory.create(8) {Err(e)=>{
+          d=discard(move x);c=memory.close(move r);return 1
+        } Ok(other)=>{
+          n=outer(x,memory.close(move other))
+          d=discard(move x);c=memory.close(move r);return n
+        }}"""
+        lower(Parser(program(body,extra)).parse())
+        self.reject(program(body.replace('outer(x,memory.close(move other))',
+            'outer(x,memory.close(move r))').replace(
+            'd=discard(move x);c=memory.close(move r);return n',
+            'd=discard(move x);c=memory.close(move other);return n'),extra),
+            'dependent buffer or Result')
+
+    def test_generic_reborrow_cannot_mutate_nested_region(self):
+        source = """struct RegionOwner {region:memory.Region}
+        struct Box<T> {value:T}
+        fn observe(borrow r:RegionOwner,n:u32)->u32{return n}
+        fn bad<T>(borrow x:Box<T>)->u32:alloc {
+          return observe(x.value,close_region(x.value.region))
+        }
+        fn close_region(r:memory.Region)->u32:alloc {
+          c=memory.close(move r);return c
+        }
+        fn main()->u32:alloc {
+          match memory.create(8) {Err(e)=>{return 1} Ok(r)=>{
+            x=Box<RegionOwner>(RegionOwner(move r))
+            n=bad(x);(owner,)=move x;(region,)=move owner
+            c=memory.close(move region);return n
+          }}
+        }"""
+        self.reject(source,'readonly')
+        # Legacy non-consuming alloc also cannot acquire mutation permission.
+        self.reject(source.replace('return observe(x.value,close_region(x.value.region))',
+            'match memory.alloc<u8>(x.value.region,1,0) {'
+            'Err(e)=>{return 1} Ok(b)=>{return memory.release(move b)}}'),
+            'no readonly permission')
+
     def test_privacy_and_generic_projection(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
