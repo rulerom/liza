@@ -61,6 +61,7 @@ nav:
   - Потоковый JSON: json.md
   - Ресурсные структуры: resource-structures.md
   - Владеющий UTF-8 (T1): owned-string.md
+  - Readonly-ресурсы (проект T2): readonly-resources.md
   - Запись файлов и liza-copy: file-output.md
   - TCP echo server: tcp.md
   - TCP message server: message-server.md
