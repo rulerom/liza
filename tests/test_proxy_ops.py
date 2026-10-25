@@ -190,3 +190,31 @@ fn main()->u32 {
                         gate.write_bytes(b'advance')
                         self.assertEqual(stalled.recv(1),b'')
                 self.assertIsNone(process.poll())
+
+    def test_explicit_listener(self):
+        self.endpoint_case('127.0.0.1')
+
+    def test_nondefault_ipv4_address(self):
+        # The 127/8 route is OS-dependent; no non-loopback traffic is used.
+        self.endpoint_case('127.0.0.2')
+
+    def endpoint_case(self,address):
+        for exe,_ in self.executables:
+            upstream=socket.socket();self.addCleanup(upstream.close)
+            reservation=socket.socket();self.addCleanup(reservation.close)
+            try:
+                upstream.bind((address,0));reservation.bind((address,0))
+            except OSError as error:
+                if address=='127.0.0.1':raise
+                self.skipTest('host does not bind alternate loopback: '+str(error))
+            upstream.listen(2);upstream.settimeout(5)
+            fixed_port=reservation.getsockname()[1];reservation.close()
+            process,port=self.start(exe,['--listen',address+':'+str(fixed_port),'--upstream',address+':'+str(upstream.getsockname()[1])])
+            self.assertEqual(port,fixed_port)
+            client=socket.create_connection((address,port),timeout=5);self.addCleanup(client.close)
+            peer,_=upstream.accept();peer.settimeout(5);self.addCleanup(peer.close)
+            client.sendall(b'address');client.shutdown(socket.SHUT_WR)
+            self.assertEqual(test_reactor.receive(peer,7),b'address');self.assertEqual(peer.recv(1),b'')
+            peer.sendall(b'ok');peer.shutdown(socket.SHUT_WR)
+            self.assertEqual(test_reactor.receive(client,2),b'ok');self.assertEqual(client.recv(1),b'')
+            self.assertIsNone(process.poll())

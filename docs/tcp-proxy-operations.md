@@ -1,5 +1,5 @@
 ---
-description: "План первого прикладного среза Liza 0.0.31: типизированный IPv4 endpoint, CLI-конфигурация и connect deadline. Возможности пока не реализованы."
+description: "Первый прикладной срез Liza 0.0.31: типизированный IPv4 endpoint, CLI-конфигурация и connect deadline."
 ---
 
 # Liza 0.0.31 — TCP Proxy Operations
@@ -9,6 +9,11 @@ description: "План первого прикладного среза Liza 0.0
 Исходный [прокси 0.0.30](tcp-proxy.md) сохранён без изменений как baseline
 R2-B/R2-C. Idle timeout, graceful shutdown и счётчики остаются следующим
 срезом; полной эксплуатационной готовности этот PR не заявляет.
+
+```sh
+python -m liza build examples/apps/liza_proxy_ops.liza -O 2 -o build/liza-proxy-ops
+./build/liza-proxy-ops --listen 127.0.0.1:9004 --upstream 127.0.0.1:9003 --connect-timeout-ms 5000
+```
 
 ## Исходные ограничения и совместимость
 
