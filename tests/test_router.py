@@ -103,6 +103,16 @@ uint64_t liza_rt_reactor_write(reactor*r,uint64_t owner,uint64_t generation,uint
             self.assertEqual(packet(a),b'\x06'+aid+b'self')
             self.assertIsNone(p.poll())
 
+    def test_waiting_delivery_is_reserved_after_control_completes(self):
+        for exe in self.executables+self.fault_executables:
+            p,port=self.start(exe,'--ephemeral')
+            a,aid=self.connect(port)
+            a.sendall(send(aid,b'first')+send(aid,b'busy'))
+            self.assertEqual(packet(a),b'\x03')
+            self.assertEqual(packet(a),b'\x06'+aid+b'first')
+            self.assertEqual(packet(a),b'\x04')
+            self.assertIsNone(p.poll())
+
     def test_stale_id_and_out_of_range_id_never_target_replacement(self):
         for exe in self.executables:
             p,port=self.start(exe,'--ephemeral')

@@ -227,6 +227,10 @@ fn exchange(reactor:net.Reactor, initial:memory.Buffer<u8>, staging:memory.Buffe
                                     if c.mode==1 {c.control=0} else {c.delivery=0}
                                     c.mode=0
                                     c.sent=0
+                                    // Reserve an already waiting frame before admitting a new reply.
+                                    // Neither queue can repeatedly jump ahead of the other.
+                                    if c.control!=0 {c.mode=1}
+                                    if c.delivery!=0 {c.mode=2}
                                 }
                             }
                         }
