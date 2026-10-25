@@ -265,7 +265,7 @@ python -m liza build examples/apps/liza_router.liza -O 2 -o build/liza-router
 нового клиента после переиспользования слота. Логика реализована на Liza
 поверх существующего reactor. [Wire-протокол и границы](docs/message-router.md).
 
-## Bounded L4 TCP Proxy · срез 0.0.30 на приёмке
+## Bounded L4 TCP Proxy · срез 0.0.30
 
 ```sh
 python -m liza build examples/apps/liza_proxy.liza -O 2 -o build/liza-proxy
@@ -275,3 +275,8 @@ python -m liza build examples/apps/liza_proxy.liza -O 2 -o build/liza-proxy
 До восьми пар, фиксированный upstream `127.0.0.1:9003`, два независимых
 направления с half-close и 32 КиБ пользовательских буферов. Неблокирующий
 connect явно проверяется перед передачей. [Контракт и отдельная модель relay](docs/tcp-proxy.md).
+
+[Verified Relay R1](docs/verified-relay-r1.md) проверяет восемь чистых функций
+`relay.direction` на полном пространстве входов через фактический Semantic IR:
+16 обязательств и восемь воспроизводимых мутаций. Гарантия относится к
+координатам очереди, не к сохранности байтов, runtime или машинному коду.
