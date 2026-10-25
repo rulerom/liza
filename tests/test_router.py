@@ -152,6 +152,45 @@ uint64_t liza_rt_reactor_write(reactor*r,uint64_t owner,uint64_t generation,uint
             self.assertEqual(prefix+receive(b,len(expected)-2),expected)
             self.assertIsNone(p.poll())
 
+    def test_partial_delivery_does_not_starve_recipient_requests(self):
+        for exe in self.fault_executables:
+            with tempfile.TemporaryDirectory() as temp:
+                gate=Path(temp)/'gate'
+                with unittest.mock.patch.dict(os.environ,{'LIZA_ROUTER_GATE':str(gate),'LIZA_ROUTER_GATE_MODE':'delivery'}):
+                    p,port=self.start(exe,'--ephemeral')
+                a,aid=self.connect(port);b,bid=self.connect(port);c,cid=self.connect(port)
+                a.sendall(send(bid,b'incoming'));self.assertEqual(packet(a),b'\x03')
+                prefix=receive(b,2)
+                b.sendall(send(cid,b'outgoing'))
+                # B can route its own request while the outgoing TCP frame to B is partial.
+                self.assertEqual(packet(c),b'\x06'+bid+b'outgoing')
+                gate.write_bytes(b'continue')
+                expected=frame(b'\x06'+aid+b'incoming')
+                self.assertEqual(prefix+receive(b,len(expected)-2),expected)
+                self.assertEqual(packet(b),b'\x03')
+                self.assertIsNone(p.poll())
+
+    def test_half_close_drains_accepted_delivery(self):
+        for exe in self.fault_executables:
+            with tempfile.TemporaryDirectory() as temp:
+                gate=Path(temp)/'gate'
+                with unittest.mock.patch.dict(os.environ,{'LIZA_ROUTER_GATE':str(gate),'LIZA_ROUTER_GATE_MODE':'delivery'}):
+                    p,port=self.start(exe,'--ephemeral')
+                a,aid=self.connect(port);b,bid=self.connect(port)
+                a.sendall(send(bid,b'drain'));self.assertEqual(packet(a),b'\x03')
+                prefix=receive(b,2);b.shutdown(socket.SHUT_WR)
+                import time
+                deadline=time.monotonic()+5
+                while True:
+                    a.sendall(send(bid,b'probe'));reply=packet(a)
+                    if reply==b'\x05':break
+                    self.assertEqual(reply,b'\x04');self.assertLess(time.monotonic(),deadline)
+                gate.write_bytes(b'continue')
+                expected=frame(b'\x06'+aid+b'drain')
+                self.assertEqual(prefix+receive(b,len(expected)-2),expected)
+                self.assertEqual(b.recv(1),b'')
+                self.assertIsNone(p.poll())
+
     def test_pending_control_pauses_pipelined_requests(self):
         for exe in self.fault_executables:
             p,port,gate=self.gated_start(exe,'control')
@@ -180,8 +219,8 @@ uint64_t liza_rt_reactor_write(reactor*r,uint64_t owner,uint64_t generation,uint
                 a.sendall(send(bid,b'not-delivered'));self.assertEqual(packet(a),b'\x03');receive(b,2)
                 linger=struct.pack('HH' if os.name=='nt' else 'ii',1,0)
                 b.setsockopt(socket.SOL_SOCKET,socket.SO_LINGER,linger);b.close()
-                # The fault gate masks write errors until opened; Busy is valid while disconnect is unobserved.
-                a.sendall(send(bid,b'cannot-replace'));self.assertEqual(packet(a),b'\x04')
+                # Busy is valid before the reset is observed; read may already have detected it.
+                a.sendall(send(bid,b'cannot-replace'));self.assertIn(packet(a),(b'\x04',b'\x05'))
                 Path(temp,'never').write_bytes(b'open')
                 # Wait for disconnect processing through observable Unavailable, no fixed sleep.
                 import time

@@ -90,7 +90,7 @@ fn exchange(reactor:net.Reactor, initial:memory.Buffer<u8>, staging:memory.Buffe
         var i:u32=0
         while i<8 {
             c=copy clients[i]
-            if !c.closing && c.control==0 && c.delivery==0 && c.cursor<c.received {timeout=0}
+            if !c.closing && c.control==0 && c.cursor<c.received {timeout=0}
             i=i+1
         }
         match net.reactor_poll(reactor,timeout) {
@@ -132,7 +132,7 @@ fn exchange(reactor:net.Reactor, initial:memory.Buffer<u8>, staging:memory.Buffe
                         Err(error)=>{alive=false;c.failure=3}
                         Ok(flags)=>{ready=flags}
                     }
-                    if alive && !c.closing && c.control==0 && c.delivery==0 && c.cursor==c.received && (ready&5)!=0 {
+                    if alive && !c.closing && c.control==0 && c.cursor==c.received && (ready&5)!=0 {
                         (next,result)=net.reactor_read(reactor,id,move input,i*2048,2048)
                         input=move next
                         match result {
@@ -142,7 +142,7 @@ fn exchange(reactor:net.Reactor, initial:memory.Buffer<u8>, staging:memory.Buffe
                                 c.received=count
                                 if count==0 {
                                     match framing.finish(c.parser) {
-                                        Ok(done)=>{alive=false}
+                                        Ok(done)=>{c.closing=true}
                                         Err(error)=>{protocol_error=3}
                                     }
                                 }
@@ -151,7 +151,7 @@ fn exchange(reactor:net.Reactor, initial:memory.Buffer<u8>, staging:memory.Buffe
                     }
                     var complete=false
                     var length:u32=0
-                    if alive && protocol_error==0 && !c.closing && c.control==0 && c.delivery==0 && c.cursor<c.received {
+                    if alive && protocol_error==0 && !c.closing && c.control==0 && c.cursor<c.received {
                         data=memory.view(input)
                         match framing.feed(c.parser,data,i*2048+c.cursor,c.received-c.cursor) {
                             Err(error)=>{protocol_error=2}
@@ -250,8 +250,9 @@ fn exchange(reactor:net.Reactor, initial:memory.Buffer<u8>, staging:memory.Buffe
             match c.connection {
                 None=>{}
                 Some(id)=>{
-                    var interest:u32=1
-                    if c.control!=0 || c.delivery!=0 {interest=2}
+                    var interest:u32=0
+                    if !c.closing && c.control==0 {interest=1}
+                    if c.control!=0 || c.delivery!=0 {interest=interest|2}
                     match net.reactor_interest(reactor,id,interest) {
                         Ok(done)=>{}
                         Err(error)=>{status=3;running=false}
