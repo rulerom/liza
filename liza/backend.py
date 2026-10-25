@@ -25,6 +25,8 @@ def llvm(module, target=None):
     types['memory.Region'] = 'ptr'
     types['Arg'] = types['Path'] = 'i32'  # Opaque indices into immutable process arguments.
     types['net.Listener'] = types['net.Stream'] = 'i64'
+    types['net.Reactor'] = 'ptr'
+    types['net.Connection'] = '[3 x i64]'
     types['File'] = 'i64'  # Private runtime token, never a source-level integer.
     types['Text'] = '{ ptr, i32 }'
     types['integer'] = None  # Only a compile-time conversion literal, never a runtime type.
@@ -86,6 +88,8 @@ def llvm(module, target=None):
                       'declare i64 @liza_rt_err_print_i64(i64)'])
         for fn in module.externals:
             from .net_backend import external as net_external
+            from .reactor_backend import external as reactor_external
+            if reactor_external(fn, lines, types): continue
             if net_external(fn, lines, types):
                 continue
             from .cli_backend import external

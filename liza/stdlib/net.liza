@@ -42,3 +42,60 @@ fn net.write(stream:net.Stream,data:View<u8>,start:u32,count:u32)->Result<u32,Ne
     if raw>>32==0 {return Ok(u32.wrap(raw))}
     return Err(__liza_net_error(u32(raw>>32)))
 }
+
+// Reactor owns its listener and all accepted sockets. IDs carry no ownership.
+enum ReactorError { AddressInUse; PermissionDenied; Interrupted; WouldBlock; Disconnected; InvalidRange; Other; InvalidCapacity; Full; InvalidConnection; Exhausted; OutOfMemory }
+struct __liza_Reactor { handle:net.Reactor; error:u32 }
+struct __liza_Connection { handle:net.Connection; error:u32 }
+fn __liza_reactor_error(code:u32)->ReactorError {
+    if code==1 {return ReactorError.AddressInUse}
+    if code==2 {return ReactorError.PermissionDenied}
+    if code==3 {return ReactorError.Interrupted}
+    if code==4 {return ReactorError.WouldBlock}
+    if code==5 {return ReactorError.Disconnected}
+    if code==6 {return ReactorError.InvalidRange}
+    if code==7 {return ReactorError.Other}
+    if code==8 {return ReactorError.InvalidCapacity}
+    if code==9 {return ReactorError.Full}
+    if code==10 {return ReactorError.InvalidConnection}
+    if code==11 {return ReactorError.Exhausted}
+    if code==12 {return ReactorError.OutOfMemory}
+    return ReactorError.Other
+}
+fn __liza_reactor_status(raw:u64)->Result<u32,ReactorError> {
+    if raw>>32==0 {return Ok(u32.wrap(raw))}
+    return Err(__liza_reactor_error(u32(raw>>32)))
+}
+fn net.reactor_create(port:u16,capacity:u32)->Result<net.Reactor,ReactorError>:io,alloc {
+    raw=__liza_reactor_create(port,capacity)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_reactor_error(raw.error))
+}
+fn net.reactor_accept(reactor:net.Reactor)->Result<net.Connection,ReactorError>:io {
+    raw=__liza_reactor_accept(reactor)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_reactor_error(raw.error))
+}
+fn net.reactor_close(reactor:net.Reactor)->Result<u32,ReactorError>:io,alloc {
+    code=__liza_reactor_close(reactor)
+    if code==0 {return Ok(0)}
+    return Err(__liza_reactor_error(code))
+}
+fn net.reactor_port(reactor:net.Reactor)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_port(reactor))
+}
+fn net.reactor_poll(reactor:net.Reactor,timeout_ms:u32)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_poll(reactor,timeout_ms))
+}
+fn net.reactor_interest(reactor:net.Reactor,id:net.Connection,flags:u32)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_interest(reactor,id,flags))
+}
+fn net.reactor_ready(reactor:net.Reactor,id:net.Connection)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_ready(reactor,id))
+}
+fn net.reactor_disconnect(reactor:net.Reactor,id:net.Connection)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_disconnect(reactor,id))
+}
+fn net.reactor_write(reactor:net.Reactor,id:net.Connection,data:View<u8>,start:u32,count:u32)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_write(reactor,id,data,start,count))
+}

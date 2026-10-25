@@ -164,6 +164,7 @@ def check_dependencies(records, structs, signatures, audit=None, expression_maps
                 # Audited I/O boundary returns the exact consumed buffer, on Ok and Err.
                 # The stream has no region origin; the status contains no resource.
                 if node.token.text=='net.read': return Value(components=(arguments[1],EMPTY))
+                if node.token.text=='net.reactor_read': return Value(components=(arguments[2],EMPTY))
                 result=analyze(node.token.text)
                 def substitute(origin):
                     if origin[0]=='parameter':

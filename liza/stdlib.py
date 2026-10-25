@@ -20,7 +20,7 @@ def attach(program):
             fn.module = '__liza_framing'
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
             fn.module = '__liza_utf8_stream'
-        if fn.name.text in ('net.accept','net.local_port','net.write','file.read_chunk', 'file.write_chunk', 'file.flush'):
+        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_close')) or fn.name.text in ('net.accept','net.local_port','net.write','file.read_chunk', 'file.write_chunk', 'file.flush'):
             fn.borrowed_params = [0]
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
@@ -80,6 +80,22 @@ def attach(program):
         ('__liza_net_write',['net.Stream','View<u8>','u32','u32'],'u64',[0]),
         ('net.read',['net.Stream','memory.Buffer<u8>'],product_type('memory.Buffer<u8>','Result<u32,NetError>'),[0]),
     ]
+    reactor_externals = [
+        ('__liza_reactor_create',['u16','u32'],'__liza_Reactor',[], 'io,alloc'),
+        ('__liza_reactor_accept',['net.Reactor'],'__liza_Connection',[0], 'io'),
+        ('__liza_reactor_port',['net.Reactor'],'u64',[0], 'io'),
+        ('__liza_reactor_poll',['net.Reactor','u32'],'u64',[0], 'io'),
+        ('__liza_reactor_interest',['net.Reactor','net.Connection','u32'],'u64',[0], 'io'),
+        ('__liza_reactor_ready',['net.Reactor','net.Connection'],'u64',[0], 'io'),
+        ('__liza_reactor_disconnect',['net.Reactor','net.Connection'],'u64',[0], 'io'),
+        ('__liza_reactor_close',['net.Reactor'],'u32',[], 'io,alloc'),
+        ('__liza_reactor_write',['net.Reactor','net.Connection','View<u8>','u32','u32'],'u64',[0], 'io'),
+        ('net.reactor_read',['net.Reactor','net.Connection','memory.Buffer<u8>','u32','u32'],
+         product_type('memory.Buffer<u8>','Result<u32,ReactorError>'),[0], 'io'),
+        ('net.connection_slot',['net.Connection'],'u32',[], 'pure'),
+    ]
+    externals.extend(Function(Token(n,1,1),[(Token('p'+str(i),1,1),t) for i,t in enumerate(params)],[],result,effect,borrowed_params=borrowed)
+                     for n,params,result,borrowed,effect in reactor_externals)
     externals.extend(Function(Token(n,1,1),[(Token('p'+str(i),1,1),t) for i,t in enumerate(params)],[],result,'io',borrowed_params=borrowed)
                      for n,params,result,borrowed in net_externals)
     return combined, [fn for fn in externals if fn.name.text in needed]
@@ -94,10 +110,12 @@ def link_flags(module):
     suffix = 'windows' if sys.platform == 'win32' else 'posix'
     names = {fn.name.text for fn in module.externals}
     file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk','__liza_file_open_path','__liza_file_create_path','__liza_file_write','__liza_file_flush'}
-    net_names = {n for n in names if n.startswith('__liza_net_') or n=='net.read'}
+    reactor_names = {n for n in names if n.startswith('__liza_reactor_') or n in ('net.reactor_read','net.connection_slot')}
+    net_names = reactor_names | {n for n in names if n.startswith('__liza_net_') or n=='net.read'}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
     libraries = (['console'] if names-file_names-cli_names-net_names else []) + (['file'] if names & file_names else [])
     if net_names: libraries.append('net')
+    if reactor_names: libraries.append('reactor')
     if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if sys.platform == 'win32':

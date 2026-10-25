@@ -130,7 +130,7 @@ def structure_types(program):
             if not resolve(element_type(name), False)['copyable']:
                 raise ValueError('views of resource values are not supported')
             return {'copyable': True, 'implicit_copy': True}
-        if name in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path', 'net.Listener', 'net.Stream'):
+        if name in SCALAR_TYPES + ('Text', 'File', 'Arg', 'Path', 'net.Listener', 'net.Stream', 'net.Reactor', 'net.Connection'):
             return value_properties(name)
         if name in result:
             return result[name].properties
@@ -710,8 +710,10 @@ def dump(module):
     def describe(t):
         if t in properties or t == 'integer':
             return
-        if t in ('memory.Region','net.Listener','net.Stream'):
+        if t in ('memory.Region','net.Listener','net.Stream','net.Reactor'):
             properties[t] = {'copyable': False, 'implicit_copy': False}
+        elif t == 'net.Connection':
+            properties[t] = value_properties(t)
         elif is_product(t):
             for component in product_args(t): describe(component)
             properties[t] = {'copyable': False, 'implicit_copy': False}
