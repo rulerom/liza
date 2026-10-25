@@ -4,8 +4,9 @@ description: "Однопоточный TCP reactor Liza: ограниченны�
 
 # TCP reactor · срез 0.0.28
 
-Реализован в ветке разработки. Приёмка и платформенный CI фиксируются в PR;
-это не расширение области доказательств Liza Verified.
+Завершён в [PR #6](https://github.com/rulerom/liza/pull/6), слитом в `main`.
+Платформенные проверки Linux/macOS/Windows прошли; это не расширяет
+область доказательств Liza Verified.
 
 `liza-reactor` обслуживает до восьми TCP-клиентов в одном потоке. Протокол
 сохраняется из [message server](message-server.md): четыре байта длины

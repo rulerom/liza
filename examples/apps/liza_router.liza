@@ -1,0 +1,321 @@
+// Wire: u32 big-endian body length, then type + protocol fields.
+// IDs are scoped to this router process; no cross-restart identity guarantee.
+struct RouterId {slot:u32;generation:u64}
+struct Client {
+    connection:Option<net.Connection>;generation:u64;parser:FrameState;
+    cursor:u32;received:u32;control:u32;delivery:u32;mode:u32;sent:u32;
+    closing:bool;failure:u32
+}
+fn empty_client()->Client {return Client(None,0,framing.create(65536),0,0,0,0,0,0,false,0)}
+fn be32(data:View<u8>,start:u32)->u32 {
+    var n:u32=0
+    var i:u32=0
+    while i<4 {n=(n<<8)|u32(data[start+i]);i=i+1}
+    return n
+}
+fn be64(data:View<u8>,start:u32)->u64 {
+    var n:u64=0
+    var i:u32=0
+    while i<8 {n=(n<<8)|u64(data[start+i]);i=i+1}
+    return n
+}
+fn put32(buffer:memory.Buffer<u8>,start:u32,value:u32)->memory.Buffer<u8> {
+    var next=move buffer
+    header=framing.header(value)
+    var i:u32=0
+    while i<4 {next=memory.set(move next,start+i,header[i]);i=i+1}
+    return move next
+}
+fn put_id(buffer:memory.Buffer<u8>,start:u32,id:RouterId)->memory.Buffer<u8> {
+    var next=put32(move buffer,start,id.slot)
+    var i:u32=0
+    while i<8 {
+        next=memory.set(move next,start+4+i,u8.wrap(id.generation>>(56-8*i)))
+        i=i+1
+    }
+    return move next
+}
+fn control(buffer:memory.Buffer<u8>,slot:u32,kind:u8,detail:u8)->memory.Buffer<u8> {
+    base=524320+slot*17
+    var length:u32=1
+    if kind==7 {length=2}
+    var next=put32(move buffer,base,length)
+    next=memory.set(move next,base+4,kind)
+    if kind==7 {next=memory.set(move next,base+5,detail)}
+    return move next
+}
+// 3 Accepted, 4 Busy, 5 Unavailable. No queue mutation on refusal.
+fn classify(clients:[Client;8],destination:RouterId)->u8 {
+    if destination.slot>=8 {return 5}
+    c=copy clients[destination.slot]
+    if c.closing || c.generation!=destination.generation {return 5}
+    match c.connection {None=>{return 5} Some(id)=>{}}
+    if c.delivery!=0 {return 4}
+    return 3
+}
+fn retry(error:ReactorError)->bool {
+    match error {
+        ReactorError.Interrupted=>{return true}
+        ReactorError.WouldBlock=>{return true}
+        ReactorError.AddressInUse=>{return false}
+        ReactorError.PermissionDenied=>{return false}
+        ReactorError.Disconnected=>{return false}
+        ReactorError.InvalidRange=>{return false}
+        ReactorError.Other=>{return false}
+        ReactorError.InvalidCapacity=>{return false}
+        ReactorError.Full=>{return true}
+        ReactorError.InvalidConnection=>{return false}
+        ReactorError.Exhausted=>{return false}
+        ReactorError.OutOfMemory=>{return false}
+    }
+}
+fn exchange(reactor:net.Reactor, initial:memory.Buffer<u8>, staging:memory.Buffer<u8>, storage:memory.Buffer<u8>, once:bool)->u32:io,alloc {
+    var input=move initial
+    var bodies=move staging
+    var output=move storage
+    var clients=[empty_client();8]
+    var generations:[u64;8]=[0;8]
+    var running=true
+    var accepted=false
+    var status:u32=0
+    match net.reactor_port(reactor) {
+        Err(error)=>{status=3;running=false}
+        Ok(port)=>{
+            match console.print_u64(u64(port)) {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+            match console.write("\n") {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+        }
+    }
+    while running {
+        var timeout:u32=1000
+        var i:u32=0
+        while i<8 {
+            c=copy clients[i]
+            if !c.closing && c.control==0 && c.cursor<c.received {timeout=0}
+            i=i+1
+        }
+        match net.reactor_poll(reactor,timeout) {
+            Err(error)=>{if !retry(error) {status=3;running=false}}
+            Ok(events)=>{}
+        }
+        if running && (!once || !accepted) {
+            match net.reactor_accept(reactor) {
+                Err(error)=>{if !retry(error) {status=3;running=false}}
+                Ok(id)=>{
+                    slot=net.connection_slot(id)
+                    if generations[slot]==18446744073709551615 {
+                        // The newly accepted socket is still owned by reactor.
+                        status=3
+                        running=false
+                    } else {
+                        generations[slot]=generations[slot]+1
+                        generation=generations[slot]
+                        clients[slot]=Client(Some(id),generation,framing.create(65536),0,0,17,0,0,0,false,0)
+                        base=524320+slot*17
+                        output=put32(move output,base,13)
+                        output=memory.set(move output,base+4,1)
+                        output=put_id(move output,base+5,RouterId(slot,generation))
+                        accepted=true
+                    }
+                }
+            }
+        }
+        i=0
+        while i<8 && running {
+            var c=copy clients[i]
+            match c.connection {
+                None=>{}
+                Some(id)=>{
+                    var alive=true
+                    var ready:u32=0
+                    var protocol_error:u8=0
+                    match net.reactor_ready(reactor,id) {
+                        Err(error)=>{alive=false;c.failure=3}
+                        Ok(flags)=>{ready=flags}
+                    }
+                    if alive && !c.closing && c.control==0 && c.cursor==c.received && (ready&5)!=0 {
+                        (next,result)=net.reactor_read(reactor,id,move input,i*2048,2048)
+                        input=move next
+                        match result {
+                            Err(error)=>{if !retry(error) {alive=false;c.failure=3}}
+                            Ok(count)=>{
+                                c.cursor=0
+                                c.received=count
+                                if count==0 {
+                                    match framing.finish(c.parser) {
+                                        Ok(done)=>{c.closing=true}
+                                        Err(error)=>{protocol_error=3}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    var complete=false
+                    var length:u32=0
+                    if alive && protocol_error==0 && !c.closing && c.control==0 && c.cursor<c.received {
+                        data=memory.view(input)
+                        match framing.feed(c.parser,data,i*2048+c.cursor,c.received-c.cursor) {
+                            Err(error)=>{protocol_error=2}
+                            Ok(step)=>{
+                                c.parser=step.state
+                                c.cursor=step.next-i*2048
+                                var j:u32=0
+                                while j<step.payload_count {
+                                    bodies=memory.set(move bodies,i*65536+step.body_offset+j,data[step.payload_start+j])
+                                    j=j+1
+                                }
+                                complete=step.complete
+                                length=step.length
+                            }
+                        }
+                    }
+                    if complete {
+                        data=memory.view(bodies)
+                        base=i*65536
+                        if length<13 {
+                            protocol_error=1
+                        } else {
+                            if data[base]!=2 {
+                                protocol_error=1
+                            } else {
+                                destination=RouterId(be32(data,base+1),be64(data,base+5))
+                                result=classify(copy clients,destination)
+                                if result==3 {
+                                    // Copy everything before publishing the recipient queue.
+                                    target=destination.slot*65540
+                                    output=put32(move output,target,length)
+                                    output=memory.set(move output,target+4,6)
+                                    output=put_id(move output,target+5,RouterId(i,c.generation))
+                                    var j:u32=13
+                                    while j<length {
+                                        output=memory.set(move output,target+4+j,data[base+j])
+                                        j=j+1
+                                    }
+                                    if destination.slot==i {
+                                        c.delivery=length+4
+                                    } else {
+                                        var receiver=copy clients[destination.slot]
+                                        receiver.delivery=length+4
+                                        clients[destination.slot]=copy receiver
+                                    }
+                                }
+                                output=control(move output,i,result,0)
+                                c.control=5
+                            }
+                        }
+                    }
+                    if protocol_error!=0 {
+                        // Invalidate routing immediately; close after the bounded error response.
+                        c.closing=true
+                        c.failure=4
+                        output=control(move output,i,7,protocol_error)
+                        c.control=6
+                    }
+                    if alive && (c.control!=0 || c.delivery!=0) {
+                        // Never switch frame kind while a prefix has already been sent.
+                        if c.mode==0 {
+                            if c.control!=0 {c.mode=1} else {c.mode=2}
+                        }
+                        var base=i*65540
+                        var amount=c.delivery
+                        if c.mode==1 {base=524320+i*17;amount=c.control}
+                        data=memory.view(output)
+                        match net.reactor_write(reactor,id,data,base+c.sent,amount-c.sent) {
+                            Err(error)=>{if !retry(error) {alive=false;c.failure=3}}
+                            Ok(count)=>{
+                                c.sent=c.sent+count
+                                if c.sent==amount {
+                                    if c.mode==1 {c.control=0} else {c.delivery=0}
+                                    c.mode=0
+                                    c.sent=0
+                                    // Reserve an already waiting frame before admitting a new reply.
+                                    // Neither queue can repeatedly jump ahead of the other.
+                                    if c.control!=0 {c.mode=1}
+                                    if c.delivery!=0 {c.mode=2}
+                                }
+                            }
+                        }
+                    }
+                    if c.closing && c.control==0 && c.delivery==0 {alive=false}
+                    if !alive {
+                        match net.reactor_disconnect(reactor,id) {Ok(done)=>{} Err(error)=>{c.failure=3}}
+                        if once {status=c.failure;running=false}
+                        c=empty_client()
+                    }
+                    clients[i]=copy c
+                }
+            }
+            i=i+1
+        }
+        // A later slot may have queued a delivery to an earlier slot this turn.
+        // Refresh all interests only after all routing publications are visible.
+        i=0
+        while i<8 && running {
+            c=copy clients[i]
+            match c.connection {
+                None=>{}
+                Some(id)=>{
+                    var interest:u32=0
+                    if !c.closing && c.control==0 {interest=1}
+                    if c.control!=0 || c.delivery!=0 {interest=interest|2}
+                    match net.reactor_interest(reactor,id,interest) {
+                        Ok(done)=>{}
+                        Err(error)=>{status=3;running=false}
+                    }
+                }
+            }
+            i=i+1
+        }
+    }
+    a=memory.release(move input)
+    b=memory.release(move bodies)
+    c=memory.release(move output)
+    match net.reactor_close(move reactor) {Ok(done)=>{} Err(error)=>{status=3}}
+    return status
+}
+fn serve(reactor:net.Reactor,once:bool)->u32:io,alloc {
+    match memory.create(1065128) {
+        Err(error)=>{c=net.reactor_close(move reactor);return 3}
+        Ok(region)=>{
+            match memory.alloc<u8>(region,16384,0) {
+                Err(error)=>{f=memory.close(move region);c=net.reactor_close(move reactor);return 3}
+                Ok(input)=>{
+                    match memory.alloc<u8>(region,524288,0) {
+                        Err(error)=>{a=memory.release(move input);f=memory.close(move region);c=net.reactor_close(move reactor);return 3}
+                        Ok(bodies)=>{
+                            match memory.alloc<u8>(region,524456,0) {
+                                Err(error)=>{
+                                    a=memory.release(move input);b=memory.release(move bodies)
+                                    f=memory.close(move region);c=net.reactor_close(move reactor);return 3
+                                }
+                                Ok(output)=>{
+                                    result=exchange(move reactor,move input,move bodies,move output,once)
+                                    f=memory.close(move region)
+                                    return result
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+fn main()->u32:io,alloc {
+    var once=false
+    var port:u16=9003
+    if cli.count()!=1 {
+        if cli.count()!=2 {message=console.err("Usage: liza-router [--once | --ephemeral]\n");return 2}
+        match cli.arg(1) {
+            None=>{return 2}
+            Some(arg)=>{
+                if !cli.equals(arg,"--once") && !cli.equals(arg,"--ephemeral") {message=console.err("Usage: liza-router [--once | --ephemeral]\n");return 2}
+                once=cli.equals(arg,"--once")
+                port=0
+            }
+        }
+    }
+    match net.reactor_create(port,8) {
+        Err(error)=>{message=console.err("Cannot create loopback reactor\n");return 3}
+        Ok(reactor)=>{return serve(move reactor,once)}
+    }
+}
