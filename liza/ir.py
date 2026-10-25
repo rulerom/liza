@@ -1,5 +1,5 @@
 """Typed value graph with explicit control flow and arithmetic policy."""
-from .types import is_vec, vec_element, is_product, product_args
+from .types import is_vec, vec_element, is_product, product_args, consumed_components
 from dataclasses import dataclass, asdict, field
 import json
 from typing import Optional
@@ -159,8 +159,6 @@ def structure_types(program):
                 if is_product(type_name):
                     raise ValueError('linear products cannot be stored in aggregates')
                 member = resolve(type_name, False)
-                if not variant and not name.startswith('__liza_') and not member['copyable']:
-                    raise ValueError('resource fields require destructuring, which is not supported yet')
                 if member.get('process_borrow'):
                     if decl is not None:
                         raise ValueError('process arguments and paths cannot be stored in user aggregates')
@@ -515,14 +513,21 @@ class Lowerer:
             if self.current is None:
                 raise CompileError(stmt.token, 'unreachable statement after control transfer')
             if isinstance(stmt, Destructure):
-                if len({n.text for n in stmt.names}) != 2 or any(n.text in names or n.text == '_' for n in stmt.names):
-                    raise CompileError(stmt.token, 'unpack requires two distinct new bindings')
+                if len({n.text for n in stmt.names}) != len(stmt.names) or any(n.text in names or n.text == '_' for n in stmt.names):
+                    raise CompileError(stmt.token, 'unpack requires distinct new bindings, without discards')
                 value = self.expression(stmt.expr, names)
                 t = self.types[value]
-                if not is_product(t):
-                    raise CompileError(stmt.token, 'unpack requires a linear product')
+                try:
+                    components = consumed_components(t, self.structs)
+                except ValueError as error:
+                    raise CompileError(stmt.token, str(error)) from None
+                if len(stmt.names) != len(components):
+                    raise CompileError(stmt.token, 'unpack must bind every component exactly once')
+                visibility = self.structs.visibility.get(t)
+                if visibility and visibility[0] != self.fn.module and any(f not in visibility[1] for f,_ in self.structs[t].fields):
+                    raise CompileError(stmt.token, 'unpack contains private fields')
                 consumed = self.emit('unpack.consume', [value], type=t)
-                for index, (token, component) in enumerate(zip(stmt.names, product_args(t))):
+                for index, (token, component) in enumerate(zip(stmt.names, components)):
                     names[token.text] = self.emit('unpack.component', [consumed], type=component, source_type=t, field_name=str(index))
             elif isinstance(stmt, Scope):
                 inner = names.copy()
@@ -601,7 +606,7 @@ class Lowerer:
         if self.current is not None:
             raise CompileError(self.fn.name, f'function must return a {self.fn.result_type} value on every path')
         check_resources(self.fn, self.expression_types, self.match_types, self.structs, self.signatures)
-        check_borrows(self.fn, self.expression_types, self.match_types, self.structs.variants)
+        check_borrows(self.fn, self.expression_types, self.match_types, self.structs.variants, self.structs)
         return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type, self.fn.effect_contract)
 
 

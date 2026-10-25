@@ -4,12 +4,12 @@ Loans survive moving/copying/reassigning a view until their lexical scope ends.
 Assigning a view into an outer binding extends the loan to that binding's scope;
 its owner must live at least that long. No view can escape a function.
 """
-from .types import product_args
+from .types import consumed_components
 from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope, Destructure
 from .types import is_view
 
 
-def check_borrows(fn, types, match_types=None, variants=None):
+def check_borrows(fn, types, match_types=None, variants=None, structs=None):
     loans = [set()]
     # name -> (type, declaration depth, possible owner names)
     initial = {p.text: (t, 0, set()) for p, t in fn.params}
@@ -50,7 +50,7 @@ def check_borrows(fn, types, match_types=None, variants=None):
         for stmt in body:
             if isinstance(stmt, Destructure):
                 expr(stmt.expr, env)
-                for token, t in zip(stmt.names, product_args(types[id(stmt.expr)])):
+                for token, t in zip(stmt.names, consumed_components(types[id(stmt.expr)], structs)):
                     env[token.text] = (t, len(loans)-1, set())
             elif isinstance(stmt, Scope):
                 env = join(env, [scoped(stmt.body, env)])

@@ -616,18 +616,8 @@
     "type": "destructuring_assignment",
     "named": true,
     "fields": {
-      "first": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      },
-      "second": {
-        "multiple": false,
+      "binding": {
+        "multiple": true,
         "required": true,
         "types": [
           {

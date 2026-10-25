@@ -35,4 +35,4 @@
 (generic_parameter (identifier) @type)
 ["copyable" "implicit_copy"] @keyword
 
-(destructuring_assignment first: (identifier) @variable second: (identifier) @variable)
+(destructuring_assignment binding: (identifier) @variable)

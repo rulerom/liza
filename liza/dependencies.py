@@ -55,6 +55,8 @@ def check_dependencies(records, structs, signatures, audit=None, expression_maps
         if t == 'memory.Region': return Value(regions=frozenset([origin]))
         if is_product(t): return Value(components=tuple(shape(c,origin+(i,)) for i,c in enumerate(product_args(t))))
         if is_buffer(t) or is_vec(t): return Value(buffers=frozenset([origin]))
+        if t in structs and not structs[t].properties['copyable']:
+            return Value(components=tuple(shape(c,origin+(i,)) for i,(_,c) in enumerate(structs[t].fields)))
         if t in structs.variants:
             return Value(cases={k:shape(v,origin+(k,)) if v else EMPTY
                                 for k,v in structs.variants[t].cases})
@@ -142,6 +144,8 @@ def check_dependencies(records, structs, signatures, audit=None, expression_maps
             if node.kind=='variant':
                 return Value(cases={node.token.text.rsplit('.',1)[-1]:arguments[0] if arguments else EMPTY})
             if node.kind=='call':
+                if node.token.text in structs and not structs[node.token.text].properties['copyable']:
+                    return Value(components=tuple(arguments))
                 signature=signatures[node.token.text] if node.token.text in signatures else None
                 operation=getattr(signature,'memory_operation','')
                 if operation=='region.create':

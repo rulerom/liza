@@ -629,3 +629,58 @@ fn step(current:vec.Vec<u32>)->vec.Vec<u32> {
       (return_statement
         (unary_expression
           (identifier))))))
+
+==================
+Resource structures: singleton and complete multi-field unpack
+==================
+struct One { handle:File }
+struct Three { owner:One; length:u32; capacity:u32 }
+fn unwrap(value:Three)->File {
+  (owner,length,capacity)=move value
+  (handle,)=move owner
+  return move handle
+}
+---
+
+(source_file
+  (struct_definition
+    (type_identifier
+      (identifier))
+    (field_definition
+      (identifier)
+      (builtin_type)))
+  (struct_definition
+    (type_identifier
+      (identifier))
+    (field_definition
+      (identifier)
+      (type_identifier
+        (identifier)))
+    (field_definition
+      (identifier)
+      (builtin_type))
+    (field_definition
+      (identifier)
+      (builtin_type)))
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)
+        (type_identifier
+          (identifier))))
+    (builtin_type)
+    (block
+      (destructuring_assignment
+        (identifier)
+        (identifier)
+        (identifier)
+        (unary_expression
+          (identifier)))
+      (destructuring_assignment
+        (identifier)
+        (unary_expression
+          (identifier)))
+      (return_statement
+        (unary_expression
+          (identifier))))))

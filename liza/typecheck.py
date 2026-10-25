@@ -237,6 +237,8 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                         continue
                     if t not in structs:
                         raise CompileError(token, 'field access requires a structure value')
+                    if not t.startswith('__liza_') and not structs[t].properties['copyable']:
+                        raise CompileError(token, 'resource structure requires whole-value unpack; field access is not supported')
                     fields = dict(structs[t].fields)
                     if token.text not in fields:
                         raise CompileError(token, f'unknown field {token.text!r} in {t}')
