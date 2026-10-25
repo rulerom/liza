@@ -8,6 +8,8 @@ def attach(program):
     libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net', 'framing', 'json') if getattr(program, 'uses_'+name, False)]
     if 'json' in libraries and 'utf8_stream' not in libraries:
         libraries.insert(0,'utf8_stream')
+    if 'json' in libraries:
+        libraries.append('json_mut')
     if not libraries:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')

@@ -1,0 +1,12 @@
+struct Counter {value:u32}
+fn increment(borrow mut state:Counter)->u32 {
+    state.value=state.value+1
+    return state.value
+}
+fn main()->u32 {
+    var state=Counter(7)
+    snapshot=copy state
+    result=increment(borrow mut state)
+    if state.value!=8 || snapshot.value!=7 {return 1}
+    return 0
+}

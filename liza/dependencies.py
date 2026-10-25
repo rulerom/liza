@@ -258,6 +258,9 @@ def check_dependencies(records, structs, signatures, audit=None, expression_maps
                              'returns':result.describe(),'creation_sites':origins,
                              'normal_exit':'all resource obligations discharged',
                              'trap_cleanup':'not guaranteed'}
+        if fn.mutable_params:
+            ir.storage_contract['mutable_parameters']=[fn.params[i][0].text for i in fn.mutable_params]
+            ir.storage_contract['requires'].append('exclusive call-scoped access to each mutable parameter storage')
         if fn.readonly_params:
             ir.storage_contract['requires'][0]='available arguments with their declared access modes'
             ir.storage_contract['requires'].append('readonly access to each readonly parameter and its reachable storage')

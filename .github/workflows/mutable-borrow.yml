@@ -1,0 +1,35 @@
+name: Mutable borrow and JSON agreement
+on:
+  pull_request:
+    paths: ['liza/**', 'tests/test_mutable_borrow.py', 'benchmarks/mutable/**', '.github/workflows/mutable-borrow.yml']
+  push:
+    branches: [main]
+    paths: ['liza/**', 'tests/test_mutable_borrow.py', 'benchmarks/mutable/**', '.github/workflows/mutable-borrow.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  agreement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: M0 native semantics and mutation replay
+        run: python -m unittest discover -s tests -p test_mutable_borrow.py -v
+      - name: Frozen A0/A3, M0, C++ and Rust correctness (no timing threshold)
+        run: python benchmarks/mutable/run.py --candidate "$GITHUB_SHA" --check-only --output build/mutable-study
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutable-study
+          path: |
+            build/mutable-study/report.json
+            build/mutable-study/A3/*.ll
+            build/mutable-study/M0/*.ll
+            build/mutable-study/M0/*.s
+            build/mutable-study/M0/*.su

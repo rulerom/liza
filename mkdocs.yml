@@ -66,6 +66,7 @@ nav:
   - Ресурсные структуры: resource-structures.md
   - Владеющий UTF-8 (T1): owned-string.md
   - Readonly-доступ (T2-A): readonly-access.md
+  - "M0: mutable-доступ": mutable-access.md
   - "T2-B: local subviews (plan)": local-subviews.md
   - "JSON performance (plan)": json-performance.md
   - Lowering составных значений: aggregate-lowering.md
