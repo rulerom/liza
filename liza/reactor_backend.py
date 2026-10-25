@@ -13,11 +13,13 @@ def external(fn, lines, types):
         return False
     operation = 'read' if name == 'net.reactor_read' else name.removeprefix('__liza_reactor_')
     result = types[fn.result_type]
-    if operation in ('create', 'accept'):
+    if operation in ('create', 'accept', 'connect'):
         create = operation == 'create'
         params = 'i16 %port, i32 %capacity' if create else 'ptr %r'
         abi = 'i16, i32, ptr' if create else 'ptr, ptr'
         args = 'i16 %port, i32 %capacity, ptr %out' if create else 'ptr %r, ptr %out'
+        if operation == 'connect':
+            params='ptr %r, i16 %port';abi='ptr, i16, ptr';args='ptr %r, i16 %port, ptr %out'
         handle = 'ptr' if create else '[3 x i64]'
         lines.extend([f'declare i32 @liza_rt_reactor_{operation}({abi})',
                       f'define internal {result} @liza_{name}({params}) {{',
@@ -29,7 +31,7 @@ def external(fn, lines, types):
                       f'  ret {result} %r1', '}'])
         return True
     params=['ptr %r'];abi=['ptr'];args=['ptr %r'];body=[]
-    if operation in ('read','write','interest','ready','disconnect'):
+    if operation in ('read','write','interest','ready','disconnect','finish_connect','shutdown_write'):
         params.append('[3 x i64] %id')
         for i in range(3):
             body.append(f'  %id{i} = extractvalue [3 x i64] %id, {i}')

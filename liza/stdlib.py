@@ -81,6 +81,9 @@ def attach(program):
         ('net.read',['net.Stream','memory.Buffer<u8>'],product_type('memory.Buffer<u8>','Result<u32,NetError>'),[0]),
     ]
     reactor_externals = [
+        ('__liza_reactor_connect',['net.Reactor','u16'],'__liza_Connection',[0], 'io'),
+        ('__liza_reactor_finish_connect',['net.Reactor','net.Connection'],'u64',[0], 'io'),
+        ('__liza_reactor_shutdown_write',['net.Reactor','net.Connection'],'u64',[0], 'io'),
         ('__liza_reactor_create',['u16','u32'],'__liza_Reactor',[], 'io,alloc'),
         ('__liza_reactor_accept',['net.Reactor'],'__liza_Connection',[0], 'io'),
         ('__liza_reactor_port',['net.Reactor'],'u64',[0], 'io'),

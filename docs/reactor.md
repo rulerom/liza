@@ -70,6 +70,13 @@ I/O/аллокации/закрытия, 4 — ошибка протокола �
 `ReactorError`: `AddressInUse`, `PermissionDenied`, `Interrupted`, `WouldBlock`,
 `Disconnected`, `InvalidRange`, `Other`, `InvalidCapacity`, `Full`,
 `InvalidConnection`, `Exhausted`, `OutOfMemory`.
+
+Срез [0.0.30 TCP Proxy](tcp-proxy.md) добавляет исходящий `reactor_connect`,
+явный `reactor_finish_connect` и `reactor_shutdown_write`. Для исходящего ID
+перед read/write нужно подтвердить Connected. Принятые через accept соединения
+по-прежнему сразу готовы к неблокирующему I/O. Подробный контракт pending,
+ошибок подключения и half-close описан на странице proxy.
+
 Неизвестные ошибки ОС отображаются в `Other`. `Full` не принимает и не теряет
 новый сокет; очередь ОС остаётся ограниченной настройками listen и ОС.
 

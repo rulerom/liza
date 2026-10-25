@@ -252,7 +252,7 @@ python -m liza build examples/apps/liza_reactor.liza -O 2 -o build/liza-reactor
 на соединение. Буферы выделяются один раз и переиспользуются. Медленный клиент
 не блокирует остальных. [Контракт, память и ограничения](docs/reactor.md).
 
-## Message Router · срез 0.0.29 на приёмке
+## Message Router · срез 0.0.29
 
 ```sh
 python -m liza build examples/apps/liza_router.liza -O 2 -o build/liza-router
@@ -264,3 +264,14 @@ python -m liza build examples/apps/liza_router.liza -O 2 -o build/liza-router
 `Busy` и `Unavailable` не меняют очередь адресата. Старый ID не адресует
 нового клиента после переиспользования слота. Логика реализована на Liza
 поверх существующего reactor. [Wire-протокол и границы](docs/message-router.md).
+
+## Bounded L4 TCP Proxy · срез 0.0.30 на приёмке
+
+```sh
+python -m liza build examples/apps/liza_proxy.liza -O 2 -o build/liza-proxy
+./build/liza-proxy --ephemeral
+```
+
+До восьми пар, фиксированный upstream `127.0.0.1:9003`, два независимых
+направления с half-close и 32 КиБ пользовательских буферов. Неблокирующий
+connect явно проверяется перед передачей. [Контракт и отдельная модель relay](docs/tcp-proxy.md).
