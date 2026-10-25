@@ -5,7 +5,7 @@ from .frontend import Parser, Function, Token, Program, Expr
 
 
 def attach(program):
-    libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net') if getattr(program, 'uses_'+name, False)]
+    libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net', 'framing') if getattr(program, 'uses_'+name, False)]
     if not libraries:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
@@ -13,7 +13,11 @@ def attach(program):
     for structure in library.structs:
         if structure.name.text == 'Utf8StreamState':
             structure.module = '__liza_utf8_stream'
+        if structure.name.text == 'FrameState':
+            structure.module = '__liza_framing'
     for fn in library:
+        if fn.name.text.startswith('framing.'):
+            fn.module = '__liza_framing'
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
             fn.module = '__liza_utf8_stream'
         if fn.name.text in ('net.accept','net.local_port','net.write','file.read_chunk', 'file.write_chunk', 'file.flush'):

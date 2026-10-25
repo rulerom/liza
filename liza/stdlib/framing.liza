@@ -1,0 +1,42 @@
+// Four-byte unsigned big-endian length. State never retains input or storage.
+struct FrameState { limit:u32; length:u32; header_bytes:u32; received:u32 }
+enum FrameError { InvalidRange; TooLarge; TruncatedHeader; TruncatedBody }
+struct FrameStep {
+    state:FrameState; next:u32; payload_start:u32; payload_count:u32
+    body_offset:u32; length:u32; complete:bool
+}
+fn framing.create(limit:u32)->FrameState {return FrameState(limit,0,0,0)}
+
+// Consume at most one frame (or its currently available payload segment).
+// next is an absolute input index, not a count. No allocation or payload copy.
+fn framing.feed(state:FrameState,data:View<u8>,start:u32,count:u32)->Result<FrameStep,FrameError> {
+    if start>data.len {return Err(FrameError.InvalidRange)}
+    if count>data.len-start {return Err(FrameError.InvalidRange)}
+    end=start+count
+    var cursor=start
+    var next=state
+    while next.header_bytes<4 && cursor<end {
+        next.length=(next.length<<8) | u32(data[cursor])
+        next.header_bytes=next.header_bytes+1
+        cursor=cursor+1
+    }
+    if next.header_bytes<4 {return Ok(FrameStep(next,cursor,cursor,0,0,0,false))}
+    if next.length>next.limit {return Err(FrameError.TooLarge)}
+    remaining=next.length-next.received
+    var take=end-cursor
+    if take>remaining {take=remaining}
+    offset=next.received
+    next.received=next.received+take
+    total=next.length
+    complete=next.received==total
+    if complete {next=framing.create(next.limit)}
+    return Ok(FrameStep(next,cursor+take,cursor,take,offset,total,complete))
+}
+fn framing.finish(state:FrameState)->Result<u32,FrameError> {
+    if state.header_bytes==0 {return Ok(0)}
+    if state.header_bytes<4 {return Err(FrameError.TruncatedHeader)}
+    return Err(FrameError.TruncatedBody)
+}
+fn framing.header(length:u32)->[u8;4] {
+    return [u8.wrap(length>>24),u8.wrap(length>>16),u8.wrap(length>>8),u8.wrap(length)]
+}
