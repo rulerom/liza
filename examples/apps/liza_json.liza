@@ -1,0 +1,64 @@
+// Build: python3 -m liza build examples/apps/liza_json.liza -o build/liza-json
+fn diagnostic(message:Text,code:u32)->u32:io {
+    match console.errln(message) {Ok(n)=>{return code} Err(e)=>{return 3}}
+}
+fn report(result:Result<u64,JsonError>)->u32:io {
+    match result {
+        Ok(count)=>{match console.println("OK") {Ok(n)=>{return 0} Err(e)=>{return 3}}}
+        Err(error)=>{
+            var label:Text="Syntax"
+            var code:u32=1
+            match error.kind {
+                JsonErrorKind.Syntax=>{}
+                JsonErrorKind.InvalidNumber=>{label="InvalidNumber"}
+                JsonErrorKind.InvalidEscape=>{label="InvalidEscape"}
+                JsonErrorKind.InvalidSurrogate=>{label="InvalidSurrogate"}
+                JsonErrorKind.InvalidUtf8=>{label="InvalidUtf8"}
+                JsonErrorKind.UnexpectedEof=>{label="UnexpectedEof"}
+                JsonErrorKind.DepthLimit=>{label="DepthLimit";code=4}
+                JsonErrorKind.SizeOverflow=>{label="SizeOverflow";code=4}
+            }
+            match console.err(label) {Ok(n)=>{} Err(e)=>{return 3}}
+            match console.err(" at byte ") {Ok(n)=>{} Err(e)=>{return 3}}
+            match console.err_u64(error.offset) {Ok(n)=>{} Err(e)=>{return 3}}
+            match console.errln("") {Ok(n)=>{} Err(e)=>{return 3}}
+            return code
+        }
+    }
+}
+fn run(path:Path)->u32:io {
+    match file.open_path(path) {
+        Err(error)=>{return diagnostic("Cannot open file",3)}
+        Ok(input)=>{
+            var state=json.create()
+            var failed:bool=false
+            var done:bool=false
+            while !done {
+                match file.read_chunk(input) {
+                    Err(error)=>{failed=true;break}
+                    Ok(chunk)=>{
+                        if chunk.eof {break}
+                        bytes=chunk.data
+                        data=view bytes[0..chunk.len]
+                        state=json.feed(state,data)
+                        match json.status(state) {Some(e)=>{done=true} None=>{}}
+                    }
+                }
+            }
+            match file.close(move input) {Err(error)=>{return diagnostic("Cannot close file",3)} Ok(closed)=>{}}
+            if failed {return diagnostic("Cannot read file",3)}
+            return report(json.finish(state))
+        }
+    }
+}
+fn usage()->u32:io {return diagnostic("Usage: liza-json check <file>",2)}
+fn main()->u32:io {
+    if cli.count()!=3 {return usage()}
+    match cli.arg(1) {
+        None=>{return usage()}
+        Some(command)=>{
+            if !cli.equals(command,"check") {return usage()}
+            match cli.path_arg(2) {None=>{return usage()} Some(path)=>{return run(path)}}
+        }
+    }
+}

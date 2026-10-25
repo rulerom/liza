@@ -1,0 +1,197 @@
+// Bounded streaming JSON syntax validator. No input bytes are retained.
+// Stack contexts: 1=array first value/end, 2=array comma/end, 3=array value;
+// 4=object first key/end, 5=colon, 6=object value, 7=object comma/end, 8=key.
+// Lexer modes: 0=structure, 1=string, 2=escape, 3=hex, 4/5/6=low surrogate;
+// 10=minus, 11=zero, 12=integer, 13=dot, 14=fraction, 15=exponent,
+// 16=exponent sign, 17=exponent digits, 20=literal.
+// Error numbers follow JsonErrorKind declaration order, starting at 1.
+struct JsonState {
+    encoding:Utf8StreamState; position:u64; stack:[u8;64]; depth:u32
+    root_done:bool; mode:u32; key:bool; word:u32; index:u32
+    digits:u32; unit:u32; escape_start:u64; high_start:u64
+    error:u32; offset:u64
+}
+enum JsonErrorKind { Syntax; InvalidNumber; InvalidEscape; InvalidSurrogate; InvalidUtf8; UnexpectedEof; DepthLimit; SizeOverflow }
+struct JsonError {kind:JsonErrorKind;offset:u64}
+fn json.create()->JsonState {
+    return JsonState(utf8_stream.create(),0,[0;64],0,false,0,false,0,0,0,0,0,0,0,0)
+}
+fn __liza_json_fail(s:JsonState,code:u32,offset:u64)->JsonState {
+    var n=s;n.error=code;n.offset=offset;return n
+}
+fn __liza_json_done(s:JsonState)->JsonState {
+    var n=s
+    if n.depth==0 {n.root_done=true}
+    else {
+        slot=n.depth-1
+        if n.stack[slot]==1 || n.stack[slot]==3 {n.stack[slot]=2}
+        else {n.stack[slot]=7}
+    }
+    return n
+}
+fn __liza_json_space(b:u8)->bool {return b==32 || b==9 || b==10 || b==13}
+fn __liza_json_digit(b:u8)->bool {return b>=48 && b<=57}
+fn __liza_json_hex(b:u8)->u32 {
+    if b>=48 && b<=57 {return u32(b)-48}
+    if b>=65 && b<=70 {return u32(b)-55}
+    if b>=97 && b<=102 {return u32(b)-87}
+    return 16
+}
+fn __liza_json_step(s:JsonState,b:u8)->JsonState {
+    var n=s
+    if n.mode==1 {
+        if b<32 {return __liza_json_fail(n,1,n.position)}
+        if b==34 {
+            n.mode=0
+            if n.key {n.stack[n.depth-1]=5;return n}
+            return __liza_json_done(n)
+        }
+        if b==92 {n.mode=2;n.escape_start=n.position}
+        return n
+    }
+    if n.mode==2 {
+        if b==34 || b==92 || b==47 || b==98 || b==102 || b==110 || b==114 || b==116 {n.mode=1;return n}
+        if b==117 {n.mode=3;n.digits=0;n.unit=0;return n}
+        return __liza_json_fail(n,3,n.position)
+    }
+    if n.mode==4 {
+        if b!=92 {return __liza_json_fail(n,4,n.high_start)}
+        n.mode=5;return n
+    }
+    if n.mode==5 {
+        if b!=117 {return __liza_json_fail(n,4,n.high_start)}
+        n.mode=6;n.digits=0;n.unit=0;return n
+    }
+    if n.mode==3 || n.mode==6 {
+        hex=__liza_json_hex(b)
+        if hex==16 {return __liza_json_fail(n,3,n.position)}
+        n.unit=n.unit*16+hex;n.digits=n.digits+1
+        if n.digits==4 {
+            if n.mode==6 {
+                if n.unit<56320 || n.unit>57343 {return __liza_json_fail(n,4,n.high_start)}
+                n.mode=1;return n
+            }
+            if n.unit>=55296 && n.unit<=56319 {n.mode=4;n.high_start=n.escape_start;return n}
+            if n.unit>=56320 && n.unit<=57343 {return __liza_json_fail(n,4,n.escape_start)}
+            n.mode=1
+        }
+        return n
+    }
+    if n.mode==20 {
+        var expected:u8=0
+        var length:u32=4
+        if n.word==1 {
+            if n.index==1 {expected=114}
+            if n.index==2 {expected=117}
+            if n.index==3 {expected=101}
+        }
+        if n.word==2 {
+            length=5
+            if n.index==1 {expected=97}
+            if n.index==2 {expected=108}
+            if n.index==3 {expected=115}
+            if n.index==4 {expected=101}
+        }
+        if n.word==3 {
+            if n.index==1 {expected=117} else {expected=108}
+        }
+        if b!=expected {return __liza_json_fail(n,1,n.position)}
+        n.index=n.index+1
+        if n.index==length {n.mode=0;return __liza_json_done(n)}
+        return n
+    }
+    if n.mode>=10 && n.mode<=17 {
+        if __liza_json_digit(b) {
+            if n.mode==11 {return __liza_json_fail(n,2,n.position)}
+            if n.mode==10 {if b==48 {n.mode=11} else {n.mode=12}}
+            if n.mode==13 {n.mode=14}
+            if n.mode==15 || n.mode==16 {n.mode=17}
+            return n
+        }
+        if (n.mode==11 || n.mode==12) && b==46 {n.mode=13;return n}
+        if (n.mode==11 || n.mode==12 || n.mode==14) && (b==101 || b==69) {n.mode=15;return n}
+        if n.mode==15 && (b==43 || b==45) {n.mode=16;return n}
+        if n.mode==10 || n.mode==13 || n.mode==15 || n.mode==16 {return __liza_json_fail(n,2,n.position)}
+        if !(__liza_json_space(b) || b==44 || b==93 || b==125) {return __liza_json_fail(n,2,n.position)}
+        n.mode=0;n=__liza_json_done(n)
+        // Delimiter still belongs to the structural grammar below.
+    }
+    if __liza_json_space(b) {return n}
+    var context:u8=0
+    if n.depth>0 {context=n.stack[n.depth-1]}
+    if b==93 && (context==1 || context==2) {n.depth=n.depth-1;return n}
+    if b==125 && (context==4 || context==7) {n.depth=n.depth-1;return n}
+    if context==2 || context==7 {
+        if b!=44 {return __liza_json_fail(n,1,n.position)}
+        if context==2 {n.stack[n.depth-1]=3} else {n.stack[n.depth-1]=8}
+        return n
+    }
+    if context==5 {
+        if b!=58 {return __liza_json_fail(n,1,n.position)}
+        n.stack[n.depth-1]=6;return n
+    }
+    if context==4 || context==8 {
+        if b!=34 {return __liza_json_fail(n,1,n.position)}
+        n.key=true;n.mode=1;return n
+    }
+    if n.depth==0 && n.root_done {return __liza_json_fail(n,1,n.position)}
+    if b==91 || b==123 {
+        if n.depth==64 {return __liza_json_fail(n,7,n.position)}
+        n=__liza_json_done(n)
+        if b==91 {n.stack[n.depth]=1} else {n.stack[n.depth]=4}
+        n.depth=n.depth+1;return n
+    }
+    if b==34 {n.key=false;n.mode=1;return n}
+    if b==45 {n.mode=10;return n}
+    if __liza_json_digit(b) {if b==48 {n.mode=11} else {n.mode=12};return n}
+    if b==116 || b==102 || b==110 {
+        n.mode=20;n.index=1
+        if b==116 {n.word=1} else {if b==102 {n.word=2} else {n.word=3}}
+        return n
+    }
+    return __liza_json_fail(n,1,n.position)
+}
+fn json.feed(state:JsonState,data:View<u8>)->JsonState {
+    var n=state
+    if n.error!=0 {return n}
+    var i:u32=0
+    while i<data.len {
+        byte=data[i]
+        n.encoding=utf8_stream.feed_byte(n.encoding,byte)
+        match utf8_stream.status(n.encoding) {
+            None=>{}
+            Some(e)=>{match e.kind {
+                Utf8StreamErrorKind.InvalidEncoding=>{return __liza_json_fail(n,5,e.offset)}
+                Utf8StreamErrorKind.SizeOverflow=>{return __liza_json_fail(n,8,e.offset)}
+            }}
+        }
+        n=__liza_json_step(n,byte)
+        if n.error!=0 {return n}
+        n.position=n.position+1;i=i+1
+    }
+    return n
+}
+fn json.status(s:JsonState)->Option<JsonError> {
+    if s.error==0 {return None}
+    var kind=JsonErrorKind.Syntax
+    if s.error==2 {kind=JsonErrorKind.InvalidNumber}
+    if s.error==3 {kind=JsonErrorKind.InvalidEscape}
+    if s.error==4 {kind=JsonErrorKind.InvalidSurrogate}
+    if s.error==5 {kind=JsonErrorKind.InvalidUtf8}
+    if s.error==6 {kind=JsonErrorKind.UnexpectedEof}
+    if s.error==7 {kind=JsonErrorKind.DepthLimit}
+    if s.error==8 {kind=JsonErrorKind.SizeOverflow}
+    return Some(JsonError(kind,s.offset))
+}
+fn json.finish(state:JsonState)->Result<u64,JsonError> {
+    var n=state
+    match json.status(n) {Some(e)=>{return Err(e)} None=>{}}
+    match utf8_stream.finish(n.encoding) {
+        Ok(count)=>{}
+        Err(e)=>{return Err(JsonError(JsonErrorKind.InvalidUtf8,e.offset))}
+    }
+    if n.mode==11 || n.mode==12 || n.mode==14 || n.mode==17 {n.mode=0;n=__liza_json_done(n)}
+    if n.mode==4 || n.mode==5 || n.mode==6 {return Err(JsonError(JsonErrorKind.InvalidSurrogate,n.high_start))}
+    if n.mode!=0 || n.depth!=0 || !n.root_done {return Err(JsonError(JsonErrorKind.UnexpectedEof,n.position))}
+    return Ok(n.position)
+}

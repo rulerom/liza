@@ -15,51 +15,58 @@ fn utf8_stream.feed(state:Utf8StreamState, data:View<u8>)->Utf8StreamState {
     if next.error!=0 {return next}
     var i:u32=0
     while i<data.len {
-        // Check per byte, not per chunk: error priority is partition invariant.
-        if next.position==18446744073709551615 {
-            next.error=2;next.offset=next.position;return next
-        }
-        byte=data[i]
-        if next.remaining==0 {
-            next.start=next.position
-            if byte<128 {
-                if next.count==18446744073709551615 {
-                    next.error=2;next.offset=next.position;return next
-                }
-                next.count=next.count+1
-            } else {
-                next.lower=128;next.upper=191
-                if byte>=194 && byte<=223 {next.remaining=1}
-                else {
-                    if byte>=224 && byte<=239 {
-                        next.remaining=2
-                        if byte==224 {next.lower=160}
-                        if byte==237 {next.upper=159}
-                    } else {
-                        if byte>=240 && byte<=244 {
-                            next.remaining=3
-                            if byte==240 {next.lower=144}
-                            if byte==244 {next.upper=143}
-                        } else {next.error=1;next.offset=next.start;return next}
-                    }
-                }
-            }
-        } else {
-            if byte<next.lower || byte>next.upper {
-                next.error=1;next.offset=next.start;return next
-            }
-            next.remaining=next.remaining-1
-            next.lower=128;next.upper=191
-            if next.remaining==0 {
-                if next.count==18446744073709551615 {
-                    next.error=2;next.offset=next.position;return next
-                }
-                next.count=next.count+1
-            }
-        }
-        next.position=next.position+1
+        next=utf8_stream.feed_byte(next,data[i])
+        if next.error!=0 {return next}
         i=i+1
     }
+    return next
+}
+
+fn utf8_stream.feed_byte(state:Utf8StreamState,byte:u8)->Utf8StreamState {
+    var next=state
+    if next.error!=0 {return next}
+    // Check per byte, not per chunk: error priority is partition invariant.
+    if next.position==18446744073709551615 {
+        next.error=2;next.offset=next.position;return next
+    }
+    if next.remaining==0 {
+        next.start=next.position
+        if byte<128 {
+            if next.count==18446744073709551615 {
+                next.error=2;next.offset=next.position;return next
+            }
+            next.count=next.count+1
+        } else {
+            next.lower=128;next.upper=191
+            if byte>=194 && byte<=223 {next.remaining=1}
+            else {
+                if byte>=224 && byte<=239 {
+                    next.remaining=2
+                    if byte==224 {next.lower=160}
+                    if byte==237 {next.upper=159}
+                } else {
+                    if byte>=240 && byte<=244 {
+                        next.remaining=3
+                        if byte==240 {next.lower=144}
+                        if byte==244 {next.upper=143}
+                    } else {next.error=1;next.offset=next.start;return next}
+                }
+            }
+        }
+    } else {
+        if byte<next.lower || byte>next.upper {
+            next.error=1;next.offset=next.start;return next
+        }
+        next.remaining=next.remaining-1
+        next.lower=128;next.upper=191
+        if next.remaining==0 {
+            if next.count==18446744073709551615 {
+                next.error=2;next.offset=next.position;return next
+            }
+            next.count=next.count+1
+        }
+    }
+    next.position=next.position+1
     return next
 }
 
@@ -68,4 +75,10 @@ fn utf8_stream.finish(state:Utf8StreamState)->Result<u64,Utf8StreamError> {
     if state.error==2 {return Err(Utf8StreamError(Utf8StreamErrorKind.SizeOverflow,state.offset))}
     if state.remaining!=0 {return Err(Utf8StreamError(Utf8StreamErrorKind.InvalidEncoding,state.start))}
     return Ok(state.count)
+}
+
+fn utf8_stream.status(state:Utf8StreamState)->Option<Utf8StreamError> {
+    if state.error==1 {return Some(Utf8StreamError(Utf8StreamErrorKind.InvalidEncoding,state.offset))}
+    if state.error==2 {return Some(Utf8StreamError(Utf8StreamErrorKind.SizeOverflow,state.offset))}
+    return None
 }

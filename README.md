@@ -166,6 +166,19 @@ python3 -m liza run examples/utf8_stream_file.liza
 
 [Контракт и пример](https://liza.rulerom.com/utf8-stream.html).
 
+## liza-json · Text & Compiler Foundations
+
+Потоковая проверка JSON на самой Liza: UTF-8, escapes и surrogate pairs,
+лексические числа, точные байтовые смещения ошибок. Стек ограничен 64 уровнями,
+память не зависит от размера файла; `format` и дерево объектов пока не реализованы.
+
+```sh
+python3 -m liza build examples/apps/liza_json.liza -o build/liza-json
+./build/liza-json check config.json
+```
+
+[Контракт и ограничения](https://liza.rulerom.com/json.html).
+
 ## liza-text · 0.0.24
 
 Первое CLI-приложение: `check`, `count`, `info` для произвольного пути к файлу.

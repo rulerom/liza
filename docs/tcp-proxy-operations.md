@@ -4,7 +4,7 @@ description: "Первый прикладной срез Liza 0.0.31: типиз
 
 # Liza 0.0.31 — TCP Proxy Operations
 
-**Статус: первый прикладной срез реализован в draft PR #13.**
+**Статус: первый прикладной срез реализован; PR #13 слит.**
 `examples/apps/liza_proxy_ops.liza` добавляет адреса, CLI и connect deadline.
 Исходный [прокси 0.0.30](tcp-proxy.md) сохранён без изменений как baseline
 R2-B/R2-C. Idle timeout, graceful shutdown и счётчики остаются следующим
