@@ -64,6 +64,7 @@ nav:
   - TCP reactor: reactor.md
   - Message Router: message-router.md
   - L4 TCP Proxy: tcp-proxy.md
+  - TCP Proxy Operations: tcp-proxy-operations.md
   - Редактор Zed: editor.md
   - Milestones: milestones.md
   - Verification pipeline: verification-pipeline.md

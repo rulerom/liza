@@ -13,13 +13,27 @@ def external(fn, lines, types):
         return False
     operation = 'read' if name == 'net.reactor_read' else name.removeprefix('__liza_reactor_')
     result = types[fn.result_type]
-    if operation in ('create', 'accept', 'connect'):
-        create = operation == 'create'
+    if operation == 'clock':
+        lines.extend(['declare i32 @liza_rt_reactor_clock(ptr)',
+                      f'define internal {result} @liza_{name}() {{',
+                      '  %out = alloca i64',
+                      '  %code = call i32 @liza_rt_reactor_clock(ptr %out)',
+                      '  %value = load i64, ptr %out',
+                      f'  %r0 = insertvalue {result} zeroinitializer, i64 %value, 0',
+                      f'  %r1 = insertvalue {result} %r0, i32 %code, 1',
+                      f'  ret {result} %r1', '}'])
+        return True
+    if operation in ('create', 'accept', 'connect', 'create_at', 'connect_at'):
+        create = operation in ('create', 'create_at')
         params = 'i16 %port, i32 %capacity' if create else 'ptr %r'
         abi = 'i16, i32, ptr' if create else 'ptr, ptr'
         args = 'i16 %port, i32 %capacity, ptr %out' if create else 'ptr %r, ptr %out'
         if operation == 'connect':
             params='ptr %r, i16 %port';abi='ptr, i16, ptr';args='ptr %r, i16 %port, ptr %out'
+        if operation == 'create_at':
+            params='i32 %ip, i16 %port, i32 %capacity';abi='i32, i16, i32, ptr';args='i32 %ip, i16 %port, i32 %capacity, ptr %out'
+        if operation == 'connect_at':
+            params='ptr %r, i32 %ip, i16 %port';abi='ptr, i32, i16, ptr';args='ptr %r, i32 %ip, i16 %port, ptr %out'
         handle = 'ptr' if create else '[3 x i64]'
         lines.extend([f'declare i32 @liza_rt_reactor_{operation}({abi})',
                       f'define internal {result} @liza_{name}({params}) {{',

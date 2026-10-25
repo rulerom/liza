@@ -114,3 +114,26 @@ fn net.reactor_finish_connect(reactor:net.Reactor,id:net.Connection)->Result<boo
 fn net.reactor_shutdown_write(reactor:net.Reactor,id:net.Connection)->Result<u32,ReactorError>:io {
     return __liza_reactor_status(__liza_reactor_shutdown_write(reactor,id))
 }
+
+// Endpoint is a value. No native sockaddr layout or socket ownership leaks.
+struct net.Address { pub a:u8; pub b:u8; pub c:u8; pub d:u8; pub port:u16 }
+struct __liza_Clock { value:u64; error:u32 }
+fn net.ipv4(a:u8,b:u8,c:u8,d:u8,port:u16)->net.Address {return net.Address(a,b,c,d,port)}
+fn net.ipv4_bits(address:net.Address)->u32 {
+    return (u32(address.a)<<24)|(u32(address.b)<<16)|(u32(address.c)<<8)|u32(address.d)
+}
+fn net.reactor_create_at(address:net.Address,capacity:u32)->Result<net.Reactor,ReactorError>:io,alloc {
+    raw=__liza_reactor_create_at(net.ipv4_bits(address),address.port,capacity)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_reactor_error(raw.error))
+}
+fn net.reactor_connect_at(reactor:net.Reactor,address:net.Address)->Result<net.Connection,ReactorError>:io {
+    raw=__liza_reactor_connect_at(reactor,net.ipv4_bits(address),address.port)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_reactor_error(raw.error))
+}
+fn net.monotonic_ms()->Result<u64,ReactorError>:io {
+    raw=__liza_reactor_clock()
+    if raw.error==0 {return Ok(raw.value)}
+    return Err(__liza_reactor_error(raw.error))
+}

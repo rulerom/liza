@@ -1,0 +1,265 @@
+import relay.direction
+import proxy.config
+struct Pair {
+    client:Option<net.Connection>;upstream:Option<net.Connection>;connected:bool;started:u64;
+    forward:relay.direction.Direction;reverse:relay.direction.Direction
+}
+fn empty_pair()->Pair {return Pair(None,None,false,0,relay.direction.empty(),relay.direction.empty())}
+fn retry(error:ReactorError)->bool {
+    match error {
+        ReactorError.Interrupted=>{return true}
+        ReactorError.WouldBlock=>{return true}
+        ReactorError.AddressInUse=>{return false}
+        ReactorError.PermissionDenied=>{return false}
+        ReactorError.Disconnected=>{return false}
+        ReactorError.InvalidRange=>{return false}
+        ReactorError.Other=>{return false}
+        ReactorError.InvalidCapacity=>{return false}
+        ReactorError.Full=>{return true}
+        ReactorError.InvalidConnection=>{return false}
+        ReactorError.Exhausted=>{return false}
+        ReactorError.OutOfMemory=>{return false}
+    }
+}
+fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.Address,timeout:u32,once:bool)->u32:io,alloc {
+    var buffers=move storage
+    var pairs=[empty_pair();8]
+    var running=true
+    var accepted=false
+    var status:u32=0
+    match net.reactor_port(reactor) {
+        Err(error)=>{status=3;running=false}
+        Ok(port)=>{
+            match console.print_u64(u64(port)) {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+            match console.write("\n") {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+        }
+    }
+    var now:u64=0
+    while running {
+        match net.monotonic_ms() {
+            Err(error)=>{status=3;break}
+            Ok(value)=>{if value<now {status=3;break} now=value}
+        }
+        var wait:u32=1000
+        var timer:u32=0
+        while timer<8 {
+            match pairs[timer].client {
+                None=>{}
+                Some(id)=>{
+                    if !pairs[timer].connected {
+                        match proxy.config.remaining(pairs[timer].started,now,timeout) {
+                            Err(error)=>{status=3;running=false}
+                            Ok(left)=>{if left<wait {wait=left}}
+                        }
+                    }
+                }
+            }
+            timer=timer+1
+        }
+        if !running {break}
+        match net.reactor_poll(reactor,wait) {
+            Err(error)=>{if !retry(error) {status=3;running=false}}
+            Ok(events)=>{}
+        }
+        match net.monotonic_ms() {
+            Err(error)=>{status=3;break}
+            Ok(value)=>{if value<now {status=3;break} now=value}
+        }
+        var free:u32=8
+        var i:u32=0
+        while i<8 {
+            match pairs[i].client {None=>{if free==8 {free=i}} Some(id)=>{}}
+            i=i+1
+        }
+        if running && free<8 && (!once || !accepted) {
+            match net.reactor_accept(reactor) {
+                Err(error)=>{if !retry(error) {status=3;running=false}}
+                Ok(client)=>{
+                    accepted=true
+                    match net.monotonic_ms() {
+                        Err(error)=>{closed=net.reactor_disconnect(reactor,client);status=3;break}
+                        Ok(value)=>{
+                            if value<now {closed=net.reactor_disconnect(reactor,client);status=3;break}
+                            now=value
+                        }
+                    }
+                    match net.reactor_connect_at(reactor,upstream_address) {
+                        Err(error)=>{
+                            closed=net.reactor_disconnect(reactor,client)
+                            if once {status=3;running=false}
+                        }
+                        Ok(upstream)=>{
+                            pairs[free]=Pair(Some(client),Some(upstream),false,now,relay.direction.empty(),relay.direction.empty())
+                        }
+                    }
+                }
+            }
+        }
+        i=0
+        while i<8 && running {
+            var pair=copy pairs[i]
+            match pair.client {
+                None=>{}
+                Some(client)=>{
+                    match pair.upstream {
+                        None=>{status=3;running=false}
+                        Some(upstream)=>{
+                            var alive=true
+                            var failure:u32=0
+                            var client_ready:u32=0
+                            var upstream_ready:u32=0
+                            match net.reactor_ready(reactor,client) {Err(e)=>{alive=false;failure=3} Ok(flags)=>{client_ready=flags}}
+                            match net.reactor_ready(reactor,upstream) {Err(e)=>{alive=false;failure=3} Ok(flags)=>{upstream_ready=flags}}
+                            if alive && !pair.connected {
+                                match net.monotonic_ms() {
+                                    Err(error)=>{alive=false;failure=3;status=3;running=false}
+                                    Ok(value)=>{
+                                        if value<now {alive=false;failure=3;status=3;running=false} else {now=value}
+                                    }
+                                }
+                                if alive {
+                                    match proxy.config.remaining(pair.started,now,timeout) {
+                                        Err(error)=>{alive=false;failure=3;status=3;running=false}
+                                        Ok(left)=>{if left==0 {alive=false;failure=3}}
+                                    }
+                                }
+                            }
+                            if alive && !pair.connected {
+                                match net.reactor_finish_connect(reactor,upstream) {
+                                    Err(error)=>{if !retry(error) {alive=false;failure=3}}
+                                    Ok(done)=>{pair.connected=done}
+                                }
+                            }
+                            if alive && true && relay.direction.readable(pair.forward)!=0 && (client_ready&5)!=0 {
+                                (next,result)=net.reactor_read(reactor,client,move buffers,i*4096+pair.forward.tail,relay.direction.readable(pair.forward))
+                                buffers=move next
+                                match result {
+                                    Err(error)=>{if !retry(error) {alive=false;failure=3}}
+                                    Ok(count)=>{
+                                        match relay.direction.read(pair.forward,count) {
+                                            Err(error)=>{alive=false;failure=3}
+                                            Ok(next_state)=>{pair.forward=next_state}
+                                        }
+                                    }
+                                }
+                            }
+                            if alive && pair.connected && relay.direction.queued(pair.forward)!=0 {
+                                data=memory.view(buffers)
+                                match net.reactor_write(reactor,upstream,data,i*4096+pair.forward.head,relay.direction.queued(pair.forward)) {
+                                    Err(error)=>{if !retry(error) {alive=false;failure=3}}
+                                    Ok(count)=>{
+                                        match relay.direction.write(pair.forward,count) {
+                                            Err(error)=>{alive=false;failure=3}
+                                            Ok(next_state)=>{pair.forward=next_state}
+                                        }
+                                    }
+                                }
+                            }
+                            if alive && pair.connected && relay.direction.needs_fin(pair.forward) {
+                                match net.reactor_shutdown_write(reactor,upstream) {
+                                    Err(error)=>{if !retry(error) {alive=false;failure=3}}
+                                    Ok(done)=>{
+                                        match relay.direction.shutdown(pair.forward) {
+                                            Err(error)=>{alive=false;failure=3}
+                                            Ok(next_state)=>{pair.forward=next_state}
+                                        }
+                                    }
+                                }
+                            }
+                            if alive && pair.connected && relay.direction.readable(pair.reverse)!=0 && (upstream_ready&5)!=0 {
+                                (next,result)=net.reactor_read(reactor,upstream,move buffers,i*4096+2048+pair.reverse.tail,relay.direction.readable(pair.reverse))
+                                buffers=move next
+                                match result {
+                                    Err(error)=>{if !retry(error) {alive=false;failure=3}}
+                                    Ok(count)=>{
+                                        match relay.direction.read(pair.reverse,count) {
+                                            Err(error)=>{alive=false;failure=3}
+                                            Ok(next_state)=>{pair.reverse=next_state}
+                                        }
+                                    }
+                                }
+                            }
+                            if alive && pair.connected && relay.direction.queued(pair.reverse)!=0 {
+                                data=memory.view(buffers)
+                                match net.reactor_write(reactor,client,data,i*4096+2048+pair.reverse.head,relay.direction.queued(pair.reverse)) {
+                                    Err(error)=>{if !retry(error) {alive=false;failure=3}}
+                                    Ok(count)=>{
+                                        match relay.direction.write(pair.reverse,count) {
+                                            Err(error)=>{alive=false;failure=3}
+                                            Ok(next_state)=>{pair.reverse=next_state}
+                                        }
+                                    }
+                                }
+                            }
+                            if alive && pair.connected && relay.direction.needs_fin(pair.reverse) {
+                                match net.reactor_shutdown_write(reactor,client) {
+                                    Err(error)=>{if !retry(error) {alive=false;failure=3}}
+                                    Ok(done)=>{
+                                        match relay.direction.shutdown(pair.reverse) {
+                                            Err(error)=>{alive=false;failure=3}
+                                            Ok(next_state)=>{pair.reverse=next_state}
+                                        }
+                                    }
+                                }
+                            }
+                            if alive && pair.forward.fin && pair.reverse.fin {alive=false}
+                            if alive {
+                                var client_interest:u32=0
+                                if relay.direction.readable(pair.forward)!=0 {client_interest=1}
+                                if relay.direction.queued(pair.reverse)!=0 || relay.direction.needs_fin(pair.reverse) {client_interest=client_interest|2}
+                                var upstream_interest:u32=2
+                                if pair.connected {
+                                    upstream_interest=0
+                                    if relay.direction.readable(pair.reverse)!=0 {upstream_interest=1}
+                                    if relay.direction.queued(pair.forward)!=0 || relay.direction.needs_fin(pair.forward) {upstream_interest=upstream_interest|2}
+                                }
+                                match net.reactor_interest(reactor,client,client_interest) {Ok(done)=>{} Err(e)=>{alive=false;failure=3}}
+                                match net.reactor_interest(reactor,upstream,upstream_interest) {Ok(done)=>{} Err(e)=>{alive=false;failure=3}}
+                            }
+                            if !alive {
+                                match net.reactor_disconnect(reactor,client) {Ok(done)=>{} Err(e)=>{failure=3}}
+                                match net.reactor_disconnect(reactor,upstream) {Ok(done)=>{} Err(e)=>{failure=3}}
+                                pair=empty_pair()
+                                if once {status=failure;running=false}
+                            }
+                        }
+                    }
+                    pairs[i]=copy pair
+                }
+            }
+            i=i+1
+        }
+    }
+    released=memory.release(move buffers)
+    match net.reactor_close(move reactor) {Ok(done)=>{} Err(e)=>{status=3}}
+    return status
+}
+fn serve(reactor:net.Reactor,upstream_address:net.Address,timeout:u32,once:bool)->u32:io,alloc {
+    match memory.create(32768) {
+        Err(e)=>{closed=net.reactor_close(move reactor);return 3}
+        Ok(region)=>{
+            match memory.alloc<u8>(region,32768,0) {
+                Err(e)=>{freed=memory.close(move region);closed=net.reactor_close(move reactor);return 3}
+                Ok(buffers)=>{
+                    result=exchange(move reactor,move buffers,upstream_address,timeout,once)
+                    freed=memory.close(move region)
+                    return result
+                }
+            }
+        }
+    }
+}
+fn main()->u32:io,alloc {
+    match proxy.config.load() {
+        Err(error)=>{
+            message=console.err("Usage: liza-proxy-ops [--listen IPv4:port] [--upstream IPv4:port] [--connect-timeout-ms 1..2147483647] [--once | --ephemeral]\n")
+            return 2
+        }
+        Ok(config)=>{
+            match net.reactor_create_at(config.listener,16) {
+                Err(error)=>{message=console.err("Cannot create reactor\n");return 3}
+                Ok(reactor)=>{return serve(move reactor,config.upstream,config.timeout,config.once)}
+            }
+        }
+    }
+}

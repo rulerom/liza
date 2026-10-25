@@ -20,7 +20,7 @@ def attach(program):
             fn.module = '__liza_framing'
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
             fn.module = '__liza_utf8_stream'
-        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_close')) or fn.name.text in ('net.accept','net.local_port','net.write','file.read_chunk', 'file.write_chunk', 'file.flush'):
+        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_create_at','net.reactor_close')) or fn.name.text in ('net.accept','net.local_port','net.write','file.read_chunk', 'file.write_chunk', 'file.flush'):
             fn.borrowed_params = [0]
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
@@ -61,6 +61,7 @@ def attach(program):
         Function(Token('__liza_read_chunk',1,1), [(Token('handle',1,1),'File')], [], '__liza_FileRead', 'io', borrowed_params=[0]),
     ])
     externals.extend([
+        Function(Token('__liza_cli_ascii_at',1,1), [(Token('arg',1,1),'Arg'),(Token('index',1,1),'u32')], [], 'u32', 'pure'),
         Function(Token('__liza_cli_count',1,1), [], [], 'u32', 'io'),
         Function(Token('__liza_cli_arg',1,1), [(Token('index',1,1),'u32')], [], 'Arg', 'io'),
         Function(Token('__liza_cli_path',1,1), [(Token('index',1,1),'u32')], [], 'Path', 'io'),
@@ -81,6 +82,9 @@ def attach(program):
         ('net.read',['net.Stream','memory.Buffer<u8>'],product_type('memory.Buffer<u8>','Result<u32,NetError>'),[0]),
     ]
     reactor_externals = [
+        ('__liza_reactor_clock',[],'__liza_Clock',[], 'io'),
+        ('__liza_reactor_connect_at',['net.Reactor','u32','u16'],'__liza_Connection',[0], 'io'),
+        ('__liza_reactor_create_at',['u32','u16','u32'],'__liza_Reactor',[], 'io,alloc'),
         ('__liza_reactor_connect',['net.Reactor','u16'],'__liza_Connection',[0], 'io'),
         ('__liza_reactor_finish_connect',['net.Reactor','net.Connection'],'u64',[0], 'io'),
         ('__liza_reactor_shutdown_write',['net.Reactor','net.Connection'],'u64',[0], 'io'),

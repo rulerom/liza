@@ -1,0 +1,124 @@
+pub enum Error { Invalid }
+pub struct Config {pub listener:net.Address;pub upstream:net.Address;pub timeout:u32;pub once:bool}
+pub fn endpoint(arg:Arg)->Result<net.Address,Error> {
+    var octets:[u8;4]=[0;4]
+    var part:u32=0
+    var pos:u32=0
+    var value:u32=0
+    var digits:u32=0
+    var zero=false
+    while pos<=21 {
+        match cli.ascii_at(arg,pos) {
+            None=>{return Err(Error.Invalid)}
+            Some(ch)=>{
+                if ch>=48 && ch<=57 {
+                    if part<4 && zero {return Err(Error.Invalid)}
+                    digit=u32(ch)-48
+                    var limit:u32=255
+                    if part==4 {limit=65535}
+                    if value>limit/10 || (value==limit/10 && digit>limit%10) {return Err(Error.Invalid)}
+                    zero=digits==0 && ch==48
+                    value=value*10+digit
+                    digits=digits+1
+                } else {
+                    if digits==0 {return Err(Error.Invalid)}
+                    if part<3 {
+                        if ch!=46 {return Err(Error.Invalid)}
+                        octets[part]=u8(value)
+                    } else {
+                        if part==3 {
+                            if ch!=58 {return Err(Error.Invalid)}
+                            octets[part]=u8(value)
+                        } else {
+                            if ch!=0 {return Err(Error.Invalid)}
+                            return Ok(net.ipv4(octets[0],octets[1],octets[2],octets[3],u16(value)))
+                        }
+                    }
+                    part=part+1
+                    digits=0
+                    value=0
+                    zero=false
+                }
+            }
+        }
+        pos=pos+1
+    }
+    return Err(Error.Invalid)
+}
+pub fn duration(arg:Arg)->Result<u32,Error> {
+    var value:u32=0
+    var i:u32=0
+    while i<=10 {
+        match cli.ascii_at(arg,i) {
+            None=>{return Err(Error.Invalid)}
+            Some(ch)=>{
+                if ch==0 {
+                    if i==0 || value==0 {return Err(Error.Invalid)}
+                    return Ok(value)
+                }
+                if ch<48 || ch>57 {return Err(Error.Invalid)}
+                digit=u32(ch)-48
+                if value>214748364 || (value==214748364 && digit>7) {return Err(Error.Invalid)}
+                value=value*10+digit
+            }
+        }
+        i=i+1
+    }
+    return Err(Error.Invalid)
+}
+pub fn remaining(started:u64,now:u64,timeout:u32)->Result<u32,Error> {
+    if now<started || timeout==0 || timeout>2147483647 {return Err(Error.Invalid)}
+    elapsed=now-started
+    if elapsed>=u64(timeout) {return Ok(0)}
+    return Ok(timeout-u32(elapsed))
+}
+pub fn load()->Result<Config,Error>:io {
+    var listener=net.ipv4(127,0,0,1,9004)
+    var upstream=net.ipv4(127,0,0,1,9003)
+    var timeout:u32=5000
+    var mode:u32=0
+    var seen:u32=0
+    var i:u32=1
+    while i<cli.count() {
+        match cli.arg(i) {
+            None=>{return Err(Error.Invalid)}
+            Some(arg)=>{
+                if cli.equals(arg,"--once") || cli.equals(arg,"--ephemeral") {
+                    if mode!=0 {return Err(Error.Invalid)}
+                    mode=2
+                    if cli.equals(arg,"--once") {mode=1}
+                } else {
+                    var flag:u32=0
+                    if cli.equals(arg,"--listen") {flag=1}
+                    if cli.equals(arg,"--upstream") {flag=2}
+                    if cli.equals(arg,"--connect-timeout-ms") {flag=4}
+                    if flag==0 || (seen&flag)!=0 || cli.count()-i<2 {return Err(Error.Invalid)}
+                    seen=seen|flag
+                    i=i+1
+                    match cli.arg(i) {
+                        None=>{return Err(Error.Invalid)}
+                        Some(value)=>{
+                            if flag==4 {
+                                match duration(value) {Err(e)=>{return Err(e)} Ok(n)=>{timeout=n}}
+                            } else {
+                                match endpoint(value) {
+                                    Err(e)=>{return Err(e)}
+                                    Ok(address)=>{
+                                        if flag==1 {listener=address} else {upstream=address}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i=i+1
+    }
+    if upstream.port==0 || net.ipv4_bits(upstream)==0 || upstream.a>=224 {return Err(Error.Invalid)}
+    if mode!=0 {
+        if (seen&1)!=0 && listener.port!=0 {return Err(Error.Invalid)}
+        listener.port=0
+    }
+    return Ok(Config(listener,upstream,timeout,mode==1))
+}

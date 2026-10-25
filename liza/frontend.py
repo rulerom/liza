@@ -343,7 +343,7 @@ class Parser:
 
     def structure(self):
         self.take('struct')
-        name = self.identifier()
+        name = self.qualified_name() if self.internal else self.identifier()
         self.generic_scope = {}
         generics = self.generic_parameters()
         self.take('{')

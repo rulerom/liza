@@ -11,6 +11,11 @@ def external(fn, lines):
         lines.extend(['declare i32 @liza_rt_cli_count()',
                       'define internal i32 @liza___liza_cli_count() {',
                       '  %n = call i32 @liza_rt_cli_count()', '  ret i32 %n','}'])
+    elif name=='__liza_cli_ascii_at':
+        lines.extend(['declare i32 @liza_rt_cli_ascii_at(i32, i32)',
+                      'define internal i32 @liza___liza_cli_ascii_at(i32 %arg, i32 %index) {',
+                      '  %r = call i32 @liza_rt_cli_ascii_at(i32 %arg, i32 %index)',
+                      '  ret i32 %r', '}'])
     elif name=='__liza_cli_equals':
         lines.extend(['declare i32 @liza_rt_cli_equals(i32, ptr, i32)',
                       'define internal i1 @liza___liza_cli_equals(i32 %arg, { ptr, i32 } %text) {',
