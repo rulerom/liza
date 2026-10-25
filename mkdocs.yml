@@ -10,6 +10,8 @@ use_directory_urls: false
 theme:
   name: material
   custom_dir: overrides
+  logo: assets/images/liza-logo.png
+  favicon: assets/images/liza-logo.png
   language: ru
   palette:
     - scheme: default
@@ -31,8 +33,10 @@ theme:
   font: false
 
 extra:
-  social_image: assets/images/liza-social-v2.png
-  social_image_alt: 'Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций. Контролируемая стоимость — проектная цель.'
+  social_image: assets/images/liza-logo.png
+  social_image_alt: 'Логотип Liza — девушка с лисьими ушами и надпись Liza.'
+  social_image_width: 640
+  social_image_height: 640
 
 plugins:
   - search:

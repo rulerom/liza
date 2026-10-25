@@ -100,5 +100,5 @@ jobs:
           curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
             --max-time 30 https://liza.rulerom.com/core.html -o /dev/null
           curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
-            --max-time 30 https://liza.rulerom.com/assets/images/liza-social-v2.png -o /dev/null
+            --max-time 30 https://liza.rulerom.com/assets/images/liza-logo.png -o /dev/null
           echo 'Documentation: https://liza.rulerom.com/' >> "$GITHUB_STEP_SUMMARY"
