@@ -67,6 +67,7 @@ nav:
   - Владеющий UTF-8 (T1): owned-string.md
   - Readonly-доступ (T2-A): readonly-access.md
   - "T2-B: local subviews (plan)": local-subviews.md
+  - "M0: mutable borrowing (plan)": mutable-borrow.md
   - "JSON performance (plan)": json-performance.md
   - Запись файлов и liza-copy: file-output.md
   - TCP echo server: tcp.md
