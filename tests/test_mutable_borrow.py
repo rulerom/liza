@@ -175,3 +175,30 @@ fn main()->u32 {var s=Small(1);return conflict(borrow mut s,s)}'''
             compile_ir(source)
         with patch('liza.ir.check_borrows',return_value=None):
             self.run_source(source,expected_exit=1)
+
+    def test_mutable_json_entire_partitioned_corpus_at_o0_o2(self):
+        import json
+        import os
+        import struct
+        from benchmarks.json.corpus import cases, partitions
+        root=Path(__file__).resolve().parents[1]
+        payload=bytearray();expected=[]
+        for data,status,offset in cases():
+            for chunks in partitions(data):
+                expected.append((status,offset));payload.extend(struct.pack('<I',len(chunks)))
+                for chunk in chunks:
+                    payload.extend(struct.pack('<I',len(chunk)));payload.extend(chunk)
+        with tempfile.TemporaryDirectory() as folder:
+            folder=Path(folder);ir=folder/'module.ll'
+            r=subprocess.run([sys.executable,str(root/'benchmarks/mutable/emit.py'),str(ir),shutil.which('clang')],
+                             cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True)
+            self.assertEqual(r.returncode,0,r.stderr)
+            flags=json.loads(ir.with_suffix('.target.json').read_text())['flags']
+            for opt in ('-O0','-O2'):
+                with self.subTest(opt=opt):
+                    exe=folder/'probe.exe'
+                    r=subprocess.run(['clang',*flags,opt,str(ir),str(root/'benchmarks/json/driver.c'),'-o',str(exe)],capture_output=True,text=True)
+                    self.assertEqual(r.returncode,0,r.stderr)
+                    r=subprocess.run([str(exe),'probe'],input=payload,capture_output=True,timeout=120)
+                    self.assertEqual(r.returncode,0,r.stderr)
+                    self.assertEqual(list(struct.iter_unpack('<IQ',r.stdout)),expected)
