@@ -31,3 +31,12 @@ uint32_t liza_rt_cli_equals(uint32_t index,const uint8_t *text,uint32_t size) {
     }
     return arg[j]==0;
 }
+
+/* Bounded ASCII inspection, including NUL. Invalid/non-ASCII => 256. */
+uint32_t liza_rt_cli_ascii_at(uint32_t arg,uint32_t index) {
+    if(arg>=count || index>=64)return 256;
+    const wchar_t *p=(const wchar_t*)arguments[arg];
+    for(uint32_t i=0;i<index;i++)if(!p[i])return 256;
+    uint32_t value=(uint32_t)p[index];
+    return value<128?value:256;
+}

@@ -1,5 +1,5 @@
 #include "net_platform.h"
-uint32_t liza_rt_net_listen(uint16_t port, uint64_t *out) {
+uint32_t liza_rt_net_listen_at(uint32_t ip, uint16_t port, uint64_t *out) {
     *out=0;
     if (net_start()!=0) return 7;
     net_socket s=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
@@ -11,11 +11,14 @@ uint32_t liza_rt_net_listen(uint16_t port, uint64_t *out) {
 #endif
     struct sockaddr_in address;
     memset(&address,0,sizeof(address));
-    address.sin_family=AF_INET;address.sin_port=htons(port);address.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+    address.sin_family=AF_INET;address.sin_port=htons(port);address.sin_addr.s_addr=htonl(ip);
     if (!error && bind(s,(struct sockaddr*)&address,sizeof(address))!=0) error=net_error();
     if (!error && listen(s,1)!=0) error=net_error();
     if (error) {net_os_close(s);net_stop();return error;}
     *out=(uint64_t)s;return 0;
+}
+uint32_t liza_rt_net_listen(uint16_t port,uint64_t *out) {
+    return liza_rt_net_listen_at(INADDR_LOOPBACK,port,out);
 }
 uint32_t liza_rt_net_accept(uint64_t handle, uint64_t *out) {
     *out=0;

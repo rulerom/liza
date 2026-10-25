@@ -8,3 +8,10 @@ fn cli.path_arg(index:u32)->Option<Path>:io {
     return Some(__liza_cli_path(index))
 }
 fn cli.equals(arg:Arg, text:Text)->bool {return __liza_cli_equals(arg,text)}
+
+// At most 64 ASCII code units, including NUL; no allocation or borrowed view.
+fn cli.ascii_at(arg:Arg,index:u32)->Option<u8> {
+    raw=__liza_cli_ascii_at(arg,index)
+    if raw<128 {return Some(u8(raw))}
+    return None
+}
