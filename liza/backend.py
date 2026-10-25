@@ -1,7 +1,7 @@
 """Liza IR -> textual LLVM IR. The host toolchain supplies ABI and linking."""
 from .types import is_vec, is_product, product_args
 from dataclasses import replace
-from .storage import owned_variant, caller_plan
+from .storage import owned_variant, caller_plan, direct_owned_variant
 from .types import INTEGER_TYPES, width, signed, bounds, convert_integer, is_array, is_view, element_type, array_length, is_buffer
 
 
@@ -174,12 +174,21 @@ def llvm(module, target=None):
 
     owned = {}
     owned_plans = {}
-    for function in module:
-        plan = owned_variant(function, structs, large)
-        if plan is not None:
-            index = next(i for i,p in enumerate(function.params) if p['name']==plan.owned_parameter)
-            owned[function.name] = (index, plan)
-            owned_plans['__liza_owned_'+function.name] = plan
+    # Discover composition bottom-up; recursive SCCs never bootstrap a proof.
+    changed = True
+    while changed:
+        changed = False
+        for function in module:
+            if function.name in owned:
+                continue
+            plan = owned_variant(function, structs, large)
+            if plan is None:
+                plan = direct_owned_variant(function, structs, large, owned)
+            if plan is not None:
+                index = next(i for i,p in enumerate(function.params) if p['name']==plan.owned_parameter)
+                owned[function.name] = (index, plan)
+                owned_plans['__liza_owned_'+function.name] = plan
+                changed = True
     functions = list(module) + [replace(fn,name='__liza_owned_'+fn.name) for fn in module if fn.name in owned]
     for fn in functions:
         plan = owned_plans.get(fn.name) or caller_plan(fn, structs, large, owned)
