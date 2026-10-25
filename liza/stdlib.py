@@ -5,17 +5,23 @@ from .frontend import Parser, Function, Token, Program, Expr
 
 
 def attach(program):
-    libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net', 'framing') if getattr(program, 'uses_'+name, False)]
+    libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net', 'framing', 'json') if getattr(program, 'uses_'+name, False)]
+    if 'json' in libraries and 'utf8_stream' not in libraries:
+        libraries.insert(0,'utf8_stream')
     if not libraries:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
                                for name in libraries), internal=True).parse()
     for structure in library.structs:
+        if structure.name.text == 'JsonState':
+            structure.module = '__liza_json'
         if structure.name.text == 'Utf8StreamState':
             structure.module = '__liza_utf8_stream'
         if structure.name.text == 'FrameState':
             structure.module = '__liza_framing'
     for fn in library:
+        if fn.name.text.startswith(('json.', '__liza_json_')):
+            fn.module = '__liza_json'
         if fn.name.text.startswith('framing.'):
             fn.module = '__liza_framing'
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):

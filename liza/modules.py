@@ -12,8 +12,8 @@ from .types import SCALAR_TYPES, is_array, is_view, element_type, array_length, 
 BUILTINS = set(SCALAR_TYPES) | {'FrameState','FrameStep','FrameError','net.Address','net.Listener','net.Stream','net.Reactor','net.Connection','ReactorError','NetError','Text','File','Arg','Path','IoError','IoFailure','FileError',
     'FileFailure','FileBuffer','FileChunk','FileCreateError','FileWriteError','FileWriteFailure','memory.Region','MemoryError','vec.Done','vec.Error',
     'Utf8ErrorKind','Utf8Error','Utf8Step','Utf8Range','Utf8Done',
-    'Utf8StreamState','Utf8StreamError','Utf8StreamErrorKind'}
-RESERVED = {'console','file','memory','vec','utf8','utf8_stream','cli','net','framing'}
+    'Utf8StreamState','Utf8StreamError','Utf8StreamErrorKind','JsonState','JsonError','JsonErrorKind'}
+RESERVED = {'console','file','memory','vec','utf8','utf8_stream','cli','net','framing','json'}
 
 
 def load_program(source, project_root=None):
