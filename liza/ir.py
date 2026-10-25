@@ -292,7 +292,11 @@ class Lowerer:
         if expr.kind == 'literal':
             value = int(text, 16 if text.lstrip('-').startswith('0x') else 10)
             return self.emit('constant', [value], type=type_name)
-        if expr.kind in ('name', 'field', 'index') and names.get(self.storage_root(expr)) in self.storage_values and not (expr.kind == 'field' and text == 'len' and inferred[id(expr.args[0])] not in self.structs):
+        addressable = names.get(self.storage_root(expr)) in self.storage_values
+        if addressable and expr.kind == 'field' and text == 'len' and is_array(inferred[id(expr.args[0])]):
+            pointer = self.storage_address(expr.args[0], names, inferred)
+            return self.emit('sequence.length', [pointer], type='u32', source_type=self.types[pointer])
+        if addressable and expr.kind in ('name', 'field', 'index'):
             pointer = self.storage_address(expr, names, inferred)
             return self.emit('storage.read', [pointer], type=type_name,
                              owner_binding=names[self.storage_root(expr)], storage_relation='independent_snapshot')

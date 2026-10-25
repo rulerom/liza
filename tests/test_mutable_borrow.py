@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -21,6 +22,7 @@ struct Small {n:u32}
 struct Large {a:[u32;128];n:u32}
 fn inc(borrow mut s:Small)->u32 {s.n=s.n+1;return s.n}
 fn get(borrow s:Small)->u32 {return s.n}
+fn capacity(borrow s:Large)->u32 {return s.a.len}
 fn take(s:Small)->u32 {return s.n}
 fn set(borrow mut s:Large,i:u32)->u32 {s.a[i]=s.a[i]+1;s.n=s.n+1;return 0}
 fn twice(borrow mut s:Small)->u32 {
@@ -67,12 +69,16 @@ class MutableBorrowChecking(unittest.TestCase):
         inc=next(f for f in module if f.name=='inc')
         self.assertEqual(inc.params[0]['mode'],'mutable')
         self.assertEqual(inc.effect_contract,'pure')
+        self.assertIn('storage.write',inc.storage_contract['effects'])
+        self.assertEqual(inc.storage_contract['mutable_parameters'],['s'])
         self.assertIn('storage.write',[o.op for b in inc.blocks for o in b.operations])
         ir=llvm(module)
         self.assertIn('define i32 @liza_inc(ptr %p0)',ir)
         self.assertNotRegex(function_body(ir,'inc'),r'alloca|memcpy|memmove|insertvalue')
         self.assertIn('store i32',function_body(ir,'inc'))
         self.assertNotIn('__liza_owned_inc',ir)
+        for name in ('set', 'capacity'):
+            self.assertNotRegex(function_body(ir,name),r'alloca|memcpy|memmove|insertvalue')
 
     def test_readonly_generic_reborrow(self):
         src='''struct Box<T> {value:T}
@@ -84,7 +90,7 @@ fn main()->u32 {var s=Box<u32>(7);old=update(borrow mut s,9);return old-7+s.valu
 
 @unittest.skipUnless(shutil.which('clang'),'Clang required')
 class MutableBorrowNative(unittest.TestCase):
-    def run_source(self, source, expect_trap=False, mutate=None):
+    def run_source(self, source, expect_trap=False, mutate=None, expected_exit=0):
         text=llvm(compile_ir(source))
         if mutate: text=mutate(text)
         for opt in ('-O0','-O2'):
@@ -94,8 +100,10 @@ class MutableBorrowNative(unittest.TestCase):
                 r=subprocess.run(['clang','-Wno-override-module',opt,str(ll),'-o',str(exe)],capture_output=True,text=True)
                 self.assertEqual(r.returncode,0,r.stderr)
                 r=subprocess.run([str(exe)],capture_output=True,timeout=10)
-                if expect_trap:self.assertNotEqual(r.returncode,0)
-                else:self.assertEqual(r.returncode,0,r.stderr)
+                if expect_trap:
+                    if sys.platform=='win32':self.assertIn(r.returncode & 0xffffffff,(0x80000003,0xc000001d))
+                    else:self.assertLess(r.returncode,0)
+                else:self.assertEqual(r.returncode,expected_exit,r.stderr)
 
     def test_snapshots_small_large_nested_calls_and_loops(self):
         self.run_source(BASE+'''fn main()->u32 {
@@ -156,7 +164,7 @@ fn main()->u32 {var s=Small(0);match fail(borrow mut s){Ok(v)=>{return 1} Err(e)
         snapshot=next(o for b in main.blocks for o in b.operations if o.op=='storage.read' and o.type=='Large')
         snapshot.op='loan.begin'
         with patch('test_mutable_borrow.compile_ir',return_value=module):
-            self.run_source(source,True)
+            self.run_source(source,expected_exit=1)
 
     def test_mutant_disabled_exclusivity_replays_alias_violation(self):
         source=BASE+'''fn conflict(borrow mut a:Small,borrow b:Small)->u32 {
@@ -166,4 +174,4 @@ fn main()->u32 {var s=Small(1);return conflict(borrow mut s,s)}'''
         with self.assertRaisesRegex(CompileError,'borrow'):
             compile_ir(source)
         with patch('liza.ir.check_borrows',return_value=None):
-            self.run_source(source,True)
+            self.run_source(source,expected_exit=1)
