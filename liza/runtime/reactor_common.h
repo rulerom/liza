@@ -14,7 +14,7 @@ uint64_t liza_rt_net_port(uint64_t);
 uint64_t liza_rt_net_read(uint64_t, uint8_t*, uint32_t);
 uint64_t liza_rt_net_write(uint64_t, const uint8_t*, uint32_t, uint32_t, uint32_t);
 uint32_t liza_rt_net_close(uint64_t);
-typedef struct { uint64_t socket,generation; uint32_t live,interest,ready; } reactor_slot;
+typedef struct { uint64_t socket,generation; uint32_t live,interest,ready,phase,error,write_closed; } reactor_slot;
 typedef struct { uint64_t owner,listener; uint32_t capacity; reactor_slot slots[REACTOR_MAX]; } reactor;
 /* No tasks/threads in this runtime contract. Never wrap identities. */
 static uint64_t reactor_next_owner;
@@ -59,7 +59,93 @@ uint32_t liza_rt_reactor_accept(reactor *r,uint64_t *id) {
     if (e) {liza_rt_net_close(handle);return e;}
     reactor_slot *s=&r->slots[index];
     s->socket=handle;s->generation++;s->live=1;s->interest=1;s->ready=0;
+    s->phase=0;s->error=0;s->write_closed=0;
     id[0]=r->owner;id[1]=s->generation;id[2]=index;return 0;
+}
+/* phase: 0 connected, 1 connecting, 2 failed (sticky SO_ERROR result). */
+uint32_t liza_rt_reactor_connect(reactor *r,uint16_t port,uint64_t *id) {
+    id[0]=id[1]=id[2]=0;
+    if (!port) return 6;
+    uint32_t index=r->capacity;
+    for (uint32_t i=0;i<r->capacity;i++)
+        if (!r->slots[i].live && r->slots[i].generation!=UINT64_MAX) {index=i;break;}
+    if (index==r->capacity) return 9;
+    if (net_start()!=0) return 7;
+    net_socket fd=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+    if (fd==NET_INVALID) {uint32_t e=net_error();net_stop();return e;}
+    uint32_t e=net_prepare(fd);
+    if (!e) e=reactor_nonblocking((uint64_t)fd);
+    uint32_t pending=0;
+    struct sockaddr_in address;memset(&address,0,sizeof(address));
+    address.sin_family=AF_INET;address.sin_addr.s_addr=htonl(INADDR_LOOPBACK);address.sin_port=htons(port);
+    if (!e && connect(fd,(struct sockaddr*)&address,sizeof(address))!=0) {
+#ifdef _WIN32
+        int code=WSAGetLastError();
+        pending=code==WSAEWOULDBLOCK || code==WSAEINPROGRESS || code==WSAEALREADY;
+#else
+        int code=errno;
+        pending=code==EINPROGRESS || code==EALREADY || code==EINTR;
+#endif
+        if (!pending) e=net_error();
+    }
+    if (e) {net_os_close(fd);net_stop();return e;}
+    reactor_slot *slot=&r->slots[index];
+    slot->socket=(uint64_t)fd;slot->generation++;slot->live=1;slot->interest=2;slot->ready=0;
+    slot->phase=pending;slot->error=0;slot->write_closed=0;
+    id[0]=r->owner;id[1]=slot->generation;id[2]=index;return 0;
+}
+uint64_t liza_rt_reactor_finish_connect(reactor *r,uint64_t owner,uint64_t generation,uint64_t slot) {
+    reactor_slot *s=reactor_find(r,owner,generation,slot);
+    if (!s) return net_failure(10);
+    if (s->phase==0) return 1;
+    if (s->phase==2) return net_failure(s->error);
+    /* A fresh zero-time readiness check: SO_ERROR=0 alone can mean still pending. */
+#ifdef _WIN32
+    fd_set writes,errors;FD_ZERO(&writes);FD_ZERO(&errors);
+    FD_SET((SOCKET)s->socket,&writes);FD_SET((SOCKET)s->socket,&errors);
+    struct timeval zero={0,0};
+    int ready=select(0,NULL,&writes,&errors,&zero);
+#else
+    struct pollfd fd={(int)s->socket,POLLOUT,0};
+    int ready=poll(&fd,1,0);
+#endif
+    if (ready<0) return net_failure(net_error());
+    if (!ready) return 0;
+    int error=0;
+#ifdef _WIN32
+    int size=sizeof(error);
+    int result=getsockopt((SOCKET)s->socket,SOL_SOCKET,SO_ERROR,(char*)&error,&size);
+#else
+    socklen_t size=sizeof(error);
+    int result=getsockopt((int)s->socket,SOL_SOCKET,SO_ERROR,&error,&size);
+#endif
+    if (result!=0) return net_failure(net_error());
+    if (error) {
+#ifdef _WIN32
+        WSASetLastError(error);
+#else
+        errno=error;
+#endif
+        s->error=net_error();
+        /* A reported connect failure is terminal, not an operation to retry. */
+        if (s->error==3 || s->error==4) s->error=7;
+        s->phase=2;return net_failure(s->error);
+    }
+    s->phase=0;return 1;
+}
+uint64_t liza_rt_reactor_shutdown_write(reactor *r,uint64_t owner,uint64_t generation,uint64_t slot) {
+    reactor_slot *s=reactor_find(r,owner,generation,slot);
+    if (!s) return net_failure(10);
+    if (s->phase==1) return net_failure(4);
+    if (s->phase==2) return net_failure(s->error);
+    if (s->write_closed) return 0;
+#ifdef _WIN32
+    int result=shutdown((SOCKET)s->socket,SD_SEND);
+#else
+    int result=shutdown((int)s->socket,SHUT_WR);
+#endif
+    if (result!=0) return net_failure(net_error());
+    s->write_closed=1;return 0;
 }
 uint64_t liza_rt_reactor_interest(reactor *r,uint64_t owner,uint64_t generation,uint64_t slot,uint32_t flags) {
     reactor_slot *s=reactor_find(r,owner,generation,slot);
@@ -111,6 +197,8 @@ uint64_t liza_rt_reactor_read(reactor *r,uint64_t owner,uint64_t generation,uint
                              uint8_t *data,uint32_t length,uint32_t start,uint32_t count) {
     reactor_slot *s=reactor_find(r,owner,generation,slot);
     if (!s) return net_failure(10);
+    if (s->phase==1) return net_failure(4);
+    if (s->phase==2) return net_failure(s->error);
     if (start>length || count>length-start || !count) return net_failure(6);
     return liza_rt_net_read(s->socket,data+start,count);
 }
@@ -118,6 +206,9 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
                               const uint8_t *data,uint32_t length,uint32_t start,uint32_t count) {
     reactor_slot *s=reactor_find(r,owner,generation,slot);
     if (!s) return net_failure(10);
+    if (s->phase==1) return net_failure(4);
+    if (s->phase==2) return net_failure(s->error);
+    if (s->write_closed) return net_failure(5);
     return liza_rt_net_write(s->socket,data,length,start,count);
 }
 uint64_t liza_rt_reactor_disconnect(reactor *r,uint64_t owner,uint64_t generation,uint64_t slot) {

@@ -4,7 +4,8 @@ description: "Message Router на Liza: идентичность адресат�
 
 # Message Router · срез 0.0.29
 
-Прикладной этап на приёмке, отдельно от завершённого [TCP reactor](reactor.md).
+Прикладной этап завершён в [PR #7](https://github.com/rulerom/liza/pull/7),
+слитом в `main`, отдельно от [TCP reactor](reactor.md).
 Восемь loopback-клиентов могут пересылать друг другу бинарные сообщения.
 Core, Semantic IR, stdlib и платформенный runtime не изменяются: маршрутизация
 написана на Liza в `examples/apps/liza_router.liza`.

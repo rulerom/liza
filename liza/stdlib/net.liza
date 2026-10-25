@@ -99,3 +99,18 @@ fn net.reactor_disconnect(reactor:net.Reactor,id:net.Connection)->Result<u32,Rea
 fn net.reactor_write(reactor:net.Reactor,id:net.Connection,data:View<u8>,start:u32,count:u32)->Result<u32,ReactorError>:io {
     return __liza_reactor_status(__liza_reactor_write(reactor,id,data,start,count))
 }
+
+// Outbound IPv4 loopback, owned by the same reactor even while connecting.
+fn net.reactor_connect(reactor:net.Reactor,port:u16)->Result<net.Connection,ReactorError>:io {
+    raw=__liza_reactor_connect(reactor,port)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_reactor_error(raw.error))
+}
+fn net.reactor_finish_connect(reactor:net.Reactor,id:net.Connection)->Result<bool,ReactorError>:io {
+    raw=__liza_reactor_finish_connect(reactor,id)
+    if raw>>32==0 {return Ok(raw==1)}
+    return Err(__liza_reactor_error(u32(raw>>32)))
+}
+fn net.reactor_shutdown_write(reactor:net.Reactor,id:net.Connection)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_shutdown_write(reactor,id))
+}

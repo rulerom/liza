@@ -1,0 +1,31 @@
+// Pure, bounded queue coordinates. Actual bytes remain in a regional buffer.
+pub struct Direction {pub head:u32;pub tail:u32;pub eof:bool;pub fin:bool}
+pub enum Error {InvalidTransition}
+pub fn empty()->Direction {return Direction(0,0,false,false)}
+pub fn valid(d:Direction)->bool {
+    return d.head<=d.tail && d.tail<=2048 && (!d.fin || (d.eof && d.head==d.tail))
+}
+pub fn readable(d:Direction)->u32 {
+    if !valid(d) || d.eof {return 0}
+    return 2048-d.tail
+}
+pub fn queued(d:Direction)->u32 {
+    if !valid(d) {return 0}
+    return d.tail-d.head
+}
+pub fn read(d:Direction,count:u32)->Result<Direction,Error> {
+    if !valid(d) || d.eof || readable(d)==0 || count>readable(d) {return Err(Error.InvalidTransition)}
+    if count==0 {return Ok(Direction(d.head,d.tail,true,false))}
+    return Ok(Direction(d.head,d.tail+count,false,false))
+}
+pub fn write(d:Direction,count:u32)->Result<Direction,Error> {
+    if !valid(d) || count==0 || count>queued(d) {return Err(Error.InvalidTransition)}
+    next=d.head+count
+    if next==d.tail {return Ok(Direction(0,0,d.eof,d.fin))}
+    return Ok(Direction(next,d.tail,d.eof,d.fin))
+}
+pub fn needs_fin(d:Direction)->bool {return valid(d) && d.eof && queued(d)==0 && !d.fin}
+pub fn shutdown(d:Direction)->Result<Direction,Error> {
+    if !needs_fin(d) {return Err(Error.InvalidTransition)}
+    return Ok(Direction(d.head,d.tail,true,true))
+}
