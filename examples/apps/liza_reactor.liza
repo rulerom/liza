@@ -1,0 +1,196 @@
+// Eight clients; one pending echoed frame per client. No allocation in the loop.
+struct Client {
+    connection:Option<net.Connection>;
+    parser:FrameState;
+    cursor:u32;
+    received:u32;
+    pending:u32;
+    sent:u32
+}
+fn retry(error:ReactorError)->bool {
+    match error {
+        ReactorError.Interrupted=>{return true}
+        ReactorError.WouldBlock=>{return true}
+        ReactorError.AddressInUse=>{return false}
+        ReactorError.PermissionDenied=>{return false}
+        ReactorError.Disconnected=>{return false}
+        ReactorError.InvalidRange=>{return false}
+        ReactorError.Other=>{return false}
+        ReactorError.InvalidCapacity=>{return false}
+        ReactorError.Full=>{return true}
+        ReactorError.InvalidConnection=>{return false}
+        ReactorError.Exhausted=>{return false}
+        ReactorError.OutOfMemory=>{return false}
+    }
+}
+fn exchange(reactor:net.Reactor, initial:memory.Buffer<u8>, storage:memory.Buffer<u8>, once:bool)->u32:io,alloc {
+    var input=move initial
+    var output=move storage
+    empty=Client(None,framing.create(65536),0,0,0,0)
+    var clients=[empty;8]
+    var running=true
+    var accepted=false
+    var status:u32=0
+    match net.reactor_port(reactor) {
+        Err(error)=>{status=3;running=false}
+        Ok(port)=>{
+            match console.print_u64(u64(port)) {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+            match console.write("\n") {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+        }
+    }
+    while running {
+        // Buffered bytes are runnable work even without another socket event.
+        var timeout:u32=1000
+        var i:u32=0
+        while i<8 {
+            c=copy clients[i]
+            if c.pending==0 && c.cursor<c.received {timeout=0}
+            i=i+1
+        }
+        match net.reactor_poll(reactor,timeout) {
+            Err(error)=>{if !retry(error) {status=3;running=false}}
+            Ok(events)=>{}
+        }
+        if running && (!once || !accepted) {
+            match net.reactor_accept(reactor) {
+                Err(error)=>{if !retry(error) {status=3;running=false}}
+                Ok(id)=>{
+                    slot=net.connection_slot(id)
+                    clients[slot]=Client(Some(id),framing.create(65536),0,0,0,0)
+                    accepted=true
+                }
+            }
+        }
+        i=0
+        while i<8 && running {
+            var c=copy clients[i]
+            match c.connection {
+                None=>{}
+                Some(id)=>{
+                    var alive=true
+                    var failure:u32=0
+                    var ready:u32=0
+                    match net.reactor_ready(reactor,id) {
+                        Err(error)=>{alive=false;failure=3}
+                        Ok(flags)=>{ready=flags}
+                    }
+                    if alive && c.pending==0 && c.cursor==c.received && (ready&5)!=0 {
+                        (next,result)=net.reactor_read(reactor,id,move input,i*2048,2048)
+                        input=move next
+                        match result {
+                            Err(error)=>{if !retry(error) {alive=false;failure=3}}
+                            Ok(count)=>{
+                                c.cursor=0
+                                c.received=count
+                                if count==0 {
+                                    match framing.finish(c.parser) {Ok(done)=>{} Err(error)=>{failure=4}}
+                                    alive=false
+                                }
+                            }
+                        }
+                    }
+                    var completed=false
+                    if alive && c.pending==0 && c.cursor<c.received {
+                        data=memory.view(input)
+                        match framing.feed(c.parser,data,i*2048+c.cursor,c.received-c.cursor) {
+                            Err(error)=>{alive=false;failure=4}
+                            Ok(step)=>{
+                                c.parser=step.state
+                                c.cursor=step.next-i*2048
+                                var j:u32=0
+                                while j<step.payload_count {
+                                    output=memory.set(move output,i*65540+4+step.body_offset+j,data[step.payload_start+j])
+                                    j=j+1
+                                }
+                                if step.complete {
+                                    header=framing.header(step.length)
+                                    j=0
+                                    while j<4 {
+                                        output=memory.set(move output,i*65540+j,header[j])
+                                        j=j+1
+                                    }
+                                    c.pending=step.length+4
+                                    c.sent=0
+                                    completed=true
+                                }
+                            }
+                        }
+                    }
+                    if alive && c.pending!=0 && (completed || (ready&6)!=0) {
+                        data=memory.view(output)
+                        match net.reactor_write(reactor,id,data,i*65540+c.sent,c.pending-c.sent) {
+                            Err(error)=>{if !retry(error) {alive=false;failure=3}}
+                            Ok(count)=>{
+                                c.sent=c.sent+count
+                                if c.sent==c.pending {c.pending=0;c.sent=0}
+                            }
+                        }
+                    }
+                    if alive {
+                        var interest:u32=1
+                        if c.pending!=0 {interest=2}
+                        match net.reactor_interest(reactor,id,interest) {
+                            Ok(done)=>{}
+                            Err(error)=>{alive=false;failure=3}
+                        }
+                    }
+                    if !alive {
+                        match net.reactor_disconnect(reactor,id) {Ok(done)=>{} Err(error)=>{failure=3}}
+                        c=copy empty
+                        if once {status=failure;running=false}
+                    }
+                    clients[i]=copy c
+                }
+            }
+            i=i+1
+        }
+    }
+    released_input=memory.release(move input)
+    released_output=memory.release(move output)
+    match net.reactor_close(move reactor) {Ok(done)=>{} Err(error)=>{status=3}}
+    return status
+}
+fn serve(reactor:net.Reactor,once:bool)->u32:io,alloc {
+    match memory.create(540704) {
+        Err(error)=>{closed=net.reactor_close(move reactor);return 3}
+        Ok(region)=>{
+            match memory.alloc<u8>(region,16384,0) {
+                Err(error)=>{freed=memory.close(move region);closed=net.reactor_close(move reactor);return 3}
+                Ok(input)=>{
+                    match memory.alloc<u8>(region,524320,0) {
+                        Err(error)=>{
+                            released=memory.release(move input)
+                            freed=memory.close(move region)
+                            closed=net.reactor_close(move reactor)
+                            return 3
+                        }
+                        Ok(output)=>{
+                            status=exchange(move reactor,move input,move output,once)
+                            freed=memory.close(move region)
+                            return status
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+fn main()->u32:io,alloc {
+    var once=false
+    var port:u16=9002
+    if cli.count()!=1 {
+        if cli.count()!=2 {message=console.err("Usage: liza-reactor [--once | --ephemeral]\n");return 2}
+        match cli.arg(1) {
+            None=>{return 2}
+            Some(arg)=>{
+                if !cli.equals(arg,"--once") && !cli.equals(arg,"--ephemeral") {message=console.err("Usage: liza-reactor [--once | --ephemeral]\n");return 2}
+                once=cli.equals(arg,"--once")
+                port=0
+            }
+        }
+    }
+    match net.reactor_create(port,8) {
+        Err(error)=>{message=console.err("Cannot create loopback reactor\n");return 3}
+        Ok(reactor)=>{return serve(move reactor,once)}
+    }
+}

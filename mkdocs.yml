@@ -61,6 +61,7 @@ nav:
   - Запись файлов и liza-copy: file-output.md
   - TCP echo server: tcp.md
   - TCP message server: message-server.md
+  - TCP reactor: reactor.md
   - Редактор Zed: editor.md
   - Milestones: milestones.md
   - Verification pipeline: verification-pipeline.md

@@ -36,9 +36,9 @@ def value_properties(type_name):
     """Semantic capabilities, independent of byte size and target layout."""
     if type_name in ('Arg', 'Path'):
         return {'copyable': True, 'implicit_copy': True, 'process_borrow': True}
-    if type_name in ('File','net.Listener','net.Stream'):
+    if type_name in ('File','net.Listener','net.Stream','net.Reactor'):
         return {'copyable': False, 'implicit_copy': False}
-    if type_name not in SCALAR_TYPES + ('Text',):
+    if type_name not in SCALAR_TYPES + ('Text','net.Connection'):
         raise ValueError(f'unknown value type: {type_name}')
     return {'copyable': True, 'implicit_copy': True}
 
