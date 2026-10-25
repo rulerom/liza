@@ -1,0 +1,36 @@
+name: Aggregate lowering correctness
+on:
+  pull_request:
+    paths: ['liza/backend.py', 'liza/storage.py', 'tests/test_direct_storage.py', 'benchmarks/aggregate/**', '.github/workflows/aggregate-lowering.yml']
+  push:
+    branches: [main]
+    paths: ['liza/backend.py', 'liza/storage.py', 'tests/test_direct_storage.py', 'benchmarks/aggregate/**', '.github/workflows/aggregate-lowering.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  agreement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Snapshot/trap mutation replay at O0/O2
+        run: python -m unittest discover -s tests -p test_direct_storage.py -v
+      - name: A0–A3 correctness and copy-count validation (no timing threshold)
+        run: python benchmarks/aggregate/run.py --candidate "$GITHUB_SHA" --check-only --output build/aggregate-study
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aggregate-study
+          path: |
+            build/aggregate-study/report.json
+            build/aggregate-study/samples.json
+            build/aggregate-study/A*/*.ll
+            build/aggregate-study/A*/*.s
+            build/aggregate-study/A*/*.su
+            build/aggregate-study/A*/*.json

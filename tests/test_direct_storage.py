@@ -28,6 +28,34 @@ fn observed(s:State)->State {
  if old.marker==0 {return n}
  return old
 }
+fn projection_observed(s:State,i:u32)->State {
+ old=s.data;var n=s;n.data[i]=99;n.marker=old[i];return n
+}
+fn fork(s:State,flag:bool)->State {
+ var n=s
+ if flag {n=leaf(n,0,9)} else {n=leaf(n,1,10)}
+ return n
+}
+fn two_sources(s:State,flag:bool)->State {
+ if flag {return leaf(s,0,9)}
+ return initial()
+}
+fn branch_probe(i:u32)->u32 {
+ n=fork(initial(),i==0)
+ if i==0 {return n.data[0]-9}
+ return n.data[1]-10
+}
+fn projection_probe(i:u32)->u32 {n=projection_observed(initial(),i);return n.marker-7}
+fn loop_snapshots(count:u32)->u32 {
+ var n=initial();var i:u32=0
+ while i<count {
+  old=copy n;n=leaf(n,0,i)
+  if i>0 && old.marker!=i-1 {return 1}
+  i=i+1
+ }
+ if count>0 && n.marker!=count-1 {return 2}
+ return 0
+}
 fn checked(s:State,value:u8)->State {
  var n=s;n.marker=u32(value+1);n.marker=0;return n
 }
@@ -64,6 +92,9 @@ class DirectStorageProofs(unittest.TestCase):
             self.assertNotIn('@liza___liza_owned_chain',function_body(ir,name))
         self.assertNotIn('define void @liza___liza_owned_observed',ir)
         self.assertNotIn('define void @liza___liza_owned_recur',ir)
+        self.assertNotIn('define void @liza___liza_owned_projection_observed',ir)
+        self.assertNotIn('define void @liza___liza_owned_two_sources',ir)
+        self.assertIn('@liza___liza_owned_fork',function_body(ir,'branch_probe'))
         self.assertIn('@liza___liza_owned_leaf',function_body(ir,'__liza_owned_chain'))
         self.assertNotRegex(function_body(ir,'__liza_owned_leaf'),r'@llvm.mem(?:cpy|move)')
         self.assertIn('@llvm.trap()',function_body(ir,'__liza_owned_leaf'))
@@ -96,7 +127,7 @@ class DirectStorageNative(unittest.TestCase):
     def test_native_snapshots_views_and_unique_updates(self):
         ir=emit()
         for opt in ('-O0','-O2'):
-            for name in ('unique','snapshot','view_observer','retained_inside'):
+            for name in ('unique','snapshot','view_observer','retained_inside','projection_probe','branch_probe','loop_snapshots'):
                 with self.subTest(opt=opt,name=name),tempfile.TemporaryDirectory() as folder:
                     exe=self.build(folder,ir,opt,name)
                     for i in (0,64,127):

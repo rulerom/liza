@@ -1,0 +1,30 @@
+{
+  "archive_sha256": "e3378278a6982e4a447ca5a4c66515236e4d9d953e17a6c777476953c24adeae",
+  "files": {
+    "A0/counted.ll": "0fc947d1275ef84a46d9b8e3e0abe34ac3a4743a0d0f985fa6632a23814922ee",
+    "A0/module.ll": "e578534c880001a77ab38dad18226deeae3a09cdb9d8caa4fdc5490512b4e002",
+    "A0/module.s": "cbf955ed65e990cdbc075b977ea18c5e4dcbfb42dfb8e12ed4d795e93e70c89a",
+    "A0/module.semantic.txt": "b6398248702e2628e6fb2aa4d337c963d8da9476e77b52c2ba3edd3ecfeb61af",
+    "A0/module.su": "dd6fb1224ed653fa1960fa1bbab4a14c005e33eedd23df8fe33709f1b40db8e3",
+    "A0/module.target.json": "458e1c544c0de41e100d729ddb2140bb9ba63a05f29830f1a8bdd5b06db5c461",
+    "A0/optimized.ll": "7b77981a65a265e59ab27957057bee60f1c125037ee69116e7ad79c13fabd719",
+    "A1/counted.ll": "e01b350ecb633a1987821872b31b9c6d4a43478dcfc41b64fe1455a2c24595e7",
+    "A1/module.ll": "d006727bccf9567911557e844b71e2c9da9f2c9460f0214b10ac9de9d88f67a2",
+    "A1/module.s": "eb8a7c65f4d6912ea01f43536d62295d5f444203a335fb655c8884333aee240e",
+    "A1/module.su": "07c425775f7cb860a590beb5e328675f2c309e9b3f19a153ec5d4f4daa24162c",
+    "A1/module.target.json": "458e1c544c0de41e100d729ddb2140bb9ba63a05f29830f1a8bdd5b06db5c461",
+    "A1/optimized.ll": "8bdecae4cafd5c7cfdf02a158df7a291fe1c8d7b40c075c2212652cb0f06cc94",
+    "A2/counted.ll": "ce75b41d24f3945b84af03454fbb9fca216ea86badfedbe409c7630533aef9ee",
+    "A2/module.ll": "8e182fb65d8e83736002c707993a7f113ca2a8cb63bfb46cc2d6c4a99b092b33",
+    "A2/module.s": "c04b4846fc34873babdfd22e946be853ec7bf96991522c29ea779d945eaaca88",
+    "A2/module.su": "d1459a86ffa3f8da721755c57bd238f3f1a9ba273673ededb0bd02094ff1585e",
+    "A2/module.target.json": "458e1c544c0de41e100d729ddb2140bb9ba63a05f29830f1a8bdd5b06db5c461",
+    "A2/optimized.ll": "d7b7ba0c1eb049d592fcf64c516c68318ae2a77e27323e93010ce50493161217",
+    "A3/counted.ll": "7525641b9889207448c6dbefe6258a5e667fbb5b31b53ede42d4ad0f38929412",
+    "A3/module.ll": "262186c6aedad5e42e8a59e6d9d2a669308c2096a815e0824505b8a4493b81d5",
+    "A3/module.s": "c088a649919fd2bc28890e7240c6b1a6853f835c142c71ed94131dcb31d77921",
+    "A3/module.su": "ca9dda43f75ab773c5d33725a05bfda1c54fb8da5aaa91efbc3846924a6e5378",
+    "A3/module.target.json": "458e1c544c0de41e100d729ddb2140bb9ba63a05f29830f1a8bdd5b06db5c461",
+    "A3/optimized.ll": "ec551162e1e17bd9f178a17c6c92e780f9c53a49c4a40d40e99df9cc0d6a6c32"
+  }
+}
