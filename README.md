@@ -226,3 +226,15 @@ python -m liza build examples/apps/liza_echo.liza -O 2 -o build/liza-echo
 короткие записи обрабатывает приложение. [Контракт TCP](docs/tcp.md).
 
 Сетевой runtime и машинный код не входят в гарантии Liza Verified V0–V4.
+
+## TCP message server · срез 0.0.27
+
+```sh
+python -m liza build examples/apps/liza_message.liza -O 2 -o build/liza-message
+./build/liza-message --once
+```
+
+Протокол: 4 байта unsigned big-endian длины, затем N бинарных байтов.
+Сервер возвращает только полные кадры с телом не больше 65536 байтов.
+Чистая библиотека на Liza обрабатывает фрагментацию и склейку кадров.
+[Протокол, исходник и проверки](docs/message-server.md).

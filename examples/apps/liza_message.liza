@@ -1,0 +1,139 @@
+// Wire format: u32 big-endian length followed by that many arbitrary bytes.
+// Only complete frames are echoed. The configured maximum is 65536 bytes.
+fn exchange(stream:net.Stream, initial:memory.Buffer<u8>, storage:memory.Buffer<u8>)->u32:io {
+    var input=move initial
+    var body=move storage
+    var state=framing.create(65536)
+    var running=true
+    var status:u32=0
+    while running {
+        (next,received)=net.read(stream,move input)
+        input=move next
+        match received {
+            Err(error)=>{status=3;running=false}
+            Ok(count)=>{
+                if count==0 {
+                    match framing.finish(state) {Ok(done)=>{} Err(error)=>{status=4}}
+                    running=false
+                } else {
+                    data=memory.view(input)
+                    var cursor:u32=0
+                    while cursor<count && running {
+                        match framing.feed(state,data,cursor,count-cursor) {
+                            Err(error)=>{status=4;running=false}
+                            Ok(step)=>{
+                                state=step.state
+                                cursor=step.next
+                                var i:u32=0
+                                while i<step.payload_count {
+                                    body=memory.set(move body,step.body_offset+i,data[step.payload_start+i])
+                                    i=i+1
+                                }
+                                if step.complete {
+                                    header=framing.header(step.length)
+                                    prefix=view header[0..4]
+                                    var sent:u32=0
+                                    while sent<4 && running {
+                                        match net.write(stream,prefix,sent,4-sent) {
+                                            Err(error)=>{status=3;running=false}
+                                            Ok(n)=>{sent=sent+n}
+                                        }
+                                    }
+                                    payload=memory.view(body)
+                                    sent=0
+                                    while sent<step.length && running {
+                                        match net.write(stream,payload,sent,step.length-sent) {
+                                            Err(error)=>{status=3;running=false}
+                                            Ok(n)=>{sent=sent+n}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    released_input=memory.release(move input)
+    released_body=memory.release(move body)
+    match net.close_stream(move stream) {Ok(done)=>{} Err(error)=>{status=3}}
+    return status
+}
+fn serve(stream:net.Stream)->u32:io,alloc {
+    match memory.create(67584) {
+        Err(error)=>{closed=net.close_stream(move stream);return 3}
+        Ok(region)=>{
+            match memory.alloc<u8>(region,2048,0) {
+                Err(error)=>{
+                    freed=memory.close(move region)
+                    closed=net.close_stream(move stream)
+                    return 3
+                }
+                Ok(input)=>{
+                    match memory.alloc<u8>(region,65536,0) {
+                        Err(error)=>{
+                            released=memory.release(move input)
+                            freed=memory.close(move region)
+                            closed=net.close_stream(move stream)
+                            return 3
+                        }
+                        Ok(body)=>{
+                            status=exchange(move stream,move input,move body)
+                            freed=memory.close(move region)
+                            return status
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+fn main()->u32:io,alloc {
+    var once=false
+    var port:u16=9001
+    if cli.count()!=1 {
+        if cli.count()!=2 {message=console.err("Usage: liza-message [--once | --ephemeral]\n");return 2}
+        match cli.arg(1) {
+            None=>{return 2}
+            Some(arg)=>{
+                if !cli.equals(arg,"--once") && !cli.equals(arg,"--ephemeral") {message=console.err("Usage: liza-message [--once | --ephemeral]\n");return 2}
+                once=cli.equals(arg,"--once")
+                port=0
+            }
+        }
+    }
+    match net.listen(port) {
+        Err(error)=>{message=console.err("Cannot listen on loopback\n");return 3}
+        Ok(listener)=>{
+            var status:u32=0
+            var running=true
+            match net.local_port(listener) {
+                Err(error)=>{status=3;running=false}
+                Ok(actual)=>{
+                    match console.print_u64(u64(actual)) {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+                    match console.write("\n") {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+                }
+            }
+            while running {
+                match net.accept(listener) {
+                    Err(error)=>{status=3;running=false}
+                    Ok(stream)=>{
+                        result=serve(move stream)
+                        if result!=0 {
+                            status=result
+                            if result==4 {
+                                match console.err("Invalid frame\n") {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+                            } else {
+                                match console.err("Connection I/O failed\n") {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+                            }
+                        }
+                        if once {running=false}
+                    }
+                }
+            }
+            match net.close_listener(move listener) {Ok(done)=>{} Err(error)=>{status=3}}
+            return status
+        }
+    }
+}
