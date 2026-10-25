@@ -1,0 +1,10 @@
+benchmarks/json/parser.cpp:111:stream_size	0	static
+benchmarks/json/parser.cpp:112:stream_start	0	static
+benchmarks/json/parser.cpp:113:stream_feed	512	static
+benchmarks/json/parser.cpp:130:stream_pending	0	static
+benchmarks/json/parser.cpp:131:stream_status	416	static
+benchmarks/json/parser.cpp:102:_ZL6finish5State	16	static
+benchmarks/json/parser.cpp:132:stream_value	416	static
+benchmarks/json/parser.cpp:35:_ZL4doneR5State	16	static
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/stdexcept:254:_ZNSt3__120__throw_out_of_rangeB9nqe210106EPKc	32	static
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/stdexcept:166:_ZNSt12out_of_rangeC1B9nqe210106EPKc	16	static
