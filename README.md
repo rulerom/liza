@@ -171,7 +171,9 @@ python3 -m liza run examples/utf8_stream_file.liza
 [Ресурсные структуры](https://liza.rulerom.com/resource-structures.html) позволяют
 собрать String обычным модулем Liza поверх `memory.Buffer<u8>`. Append проверяет
 UTF-8 и вместимость до записи; ошибка сохраняет прежнюю строку. Память выделяется
-явно, автоматического роста нет. Срезы и StringBuilder остаются следующими этапами.
+явно, автоматического роста нет. [T2-A](https://liza.rulerom.com/readonly-access.html)
+добавляет readonly-параметры и непотребляющие length/capacity/byte_at.
+Subviews и StringBuilder остаются следующими этапами.
 
 ```sh
 python3 -m liza run examples/owned_string.liza

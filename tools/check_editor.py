@@ -32,6 +32,8 @@ def check():
                               ('type.builtin','u32'), ('constructor','Ok'),
                               ('string','"Hello, Liza!"')]:
             assert re.search(r' - '+re.escape(category)+r',.*text: `'+re.escape(text)+r'`',highlighted), (category,text)
+        borrowed = run('query', queries/'highlights.scm', ROOT/'examples/text/string.liza')
+        assert re.search(r' - keyword,.*text: `borrow`',borrowed)
         outline = run('query', queries/'outline.scm', ROOT/'examples/tables/connections.liza')
         for name in ['ConnectionId','TableError','edit']:
             assert re.search(r' - name,.*text: `'+name+r'`',outline),name

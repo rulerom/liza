@@ -61,7 +61,8 @@ function  := "fn" name "(" parameters? ")" "->" type (":" effects)? block
 effects   := "pure" | effect ("," effect)*
 effect    := "io" | "alloc"
 type      := "Text" | "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "bool" | structure_name | enum_name | "Option<" type ">" | "Result<" type "," type ">" | "[" type ";" length "]" | "View" "<" type ">"
-parameters := name ":" type ("," name ":" type)*
+parameters := parameter ("," parameter)*
+parameter := "borrow"? name ":" type
 block     := "{" statements "}"
 statement := ("var")? name (":" type)? "=" expression
            | "return" expression | conditional | "while" expression block
@@ -89,7 +90,7 @@ binary    := "+" | "-" | "*" | "/" | "%" | "+%" | "-%" | "*%" | "+|" | "-|" | "*
 `wrap` и `saturate` обозначают режим после имени типа, а не методы объектов.
 
 Идентификаторы ASCII: `[A-Za-z_][A-Za-z_0-9]*`. Имена встроенных типов, `fn`, `return`,
-`pure`, `io`, `Text`, `enum`, `match`, `Option`, `Result`, `Some`, `None`, `Ok`, `Err`, `true`, `false`, `if`, `else`, `var`, `while`, `break`, `continue`, `copy`, `move`, `struct`, `view`, `View` зарезервированы.
+`pure`, `io`, `Text`, `enum`, `match`, `Option`, `Result`, `Some`, `None`, `Ok`, `Err`, `true`, `false`, `if`, `else`, `var`, `while`, `break`, `continue`, `copy`, `move`, `borrow`, `struct`, `view`, `View` зарезервированы.
 
 ## Имена, функции и ветвления
 
@@ -705,7 +706,9 @@ trap с изменением наблюдаемого поведения. Име
 На нормальных выходах компилятор проверяет обязательную передачу или закрытие.
 Заимствование на время `file.read_chunk` записывается в Semantic IR как
 режим параметра `borrow`; обычные параметры имеют режим `value` и получают
-владение при передаче ресурса. Версия формата IR — 14.
+владение при передаче ресурса. В 0.0.14 это вошло в формат IR 14.
+Режим адаптера `borrow` не означает readonly; T2-A добавляет отдельный режим
+`readonly` для пользовательских наблюдающих функций.
 
 [API, области действия и поведение при trap](io-model.md#0014).
 
@@ -852,3 +855,13 @@ lowering, а вся программа получает общий Semantic IR �
 Частичное извлечение, чтение и обновление полей ресурсной структуры запрещены.
 Приватность полей ограничивает и разбор. Зависимости региона переносятся по полям.
 [Полный контракт](resource-structures.md); [обычный модуль UTF-8 строки](owned-string.md).
+
+## Readonly-параметры ресурсных структур (T2-A)
+
+`fn observe(borrow value:Owner)->u32` наблюдает ресурсную структуру без передачи
+владения. Вызов `observe(owner)` сохраняет owner; последующий move допустим.
+Заём активен до возврата вызова, включая вычисление остальных аргументов.
+Ресурсные проекции не становятся owned-значениями; приватность сохраняется.
+Наблюдение копируемого поля создаёт независимое значение. Возвращаемые или
+сохраняемые views, частичное перемещение и mutable borrow не вводятся.
+[Полный контракт и граница T2-A](readonly-access.md).

@@ -2045,6 +2045,10 @@
     "named": false
   },
   {
+    "type": "borrow",
+    "named": false
+  },
+  {
     "type": "break_statement",
     "named": true
   },

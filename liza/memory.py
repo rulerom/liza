@@ -47,6 +47,7 @@ def signature(node, actuals, mono):
         raise CompileError(node.token, 'wrong number of memory operation arguments')
     symbol='memory$'+operation+'$'+hashlib.sha256(element.encode()).hexdigest()
     fn=Function(replace(node.token,text=symbol),[(Token('p'+str(i),1,1),t) for i,t in enumerate(parameters)],[],result,effect,borrowed_params=borrowed)
+    fn.readonly_borrowed_params = [0] if operation in ('view','len') else []
     fn.memory_operation=OPERATIONS[operation]
     fn.memory_element=element
     mono.signatures[symbol]=fn

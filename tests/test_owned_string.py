@@ -38,21 +38,29 @@ fn probe(data:View<u8>,capacity:u32)->u32:alloc {
  if length!=expected || cap!=capacity {status=103}
  var i:u32=0
  while i<expected {
-   (next,item)=text.string.byte_at(move current,i);current=move next
+   item=text.string.byte_at(current,i)
    var want:u8=0
    if i<prefix {if i==0 {want=111} else {want=107}} else {want=data[i-prefix]}
    match item {None=>{status=104} Some(byte)=>{if byte!=want {status=105}}}
    i=i+1
  }
- (bounded,item)=text.string.byte_at(move current,expected);current=move bounded
+ item=text.string.byte_at(current,expected)
  match item {None=>{} Some(byte)=>{status=106}}
- (maximal,last)=text.string.byte_at(move current,4294967295);current=move maximal
+ last=text.string.byte_at(current,4294967295)
  match last {None=>{} Some(byte)=>{status=107}}
  current=text.string.clear(move current)
  (cleared,zero,old_capacity)=text.string.inspect(move current);current=move cleared
  if zero!=0 || old_capacity!=capacity {status=108}
- (empty,old_byte)=text.string.byte_at(move current,0);current=move empty
+ old_byte=text.string.byte_at(current,0)
  match old_byte {None=>{} Some(byte)=>{status=109}}
+ one:[u8;1]=[88];single=view one[0..1]
+ (reused,again)=text.string.append(move current,single);current=move reused
+ match again {Ok(done)=>{if capacity==0 {status=110}} Err(e)=>{if capacity!=0 {status=111}}}
+ if text.string.capacity(current)!=capacity {status=112}
+ if capacity>0 {
+   if text.string.length(current)!=1 {status=113}
+   match text.string.byte_at(current,0) {None=>{status=114} Some(b)=>{if b!=88 {status=115}}}
+ }
  released=text.string.release(move current)
  }}
  closed=memory.close(move region);return status
