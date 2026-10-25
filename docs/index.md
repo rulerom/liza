@@ -6,7 +6,7 @@ hide:
 ---
 
 <div class="liza-hero">
-  <p class="liza-eyebrow">LIZA 0.0.27 · ЭКСПЕРИМЕНТАЛЬНЫЙ ЯЗЫК</p>
+  <p class="liza-eyebrow">LIZA 0.0.28 · ЭКСПЕРИМЕНТАЛЬНЫЙ ЯЗЫК</p>
   <h1>Код можно сгенерировать.<br>Доверие требует доказательств.</h1>
   <p class="liza-definition">Liza — системный язык для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций. Архитектура языка ориентирована на проверку свойств программ и сохранения их семантики при компиляции.</p>
   <p class="liza-lead"><strong>Сегодня:</strong> V0–V4 проверяют выбранные программы, свойства и преобразования IR.</p>
@@ -152,10 +152,12 @@ build\hello.exe
 [Все milestones и критерии достижения](milestones.md).
 
 <div class="liza-next">
-  <p class="liza-eyebrow">РУБЕЖ 0.0.27 · TCP MESSAGE SERVER</p>
-  <h2>Сообщения поверх потока байтов</h2>
-  <p>Сервер собирает кадры с четырёхбайтовой big-endian длиной, обрабатывает фрагментацию и склейку сообщений. Фрейминг написан на Liza; память ограничена, сокеты закрываются явно.</p>
-  <a href="message-server.html">Протокол, исходник и проверки →</a>
+  <p class="liza-eyebrow">РУБЕЖ 0.0.28 · TCP REACTOR</p>
+  <h2>Несколько клиентов в одном потоке</h2>
+  <p>Reactor владеет сокетами, а Liza-код управляет фреймингом и backpressure восьми клиентов. Буферы выделяются один раз и переиспользуются. Медленный клиент не блокирует остальных.</p>
+  <a href="reactor.html">Владение, память и проверки →</a>
+  <p><a href="message-router.html">На приёмке: Message Router и протокольные адресаты</a></p>
+  <p><a href="message-server.html">Blocking message server и фрейминг</a></p>
   <p><a href="tcp.html">Первый TCP echo server</a></p>
   <p><a href="file-output.html">Запись файлов и приложение liza-copy</a></p>
   <p><a href="cli.html">Liza-text: проверка и подсчёт UTF-8</a></p>

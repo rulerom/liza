@@ -240,7 +240,7 @@ python -m liza build examples/apps/liza_message.liza -O 2 -o build/liza-message
 Чистая библиотека на Liza обрабатывает фрагментацию и склейку кадров.
 [Протокол, исходник и проверки](docs/message-server.md).
 
-## TCP reactor · срез 0.0.28 в разработке
+## TCP reactor · срез 0.0.28
 
 ```sh
 python -m liza build examples/apps/liza_reactor.liza -O 2 -o build/liza-reactor
@@ -251,3 +251,16 @@ python -m liza build examples/apps/liza_reactor.liza -O 2 -o build/liza-reactor
 владеет сокетами; приложение хранит состояния клиентов и один ожидающий ответ
 на соединение. Буферы выделяются один раз и переиспользуются. Медленный клиент
 не блокирует остальных. [Контракт, память и ограничения](docs/reactor.md).
+
+## Message Router · срез 0.0.29 на приёмке
+
+```sh
+python -m liza build examples/apps/liza_router.liza -O 2 -o build/liza-router
+./build/liza-router --ephemeral
+```
+
+Клиенты получают протокольные RouterId и отправляют сообщения адресату.
+Очереди ограничены; `Accepted` подтверждает полную копию в очередь,
+`Busy` и `Unavailable` не меняют очередь адресата. Старый ID не адресует
+нового клиента после переиспользования слота. Логика реализована на Liza
+поверх существующего reactor. [Wire-протокол и границы](docs/message-router.md).

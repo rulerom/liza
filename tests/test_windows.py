@@ -102,7 +102,7 @@ class WindowsNative(unittest.TestCase):
 
 def load_tests(loader,tests,pattern):
     if sys.platform!='win32':return tests
-    for module,name in [('test_reactor','ReactorTypes'),('test_reactor','ReactorNative'),('test_framing','FramingTypes'),('test_framing','FramingNative'),('test_framing','MessageNative'),('test_net','NetTypes'),('test_net','NetNative'),('test_compiler','FrontendTests'),('test_arrays','ArrayTypes'),
+    for module,name in [('test_router','RouterNative'),('test_reactor','ReactorTypes'),('test_reactor','ReactorNative'),('test_framing','FramingTypes'),('test_framing','FramingNative'),('test_framing','MessageNative'),('test_net','NetTypes'),('test_net','NetNative'),('test_compiler','FrontendTests'),('test_arrays','ArrayTypes'),
                         ('test_conversions','ConversionTypeTests'),('test_division','DivisionTypeTests'),
                         ('test_loops','LoopTypeTests'),('test_mutable','MutableTypeTests'),
                         ('test_numbers','NumericTypeTests'),('test_ownership','OwnershipTests'),
