@@ -158,6 +158,9 @@ class Function:
     module: str = ""
     generic_params: list = field(default_factory=list)
     instantiation_chain: list = field(default_factory=list)
+    # Source readonly permissions are distinct from non-consuming runtime adapters.
+    readonly_params: list = field(default_factory=list)
+    readonly_borrowed_params: list = field(default_factory=list)
 
 
 class Parser:
@@ -185,7 +188,7 @@ class Parser:
         token = self.current
         if token.text.startswith('__liza_') and not self.internal:
             raise CompileError(token, 'reserved implementation name')
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'import', 'pub', 'fn', 'return', 'pure', 'io', 'Text', 'File', 'Arg', 'Path', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'import', 'pub', 'fn', 'return', 'pure', 'io', 'Text', 'File', 'Arg', 'Path', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'borrow', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -470,8 +473,11 @@ class Parser:
             generics = self.generic_parameters()
             self.take('(')
             params = []
+            readonly = []
             if self.current.text != ')':
                 while True:
+                    if self.current.text == 'borrow':
+                        self.take('borrow');readonly.append(len(params))
                     param = self.identifier()
                     self.take(':')
                     params.append((param, self.type_name()))
@@ -494,7 +500,7 @@ class Parser:
                         raise CompileError(next_effect, 'invalid or duplicate effect')
                     effect += ',' + next_effect.text
             body = self.block()
-            functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal, public=public, generic_params=generics))
+            functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal, public=public, generic_params=generics, readonly_params=readonly))
             self.generic_scope = {}
             self.separators()
         return functions

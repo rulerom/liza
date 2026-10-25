@@ -684,3 +684,61 @@ fn unwrap(value:Three)->File {
       (return_statement
         (unary_expression
           (identifier))))))
+
+==================
+Readonly parameters and projected builtin observations
+==================
+struct Holder { buffer:memory.Buffer<u8>; length:u32 }
+pub fn length(borrow value:Holder)->u32 { return value.length }
+fn capacity<T>(borrow value:T)->u32 { return memory.len(value.buffer) }
+---
+
+(source_file
+  (struct_definition
+    (type_identifier
+      (identifier))
+    (field_definition
+      (identifier)
+      (generic_type
+        (type_identifier
+          (identifier)
+          (identifier))
+        (type_arguments
+          (builtin_type))))
+    (field_definition
+      (identifier)
+      (builtin_type)))
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)
+        (type_identifier
+          (identifier))))
+    (builtin_type)
+    (block
+      (return_statement
+        (field_expression
+          (identifier)
+          (identifier)))))
+  (function_definition
+    (identifier)
+    (generic_parameters
+      (generic_parameter
+        (identifier)))
+    (parameters
+      (parameter
+        (identifier)
+        (type_identifier
+          (identifier))))
+    (builtin_type)
+    (block
+      (return_statement
+        (call_expression
+          (field_expression
+            (identifier)
+            (identifier))
+          (arguments
+            (field_expression
+              (identifier)
+              (identifier))))))))

@@ -141,6 +141,11 @@ def check_dependencies(records, structs, signatures, audit=None, expression_maps
             for arg in node.args:
                 arguments.append(expression(arg,state,tuple(temporary)+tuple(arguments)))
             capture(node, 'before', state, tuple(temporary)+tuple(arguments))
+            if node.kind=='field' and types[id(node.args[0])] in structs:
+                source=structs[types[id(node.args[0])]]
+                if not source.properties['copyable']:
+                    index=next(i for i,(f,_) in enumerate(source.fields) if f==node.token.text)
+                    return arguments[0].components[index] if arguments[0].components else EMPTY
             if node.kind=='variant':
                 return Value(cases={node.token.text.rsplit('.',1)[-1]:arguments[0] if arguments else EMPTY})
             if node.kind=='call':
@@ -246,13 +251,17 @@ def check_dependencies(records, structs, signatures, audit=None, expression_maps
         active.remove(name)
         storage_effects = sorted({op.op for block in ir.blocks for op in block.operations if op.op.startswith(('region.','buffer.','vec.'))})
         ir.storage_contract={'requires':['available owned arguments', 'no readonly loans on consumed buffers', 'no dependent values on consumed regions'],
-                             'consumes':[p.text for p,t in fn.params if shape(t,('p',)).all_regions() or shape(t,('p',)).all_buffers()],
+                             'consumes':[p.text for i,(p,t) in enumerate(fn.params) if i not in fn.readonly_params and (shape(t,('p',)).all_regions() or shape(t,('p',)).all_buffers())],
                              'effects':storage_effects,
                              'returned_buffer_storage':'preserved',
                              'parameters':{k:v.describe() for k,v in initial.items()},
                              'returns':result.describe(),'creation_sites':origins,
                              'normal_exit':'all resource obligations discharged',
                              'trap_cleanup':'not guaranteed'}
+        if fn.readonly_params:
+            ir.storage_contract['requires'][0]='available arguments with their declared access modes'
+            ir.storage_contract['requires'].append('readonly access to each readonly parameter and its reachable storage')
+            ir.storage_contract['readonly_parameters']=[fn.params[i][0].text for i in fn.readonly_params]
         return result
 
     for name in records:analyze(name)

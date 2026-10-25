@@ -177,6 +177,7 @@ def owned_variant(fn, structs, large):
     params=[p for p in fn.params if large(p['type'])]
     if len(params)!=1 or fn.result_type not in structs or not acyclic(fn): return None
     p=params[0]
+    if p.get("mode") == "readonly": return None
     fields=structs[fn.result_type].fields
     if not fields or fields[0][1]!=p['type'] or any(large(t) for _,t in fields[1:]): return None
     if any(x['type'].startswith('View<') for x in fn.params): return None

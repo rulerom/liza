@@ -14,11 +14,12 @@ fn main()->u32:io,alloc {
                     input=view bytes[0..9]
                     (appended,result)=text.string.append(move initial,input)
                     match result {Err(error)=>{status=3} Ok(done)=>{}}
-                    (current,length,capacity)=text.string.inspect(move appended)
+                    length=text.string.length(appended)
+                    capacity=text.string.capacity(appended)
                     if length!=9 || capacity!=64 {status=4}
                     match console.print_u64(u64(length)) {Err(error)=>{status=5} Ok(n)=>{}}
                     match console.println(" UTF-8 bytes") {Err(error)=>{status=5} Ok(n)=>{}}
-                    empty=text.string.clear(move current)
+                    empty=text.string.clear(move appended)
                     released=text.string.release(move empty)
                 }
             }

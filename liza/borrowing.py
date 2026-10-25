@@ -5,6 +5,7 @@ Assigning a view into an outer binding extends the loan to that binding's scope;
 its owner must live at least that long. No view can escape a function.
 """
 from .types import consumed_components
+from .readonly import projection_root
 from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope, Destructure
 from .types import is_view
 
@@ -23,7 +24,7 @@ def check_borrows(fn, types, match_types=None, variants=None, structs=None):
         if node.kind == 'move' and locked(node.args[0].token.text):
             raise CompileError(node.token, 'cannot move owner while readonly view is live')
         if node.kind == 'view' or (node.kind == 'call' and node.token.text.startswith(('memory$view$', 'vec$view$'))):
-            owner = node.args[0].token.text
+            owner = projection_root(node.args[0])
             loans[-1].add(owner)
             for arg in node.args[1:]:
                 expr(arg, env)

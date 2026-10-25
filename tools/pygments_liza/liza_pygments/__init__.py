@@ -17,7 +17,7 @@ class LizaLexer(RegexLexer):
             (words(('true', 'false'), suffix=r'\b'), Keyword.Constant),
             (words(('fn', 'return', 'var', 'if', 'else', 'while', 'break',
                     'continue', 'match', 'struct', 'enum', 'import', 'pub',
-                    'copy', 'move', 'view', 'pure', 'io', 'alloc', 'copyable',
+                    'copy', 'move', 'borrow', 'view', 'pure', 'io', 'alloc', 'copyable',
                     'implicit_copy'), suffix=r'\b'), Keyword),
             (words(('bool', 'u8', 'u16', 'u32', 'u64', 'i8', 'i16', 'i32',
                     'i64', 'Text', 'File', 'View', 'Option', 'Result'), suffix=r'\b'), Keyword.Type),
