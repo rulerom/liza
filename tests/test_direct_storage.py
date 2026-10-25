@@ -69,6 +69,15 @@ fn snapshot(i:u32)->u32 {
  if old.marker!=0 || old.data[i]!=7 || n.marker!=10 || n.data[i]!=10 {return 1}
  return 0
 }
+fn multiple_snapshots(i:u32)->u32 {
+ original=initial();first=copy original;second=copy original
+ var n=original
+ if i==0 {n=chain(n,i,9)} else {n=leaf(n,i,10)}
+ third=copy n;n=leaf(n,i,11)
+ if first.data[i]!=7 || second.data[i]!=7 || first.marker!=0 || second.marker!=0 {return 1}
+ if third.data[i]!=10 || third.marker!=10 || n.data[i]!=11 {return 2}
+ return 0
+}
 fn view_observer(i:u32)->u32 {
  original=initial();array=original.data;v=view array[0..128]
  n=chain(original,i,9)
@@ -127,7 +136,7 @@ class DirectStorageNative(unittest.TestCase):
     def test_native_snapshots_views_and_unique_updates(self):
         ir=emit()
         for opt in ('-O0','-O2'):
-            for name in ('unique','snapshot','view_observer','retained_inside','projection_probe','branch_probe','loop_snapshots'):
+            for name in ('unique','snapshot','view_observer','retained_inside','projection_probe','branch_probe','loop_snapshots','multiple_snapshots'):
                 with self.subTest(opt=opt,name=name),tempfile.TemporaryDirectory() as folder:
                     exe=self.build(folder,ir,opt,name)
                     for i in (0,64,127):
