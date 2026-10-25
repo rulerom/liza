@@ -75,6 +75,7 @@ nav:
   - Verified Relay R1: verified-relay-r1.md
   - Verified Relay R2: verified-relay-r2.md
   - Verified Relay R2-B: verified-relay-r2b.md
+  - Verified Relay R2-C: verified-relay-r2c.md
   - Язык:
       - Модель вычислений и памяти: design.md
       - Исполняемое ядро: core.md
