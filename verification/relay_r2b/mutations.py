@@ -17,7 +17,7 @@ TARGETS = {
     'read_base_off_by_one': ('exact_buffer_frame', 0),
     'write_from_tail': ('exact_histories', 0),
     'consume_extra_byte': ('byte_conservation', 0),
-    'read_full_queue': ('call_binding_and_guard', 1),
+    'read_full_queue': ('call_binding_and_guard', 4),
     'premature_fin': ('call_binding_and_guard', 0),
     'overwrite_other_direction': ('other_directions_unchanged', 0),
     'write_wrong_connection': ('call_binding_and_guard', 0),

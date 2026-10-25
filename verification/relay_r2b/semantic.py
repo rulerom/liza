@@ -86,10 +86,18 @@ class Executor:
                 'offset': args[3] if operation != 'fin' else z3.IntVal(0),
                 'requested': args[4] if operation != 'fin' else z3.IntVal(0)}
         n = self.inputs['count']; kind = self.inputs['outcome']; data = self.inputs['data']
-        for tag, error in [(0, None), (1, 'WouldBlock'), (2, 'Interrupted'), (3, 'Other')]:
-            path = kind == tag; new = replace(memory, call=call, fatal=tag == 3)
+        for tag, error in [(0, None), (1, 'WouldBlock'), (2, 'Interrupted'), (3, 'Other'), (4, 'InvalidRange')]:
+            path = kind == tag; new = replace(memory, call=call, fatal=tag in (3, 4))
+            offset, requested = call['offset'], call['requested']
+            admissible = z3.And(offset >= 0, requested > 0, offset+requested <= TOTAL)
+            if tag == 4:
+                # Explicit read range validation precedes recv for a valid
+                # connected stream. This outcome is used by the full-buffer
+                # source control; it must not synthesize WouldBlock for count=0.
+                path = z3.And(path, z3.BoolVal(operation == 'read'), z3.Not(admissible))
+            elif operation != 'fin':
+                path = z3.And(path, admissible)
             if tag == 0:
-                offset, requested = call['offset'], call['requested']
                 if operation != 'fin':
                     path = z3.And(path, offset >= 0, requested > 0, offset+requested <= TOTAL,
                                   n >= (0 if operation == 'read' else 1), n <= requested)

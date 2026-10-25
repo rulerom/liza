@@ -114,6 +114,18 @@ class ByteBinding(unittest.TestCase):
             _,before,result=self.concrete_case(side+'.read',(0,2048,False,False),0,1)
             self.assertIsNone(result['memory']['call']);self.assertEqual(result['memory']['B'],before['B'])
 
+    def test_full_queue_control_returns_actual_range_error(self):
+        control=next(c for c in self.report['mutations'] if c['name']=='read_full_queue')
+        record=control['checks'][0]['replay']
+        self.assertEqual(record['inputs']['outcome'],4)
+        self.assertEqual(record['execution']['memory']['call']['requested'],0)
+        self.assertFalse(record['execution']['alive'])
+        root=self.root/'run/mutations/read_full_queue'
+        module=json.loads((root/'semantic.json').read_text())
+        bad=copy.deepcopy(record);bad['inputs']['outcome']=1
+        with self.assertRaisesRegex(ValueError,'invalid range'):
+            replay_record(module,Fragment(module,'forward.read'),bad)
+
     def test_eof_does_not_discard_queue_or_send_early_fin(self):
         for side in ('forward','reverse'):
             _,before,result=self.concrete_case(side+'.read',(1,4,False,False),0)

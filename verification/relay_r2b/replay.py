@@ -26,6 +26,11 @@ def run(module, fragment, inputs, memory, budget=10000):
         n, outcome = inputs['count'], inputs['outcome']
         mem['call'] = dict(operation=operation, connection=args[1], offset=offset, requested=requested)
         trace.append({'io': mem['call'], 'outcome': outcome, 'count': n})
+        admissible = 0 <= offset < offset+requested <= len(mem['B'])
+        if outcome == 4:
+            if operation != 'read' or admissible: raise ValueError('inconsistent InvalidRange witness')
+        elif operation != 'fin' and not admissible:
+            raise ValueError('invalid range must not synthesize successful/temporary I/O')
         if outcome == 0:
             if operation != 'fin' and not (0 <= offset < offset+requested <= len(mem['B']) and
                                           (0 if operation == 'read' else 1) <= n <= requested):
@@ -37,9 +42,9 @@ def run(module, fragment, inputs, memory, budget=10000):
             elif operation == 'write': mem['W'].extend(mem['B'][offset:offset+n])
             result = ('Ok', n if operation != 'fin' else 0)
         else:
-            if outcome not in (1, 2, 3): raise ValueError('unsupported outcome')
-            result = ('Err', ({1: 'WouldBlock', 2: 'Interrupted', 3: 'Other'}[outcome],))
-            mem['fatal'] = outcome == 3
+            if outcome not in (1, 2, 3, 4): raise ValueError('unsupported outcome')
+            result = ('Err', ({1: 'WouldBlock', 2: 'Interrupted', 3: 'Other', 4: 'InvalidRange'}[outcome],))
+            mem['fatal'] = outcome in (3, 4)
         return ('buffer', result) if operation == 'read' else result
 
     def execute(function, env, start, stop=None, entry=False):
