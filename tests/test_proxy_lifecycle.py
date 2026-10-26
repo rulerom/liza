@@ -35,32 +35,22 @@ FAULT = r'''
 #undef liza_rt_reactor_shutdown_write
 #undef liza_rt_reactor_finish_connect
 #include <stdio.h>
-#ifdef _WIN32
-#include <io.h>
-#include <fcntl.h>
-#endif
-static unsigned long long tick=100,reads,writes,fins,polls;
+#include <errno.h>
+static unsigned long long tick=100,reads,writes,fins,polls,sequence=1;
 static unsigned stop;
-/* Publication replaces a complete file. Existing readers retain the old snapshot.
-   Windows CRT fopen does not share DELETE; explicitly allow atomic replacement. */
-static FILE *open_control(const char *path) {
-#ifdef _WIN32
-    HANDLE handle=CreateFileA(path,GENERIC_READ,
-        FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,NULL);
-    if(handle==INVALID_HANDLE_VALUE)return NULL;
-    int fd=_open_osfhandle((intptr_t)handle,_O_RDONLY|_O_TEXT);
-    if(fd<0){CloseHandle(handle);return NULL;}
-    FILE *file=_fdopen(fd,"r");
-    if(!file)_close(fd);
-    return file;
-#else
-    return fopen(path,"r");
-#endif
-}
+/* Immutable, sequential commands: publish only to a name never opened before.
+   No replacement/deletion of a file while a Windows reader holds it. */
 static void control(void) {
-    FILE*f=open_control(getenv("LIFECYCLE_GATE"));
-    if(f){unsigned long long t;unsigned s;if(fscanf(f,"%llu %u",&t,&s)==2){tick=t;stop=s;}fclose(f);}
+    for(;;) {
+        char path[4096];
+        int n=snprintf(path,sizeof(path),"%s.%llu",getenv("LIFECYCLE_GATE"),sequence);
+        if(n<0 || (size_t)n>=sizeof(path))exit(90);
+        FILE *f=fopen(path,"r");
+        if(!f){if(errno==ENOENT)return;perror("control open");exit(91);}
+        unsigned long long t;unsigned request;
+        if(fscanf(f,"%llu %u",&t,&request)!=2){fclose(f);exit(92);}
+        fclose(f);tick=t;stop=request;sequence++;
+    }
 }
 uint32_t liza_rt_reactor_clock(uint64_t*out){control();*out=tick;return 0;}
 uint64_t liza_rt_reactor_shutdown_requested(reactor*r){(void)r;control();return stop;}
@@ -104,9 +94,14 @@ class Lifecycle(unittest.TestCase):
     def tearDownClass(cls): cls.temp.cleanup()
     def setUp(self):
         self.case=tempfile.TemporaryDirectory();self.addCleanup(self.case.cleanup)
-        self.gate=Path(self.case.name)/'gate';self.ack=Path(self.case.name)/'ack';self.control(100,0)
+        self.gate=Path(self.case.name)/'gate';self.ack=Path(self.case.name)/'ack';self.sequence=0;self.control(100,0)
     def control(self,t,stop):
-        tmp=self.gate.with_suffix('.next');tmp.write_text(f'{t} {stop}\n');os.replace(tmp,self.gate)
+        sequence=self.sequence+1
+        destination=Path(str(self.gate)+f'.{sequence}')
+        self.assertFalse(destination.exists(), 'control commands are immutable')
+        tmp=self.gate.with_suffix('.next');tmp.write_text(f'{t} {stop}\n')
+        os.rename(tmp,destination)
+        self.sequence=sequence
     def wait_ack(self,predicate):
         deadline=time.monotonic()+5
         while time.monotonic()<deadline:
@@ -314,19 +309,19 @@ int main(void) {
             r=subprocess.run([str(exe)],capture_output=True,timeout=5);self.assertEqual(r.returncode,0,r.stderr)
 
     def test_control_publication_with_live_reader(self):
-        # The child explicitly acknowledges an open handle before replacement;
-        # its original read must remain coherent while a new open sees the update.
+        # The child explicitly acknowledges an open handle before publication;
+        # its original command must remain coherent while the next command is published.
         source=Path(self.case.name)/'publication.c'
         source.write_text(FAULT+r'''
 int main(int argc,char **argv) {
-    if(argc!=2)return 1;
-    FILE *old=open_control(argv[1]);if(!old)return 2;
+    if(argc!=3)return 1;
+    FILE *old=fopen(argv[1],"r");if(!old)return 2;
     puts("opened");fflush(stdout);
     if(getchar()!='!')return 3;
     unsigned long long t;unsigned s;
     if(fscanf(old,"%llu %u",&t,&s)!=2 || t!=100 || s!=0)return 4;
     fclose(old);
-    FILE *current=open_control(argv[1]);if(!current)return 5;
+    FILE *current=fopen(argv[2],"r");if(!current)return 5;
     if(fscanf(current,"%llu %u",&t,&s)!=2 || t!=150 || s!=1)return 6;
     fclose(current);return 0;
 }
@@ -337,12 +332,14 @@ int main(int argc,char **argv) {
             self.control(100,0)
             exe=Path(self.case.name)/('publication'+opt+'.exe')
             subprocess.run(['clang','-O'+opt,str(source),'-I'+str(ROOT/'liza/runtime'),*flags,'-o',str(exe)],check=True,capture_output=True)
-            p=subprocess.Popen([str(exe),str(self.gate)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            old=Path(str(self.gate)+f'.{self.sequence}')
+            following=Path(str(self.gate)+f'.{self.sequence+1}')
+            p=subprocess.Popen([str(exe),str(old),str(following)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             self.addCleanup(lambda p=p:test_net.NetNative.stop(p))
             self.addCleanup(p.stdin.close)
             lines=queue.Queue()
             threading.Thread(target=lambda:lines.put(p.stdout.readline()),daemon=True).start()
             self.assertEqual(lines.get(timeout=5).rstrip(b'\r\n'),b'opened')
-            self.control(150,1)  # no retry: replacement must succeed with old open
+            self.control(150,1)  # no retry: a live reader cannot block the next command
             out,err=p.communicate(b'!',timeout=5)
             self.assertEqual((p.returncode,out),(0,b''),err)
