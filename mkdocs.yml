@@ -75,6 +75,7 @@ nav:
   - Performance Parity — bounded inlining: inlining-policy.md
   - Performance Parity — state and aliasing: state-alias-analysis.md
   - Performance Parity — guard and CFG: guard-cfg-investigation.md
+  - Production field forwarding: field-forwarding.md
   - "T2-B: local subviews (plan)": local-subviews.md
   - "JSON performance (plan)": json-performance.md
   - Lowering составных значений: aggregate-lowering.md

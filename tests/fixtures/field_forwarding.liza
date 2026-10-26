@@ -1,0 +1,33 @@
+struct Packet {sequence:u64;tag:u64}
+fn nested(s:Packet,a:bool,b:bool,c:bool)->Packet {
+ if s.sequence==18446744073709551615 {return s}
+ var n=s
+ if a {if b {n.tag=7} else {n.tag=8}} else {n.tag=9}
+ if c {n.tag=10} else {n.tag=11}
+ n.sequence=n.sequence+1
+ return n
+}
+fn remote_change(s:Packet,a:bool,b:bool,c:bool)->Packet {
+ if s.sequence==18446744073709551615 {return s}
+ var n=s
+ if a {if b {n.sequence=s.tag} else {n.tag=8}} else {n.tag=9}
+ if c {n.tag=10} else {n.tag=11}
+ n.sequence=n.sequence+1
+ return n
+}
+fn snapshots(a:bool,b:bool,c:bool)->u32 {
+ s=Packet(4,5);first=copy s;second=copy s
+ current=nested(s,a,b,c);third=copy current
+ next=nested(current,!a,!b,!c)
+ if first.sequence!=4 || second.tag!=5 || third.sequence!=5 || next.sequence!=6 {return 1}
+ if c {if third.tag!=10 || next.tag!=11 {return 2}}
+ else {if third.tag!=11 || next.tag!=10 {return 3}}
+ return 0
+}
+fn other_field_trap(s:Packet,a:bool)->u64 {
+ var n=s
+ if a {n.tag=n.tag+1} else {n.tag=0}
+ return n.sequence
+}
+fn increment(x:u64)->u64 {return x+1}
+fn main()->u32 {return 0}
