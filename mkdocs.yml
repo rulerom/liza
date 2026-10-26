@@ -60,6 +60,7 @@ extra_css:
 nav:
   - Liza: index.md
   - Verified Network Gateway: network-gateway.md
+  - Gateway R0 reproduction: gateway-reproduction.md
   - Быстрый старт: getting-started.md
   - Основы языка: basics.md
   - CLI-приложение liza-text: cli.md

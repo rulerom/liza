@@ -1,0 +1,93 @@
+{
+  "commit": "90c9c2f0eab565397db00ceb4a89cf27116c5bc2",
+  "archive_sha256": "12a3e8cedc12b11c3e30e1f6fe12e6b18b7d547edf6caafbbf5e672980698d3e",
+  "application_sha256": "e6bd206d02112d50a549900395b378010772031c702aff90d5d65ed71b84ee41",
+  "scope": "isolated local reproduction pilot, not third-party acceptance",
+  "tests": [
+    {
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_proxy_ops.py",
+        "-v"
+      ],
+      "returncode": 0,
+      "seconds": 4.818265458
+    },
+    {
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_proxy_lifecycle.py",
+        "-v"
+      ],
+      "returncode": 0,
+      "seconds": 6.556525833000001
+    }
+  ],
+  "clang": "Homebrew clang version 23.1.4\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /opt/homebrew/Cellar/llvm/23.1.4/bin\n",
+  "python": "3.9.6 (default, May 22 2026, 11:13:45) \n[Clang 21.0.0 (clang-2100.1.1.101)]",
+  "build_commands": [
+    [
+      "clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O0",
+      "/private/tmp/liza-r0-pilot/build/program.ll",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/memory.c",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/console_posix.c",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/net_posix.c",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/reactor_posix.c",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/cli_posix.c",
+      "-pthread",
+      "-o",
+      "/private/tmp/liza-r0-pilot/build/proxy-O0"
+    ],
+    [
+      "clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O2",
+      "/private/tmp/liza-r0-pilot/build/program.ll",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/memory.c",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/console_posix.c",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/net_posix.c",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/reactor_posix.c",
+      "/private/tmp/liza-r0-pilot/source/liza/runtime/cli_posix.c",
+      "-pthread",
+      "-o",
+      "/private/tmp/liza-r0-pilot/build/proxy-O2"
+    ]
+  ],
+  "target": {
+    "triple": "arm64-apple-macosx26.0.0",
+    "data_layout": "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32",
+    "flags": [
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic"
+    ],
+    "pointer_bits": 64,
+    "pointer_align": 8,
+    "i64_align": 8,
+    "i32_align": 4,
+    "little_endian": 1
+  },
+  "build_sha256": {
+    "proxy-O2": "c6d6d397350dab85ece9f36a5b6c6447f1a5e622e21520be8f9e299a5b24cee9",
+    "program.semantic.json": "4c6f50374132a19469ce86d4e3e8922b5464c6f4acfdabd0b6c21a5cef39c96c",
+    "proxy-O0": "d6a5666e50d55784fad9ab1cfdb8be01faa29fbb7d9ca4e61f399abf68745a54",
+    "program.ll": "6775627b09059761c523f07de94a3f5cba08168efbdf5324c333e4bb0eb2a431"
+  },
+  "status": "local_reproduction_passed",
+  "proof_scope": "No extension of Relay proofs to the operational event loop."
+}
