@@ -1,13 +1,27 @@
 name: Verification pipeline
 on:
-  push:
   pull_request:
+    paths:
+      - 'liza/**'
+      - 'verification/**'
+      - '.github/workflows/verified-pipeline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'liza/**'
+      - 'verification/**'
+      - '.github/workflows/verified-pipeline.yml'
   workflow_dispatch:
     inputs:
       full:
         description: Run full V0–V4 with the pinned macOS proof toolchain
         type: boolean
         default: false
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   harness:
     strategy:

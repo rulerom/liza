@@ -1,13 +1,30 @@
 name: Aggregate lowering correctness
 on:
   pull_request:
-    paths: ['liza/backend.py', 'liza/storage.py', 'tests/test_direct_storage.py', 'benchmarks/aggregate/**', '.github/workflows/aggregate-lowering.yml']
+    paths:
+      - 'liza/**'
+      - 'tests/test_direct_storage.py'
+      - 'benchmarks/aggregate/**'
+      - 'benchmarks/json/**'
+      - 'examples/text/**'
+      - 'examples/apps/liza_json.liza'
+      - '.github/workflows/aggregate-lowering.yml'
   push:
     branches: [main]
-    paths: ['liza/backend.py', 'liza/storage.py', 'tests/test_direct_storage.py', 'benchmarks/aggregate/**', '.github/workflows/aggregate-lowering.yml']
+    paths:
+      - 'liza/**'
+      - 'tests/test_direct_storage.py'
+      - 'benchmarks/aggregate/**'
+      - 'benchmarks/json/**'
+      - 'examples/text/**'
+      - 'examples/apps/liza_json.liza'
+      - '.github/workflows/aggregate-lowering.yml'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   agreement:
     runs-on: ubuntu-latest
