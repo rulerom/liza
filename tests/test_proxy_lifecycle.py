@@ -35,10 +35,31 @@ FAULT = r'''
 #undef liza_rt_reactor_shutdown_write
 #undef liza_rt_reactor_finish_connect
 #include <stdio.h>
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
 static unsigned long long tick=100,reads,writes,fins,polls;
 static unsigned stop;
+/* Publication replaces a complete file. Existing readers retain the old snapshot.
+   Windows CRT fopen does not share DELETE; explicitly allow atomic replacement. */
+static FILE *open_control(const char *path) {
+#ifdef _WIN32
+    HANDLE handle=CreateFileA(path,GENERIC_READ,
+        FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,NULL);
+    if(handle==INVALID_HANDLE_VALUE)return NULL;
+    int fd=_open_osfhandle((intptr_t)handle,_O_RDONLY|_O_TEXT);
+    if(fd<0){CloseHandle(handle);return NULL;}
+    FILE *file=_fdopen(fd,"r");
+    if(!file)_close(fd);
+    return file;
+#else
+    return fopen(path,"r");
+#endif
+}
 static void control(void) {
-    FILE*f=fopen(getenv("LIFECYCLE_GATE"),"r");
+    FILE*f=open_control(getenv("LIFECYCLE_GATE"));
     if(f){unsigned long long t;unsigned s;if(fscanf(f,"%llu %u",&t,&s)==2){tick=t;stop=s;}fclose(f);}
 }
 uint32_t liza_rt_reactor_clock(uint64_t*out){control();*out=tick;return 0;}
@@ -230,11 +251,36 @@ uint32_t liza_rt_net_close(uint64_t handle) {
     uint32_t result=real_net_close(handle);close_calls++;
     if(fail_close){fail_close=0;return 7;}return result;
 }
+#ifndef _WIN32
+#include <signal.h>
+static int fail_registration;
+static int injected_sigaction(int sig,const struct sigaction *action,struct sigaction *old) {
+    if(fail_registration && sig==SIGTERM && action){fail_registration=0;errno=EIO;return -1;}
+    return sigaction(sig,action,old);
+}
+#define sigaction(...) injected_sigaction(__VA_ARGS__)
+#endif
 #include "reactor_common.h"
+#ifndef _WIN32
+#undef sigaction
+#endif
 int main(void) {
     reactor *a,*b,*c;
     if(liza_rt_reactor_create(0,2,&a)||liza_rt_reactor_create(0,2,&b))return 1;
     if(liza_rt_reactor_shutdown_requested(a)!=net_failure(7))return 2;
+#ifndef _WIN32
+    struct sigaction original_int,original_term,current;
+    sigset_t original_mask,current_mask;
+    if(sigaction(SIGINT,NULL,&original_int)||sigaction(SIGTERM,NULL,&original_term)
+       ||sigprocmask(SIG_SETMASK,NULL,&original_mask))return 16;
+    fail_registration=1;
+    if(liza_rt_reactor_watch_shutdown(a)!=net_failure(7)||reactor_watcher)return 17;
+    if(sigaction(SIGINT,NULL,&current)||current.sa_handler!=original_int.sa_handler)return 18;
+    if(sigaction(SIGTERM,NULL,&current)||current.sa_handler!=original_term.sa_handler)return 19;
+    if(sigprocmask(SIG_SETMASK,NULL,&current_mask)
+       ||sigismember(&original_mask,SIGINT)!=sigismember(&current_mask,SIGINT)
+       ||sigismember(&original_mask,SIGTERM)!=sigismember(&current_mask,SIGTERM))return 20;
+#endif
     if(liza_rt_reactor_watch_shutdown(a)||liza_rt_reactor_watch_shutdown(a))return 3;
     if(liza_rt_reactor_watch_shutdown(b)!=net_failure(7))return 4;
 #ifdef _WIN32
@@ -252,6 +298,10 @@ int main(void) {
     if(end<start || end-start<50)return 11; /* closed listener is absent, no POLLNVAL spin */
     if(liza_rt_reactor_create(0,2,&c))return 12; /* may reuse the closed descriptor */
     if(liza_rt_reactor_close(a) || (liza_rt_reactor_port(c)>>32))return 13;
+#ifndef _WIN32
+    if(sigaction(SIGINT,NULL,&current)||current.sa_handler!=original_int.sa_handler)return 21;
+    if(sigaction(SIGTERM,NULL,&current)||current.sa_handler!=original_term.sa_handler)return 22;
+#endif
     if(liza_rt_reactor_watch_shutdown(b)||liza_rt_reactor_shutdown_requested(b))return 14;
     if(liza_rt_reactor_close(b)||liza_rt_reactor_close(c))return 15;
     return 0;
@@ -262,3 +312,37 @@ int main(void) {
             exe=Path(self.case.name)/('adapter'+opt+'.exe')
             subprocess.run(['clang','-O'+opt,str(source),'-I'+str(ROOT/'liza/runtime'),*flags,'-o',str(exe)],check=True,capture_output=True)
             r=subprocess.run([str(exe)],capture_output=True,timeout=5);self.assertEqual(r.returncode,0,r.stderr)
+
+    def test_control_publication_with_live_reader(self):
+        # The child explicitly acknowledges an open handle before replacement;
+        # its original read must remain coherent while a new open sees the update.
+        source=Path(self.case.name)/'publication.c'
+        source.write_text(FAULT+r'''
+int main(int argc,char **argv) {
+    if(argc!=2)return 1;
+    FILE *old=open_control(argv[1]);if(!old)return 2;
+    puts("opened");fflush(stdout);
+    if(getchar()!='!')return 3;
+    unsigned long long t;unsigned s;
+    if(fscanf(old,"%llu %u",&t,&s)!=2 || t!=100 || s!=0)return 4;
+    fclose(old);
+    FILE *current=open_control(argv[1]);if(!current)return 5;
+    if(fscanf(current,"%llu %u",&t,&s)!=2 || t!=150 || s!=1)return 6;
+    fclose(current);return 0;
+}
+''')
+        m=lower(load_program(ROOT/'examples/apps/liza_proxy_ops.liza'))
+        flags=[f for f in link_flags(m) if not Path(f).name.startswith('reactor_')]
+        for opt in ('0','2'):
+            self.control(100,0)
+            exe=Path(self.case.name)/('publication'+opt+'.exe')
+            subprocess.run(['clang','-O'+opt,str(source),'-I'+str(ROOT/'liza/runtime'),*flags,'-o',str(exe)],check=True,capture_output=True)
+            p=subprocess.Popen([str(exe),str(self.gate)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            self.addCleanup(lambda p=p:test_net.NetNative.stop(p))
+            self.addCleanup(p.stdin.close)
+            lines=queue.Queue()
+            threading.Thread(target=lambda:lines.put(p.stdout.readline()),daemon=True).start()
+            self.assertEqual(lines.get(timeout=5).rstrip(b'\r\n'),b'opened')
+            self.control(150,1)  # no retry: replacement must succeed with old open
+            out,err=p.communicate(b'!',timeout=5)
+            self.assertEqual((p.returncode,out),(0,b''),err)
