@@ -20,6 +20,28 @@ description: "Первая программа на Liza: проверка исх
 
 Все команды ниже выполняются из каталога с исходниками Liza.
 
+### Явный выбор LLVM/Clang
+
+Liza использует выбранный Clang и для определения target/ABI, и для сборки.
+Можно выбрать LLVM 23 вместо системного Apple Clang без изменения исходника:
+
+```sh
+/opt/homebrew/opt/llvm/bin/clang --version
+python3 -m liza build examples/hello.liza --clang /opt/homebrew/opt/llvm/bin/clang
+```
+
+Это путь Homebrew на Apple Silicon; проверьте фактическую версию установленного
+пакета. Для тестов и benchmark runners, которые ищут `clang` в PATH:
+
+```sh
+PATH=/opt/homebrew/opt/llvm/bin:$PATH python3 -m unittest discover -s tests -v
+```
+
+Путь не закрепляет версию пакета навсегда. Для воспроизводимых измерений сохраняйте
+полный вывод `clang --version` вместе с target, флагами и хешами артефактов.
+Системные инструменты линковки и SDK по-прежнему необходимы. Закреплённые toolchains
+отдельных экспериментов Verified имеют собственные контракты версий.
+
 ## Первая программа — Hello World
 
 ```liza
