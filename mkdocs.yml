@@ -64,6 +64,7 @@ nav:
   - CLI-приложение liza-text: cli.md
   - Потоковый JSON: json.md
   - "T3: bounded StringBuilder": string-builder.md
+  - "T4: JSON tokenizer (plan)": json-tokenizer.md
   - Ресурсные структуры: resource-structures.md
   - Владеющий UTF-8 (T1): owned-string.md
   - Readonly-доступ (T2-A): readonly-access.md

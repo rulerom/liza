@@ -387,7 +387,7 @@ Alive2. Сначала калибровка обязательных traps; то
 | T2-A — реализован | [Readonly-параметры](readonly-access.md) и непотребляющее наблюдение String |
 | T2-B — реализован | [Локальные byte subviews](local-subviews.md) внутри вызова; возвращаемые TextView остаются отдельным этапом |
 | T3 — первый срез реализован | [Bounded builder](string-builder.md): UTF-8 append, целые числа и [потоковый format](json.md#format) |
-| T4 | Выдача JSON-токенов и явное декодирование escapes; formatter уже сохраняет исходные lexemes без tokenizer |
+| T4 — контракт | [Потоковые события и decoder](json-tokenizer.md): raw-диапазоны отдельно от UTF-8 значений в буфере; реализация ещё не начата |
 | T5 | HashMap и интернирование строк со стабильными SymbolId |
 | T6 | Lexer и parser Liza, написанные на Liza |
 
