@@ -71,7 +71,6 @@ class ReadonlyTypes(unittest.TestCase):
         self.reject(HEADER+'fn bad(borrow h:Holder)->u32{h.length=0;return 0} fn main()->u32{return 0}','immutable|readonly')
         self.reject(HEADER+'fn bad(borrow h:Holder)->View<u8>{return memory.view(h.buffer)} fn main()->u32{return 0}','views cannot')
         self.reject('struct Saved {v:View<u8>} fn main()->u32{return 0}','views cannot')
-        self.reject(HEADER+'fn bad(borrow h:Holder)->u8{v=memory.view(h.buffer);part=view v[0..1];return part[0]} fn main()->u32{return 0}','view requires an array')
 
     def test_legacy_borrowed_operations_are_not_readonly(self):
         cases=[

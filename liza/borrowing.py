@@ -36,8 +36,15 @@ def check_borrows(fn, types, match_types=None, variants=None, structs=None, sign
     initial = {}
     for i, (token, type_name) in enumerate(fn.params):
         mode = 'mutable' if i in fn.mutable_params else 'readonly' if i in fn.readonly_params else 'value'
-        initial[token.text] = declaration(token, type_name, 0, mode=='mutable', mode)
+        binding = declaration(token, type_name, 0, mode=='mutable', mode)
+        if is_view(type_name):
+            # The external backing is distinct from the movable descriptor.
+            binding = replace(binding, owners=frozenset({('view_parameter', binding.identity)}))
+        initial[token.text] = binding
     depths = {b.identity:b.depth for b in initial.values()}
+    for binding in initial.values():
+        for owner in binding.owners:
+            depths[owner] = 0
 
     def locked(identity):
         return any(identity in scope for scope in loans)
@@ -84,13 +91,19 @@ def check_borrows(fn, types, match_types=None, variants=None, structs=None, sign
             owner = projection_root(node.args[0])
             if owner is None:
                 raise CompileError(node.token, 'view requires a binding root')
-            owner = env[owner].identity
-            if owner in active_writers:
+            binding = env[owner]
+            # A descriptor is not a new storage owner. Parameter views borrow
+            # external storage for this call; locally created views retain all
+            # possible roots across assignments and CFG joins.
+            owners = set(binding.owners) if is_view(binding.type) else {binding.identity}
+            if not owners:
+                owners = {binding.identity}
+            if owners & active_writers or binding.identity in active_writers:
                 raise CompileError(node.token, 'cannot create view while mutable borrow is active')
-            loans[-1].add(owner)
+            loans[-1].update(owners)
             for arg in node.args[1:]:
                 expr(arg, env)
-            return {owner}
+            return owners
         owners = set()
         for arg in node.args:
             owners.update(expr(arg, env))

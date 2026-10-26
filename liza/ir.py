@@ -369,7 +369,8 @@ class Lowerer:
             op = 'view.create' if expr.kind == 'view' else 'view.read' if is_view(source) else 'array.read'
             return self.emit(op, args, type=type_name, source_type=source,
                              bounds_policy='trap',
-                             owner_binding=expr.args[0].token.text if expr.kind == 'view' else '')
+                             owner_binding=(args[0] if is_view(source) else expr.args[0].token.text) if expr.kind == 'view' else '',
+                             storage_relation='borrow_argument_0' if expr.kind == 'view' and is_view(source) else '')
         if expr.kind == 'variant':
             args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
             case = text.rsplit('.',1)[-1]
