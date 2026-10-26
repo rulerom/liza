@@ -1,4 +1,7 @@
-// Build: python3 -m liza build examples/apps/liza_json.liza -o build/liza-json
+// Build: python3 -m liza build examples/apps/liza_json.liza --project-root examples -o build/liza-json
+import text.string
+import text.builder
+import text.json_format
 fn diagnostic(message:Text,code:u32)->u32:io {
     match console.errln(message) {Ok(n)=>{return code} Err(e)=>{return 3}}
 }
@@ -51,14 +54,99 @@ fn run(path:Path)->u32:io {
         }
     }
 }
-fn usage()->u32:io {return diagnostic("Usage: liza-json check <file>",2)}
-fn main()->u32:io {
+// Return ownership on every outcome. No rollback/retry after partial stdout I/O.
+struct Emitted {text:text.string.String;ok:bool}
+fn emit(initial:text.string.String,data:View<u8>)->Emitted:io {
+    var output=move initial
+    if data.len>text.string.capacity(output)-text.string.length(output) {
+        match text.string.write(output) {
+            Err(e)=>{return Emitted(move output,false)}
+            Ok(n)=>{if n!=u64(text.string.length(output)) {return Emitted(move output,false)}}
+        }
+        output=text.string.clear(move output)
+    }
+    (next,status)=text.builder.append(move output,data)
+    match status {
+        Err(e)=>{return Emitted(move next,false)}
+        Ok(done)=>{return Emitted(move next,true)}
+    }
+}
+fn format_stream(input:File,storage:memory.Buffer<u8>)->u32:io {
+    var output=text.string.from_buffer(move storage)
+    var state=text.json_format.create()
+    var failure:Option<JsonError> = None
+    var io_failed=false
+    var done=false
+    while !done {
+        match file.read_chunk(input) {
+            Err(e)=>{io_failed=true;break}
+            Ok(chunk)=>{
+                if chunk.eof {break}
+                bytes=chunk.data
+                var i:u32=0
+                while i<chunk.len {
+                    match text.json_format.feed_byte(borrow mut state,bytes[i]) {
+                        Err(e)=>{failure=Some(e);done=true;break}
+                        Ok(piece)=>{
+                            if piece.length>0 {
+                                data=piece.data;prefix=view data[0..piece.length]
+                                (next,ok)=emit(move output,prefix);output=move next
+                                if !ok {io_failed=true;done=true;break}
+                            }
+                        }
+                    }
+                    i=i+1
+                }
+            }
+        }
+    }
+    if !done && !io_failed {
+        match text.json_format.finish(state) {
+            Err(e)=>{failure=Some(e)}
+            Ok(count)=>{
+                newline:[u8;1]=[10];v=view newline[0..1]
+                (next,ok)=emit(move output,v);output=move next
+                if !ok {io_failed=true}
+                else {
+                    match text.string.write(output) {
+                        Err(e)=>{io_failed=true}
+                        Ok(n)=>{if n!=u64(text.string.length(output)) {io_failed=true}}
+                    }
+                }
+            }
+        }
+    }
+    released=text.string.release(move output)
+    match file.close(move input) {Err(e)=>{return diagnostic("Cannot close file",3)} Ok(closed)=>{}}
+    if io_failed {return diagnostic("Cannot read or write JSON",3)}
+    match failure {Some(e)=>{return report(Err(e))} None=>{return 0}}
+}
+fn format(path:Path)->u32:io,alloc {
+    match memory.create(2048) {Err(e)=>{return diagnostic("Cannot allocate output",3)} Ok(region)=>{
+        var status:u32=0
+        match memory.alloc<u8>(region,2048,0) {
+            Err(e)=>{status=diagnostic("Cannot allocate output",3)}
+            Ok(storage)=>{
+                match file.open_path(path) {
+                    Err(e)=>{released=memory.release(move storage);status=diagnostic("Cannot open file",3)}
+                    Ok(input)=>{status=format_stream(move input,move storage)}
+                }
+            }
+        }
+        closed=memory.close(move region);return status
+    }}
+}
+fn usage()->u32:io {return diagnostic("Usage: liza-json <check|format> <file>",2)}
+fn main()->u32:io,alloc {
     if cli.count()!=3 {return usage()}
     match cli.arg(1) {
         None=>{return usage()}
         Some(command)=>{
-            if !cli.equals(command,"check") {return usage()}
-            match cli.path_arg(2) {None=>{return usage()} Some(path)=>{return run(path)}}
+            if !cli.equals(command,"check") && !cli.equals(command,"format") {return usage()}
+            match cli.path_arg(2) {None=>{return usage()} Some(path)=>{
+                if cli.equals(command,"format") {return format(path)}
+                return run(path)
+            }}
         }
     }
 }

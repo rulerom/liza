@@ -185,11 +185,13 @@ python3 -m liza run examples/owned_string.liza
 
 Потоковая проверка JSON на самой Liza: UTF-8, escapes и surrogate pairs,
 лексические числа, точные байтовые смещения ошибок. Стек ограничен 64 уровнями,
-память не зависит от размера файла; `format` и дерево объектов пока не реализованы.
+память не зависит от размера файла. `format` выводит JSON с отступами в stdout,
+сохраняя числа и строковые escapes; дерево объектов не строится.
 
 ```sh
-python3 -m liza build examples/apps/liza_json.liza -o build/liza-json
+python3 -m liza build examples/apps/liza_json.liza --project-root examples -o build/liza-json
 ./build/liza-json check config.json
+./build/liza-json format config.json > formatted.json
 ```
 
 [Контракт и ограничения](https://liza.rulerom.com/json.html).
