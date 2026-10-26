@@ -132,12 +132,16 @@ class SubviewTypes(unittest.TestCase):
     def test_bounds_dominate_address_and_negative_control(self):
         text=llvm(compile_source('fn probe(v:View<u8>,s:u32,e:u32)->u32{p=view v[s..e];return p.len}'+main('return 0')))
         check_guard_order(text)
-        line=next(line for line in text.splitlines(True) if '_ptr = getelementptr' in line)
-        # Deliberately move GEP before the validation block.
-        mutant=text.replace(line,'')
+        # Move GEP and its operands together: the mutant retains valid SSA
+        # while violating the required order, rather than failing on use-before-def.
+        moved=[next(line for line in text.splitlines(True) if suffix in line)
+               for suffix in ('_offset = zext', '_parent_base = extractvalue', '_ptr = getelementptr')]
+        mutant=text
+        for line in moved:
+            mutant=mutant.replace(line,'')
         at=mutant.index(' = extractvalue')
         at=mutant.rfind('\n',0,at)+1
-        mutant=mutant[:at]+line+mutant[at:]
+        mutant=mutant[:at]+''.join(moved)+mutant[at:]
         with self.assertRaisesRegex(AssertionError,'precedes'):
             check_guard_order(mutant)
 
