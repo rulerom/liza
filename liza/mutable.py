@@ -15,7 +15,9 @@ def plain_value(t, structs):
 def addressable_bindings(body):
     """Names whose var storage must exist before an eventual mutable call.
 
-    Names are not shadowed. Readonly calls can use immutable SSA snapshots;
+    Names may recur in disjoint lexical scopes; this is only a candidate set.
+    Lowering checks each declaration type and each actual mutable call.
+    Readonly calls can use immutable SSA snapshots;
     only explicit mutable arguments require a persistent local allocation.
     """
     result = set()
