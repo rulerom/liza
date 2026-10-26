@@ -13,30 +13,39 @@ def plain_value(t, structs):
 
 
 def addressable_bindings(body):
-    """Names whose var storage must exist before an eventual mutable call.
+    """Declaration IDs of vars used as explicit mutable call arguments.
 
-    Names may recur in disjoint lexical scopes; this is only a candidate set.
-    Lowering checks each declaration type and each actual mutable call.
-    Readonly calls can use immutable SSA snapshots;
-    only explicit mutable arguments require a persistent local allocation.
+    Resolve names lexically; sibling declarations with identical spelling are
+    unrelated. The same AST declaration has one stable ID across loop visits.
     """
     result = set()
-    def expr(node):
+    def expr(node, env):
         if node.kind == 'borrow_mut':
-            result.add(node.args[0].token.text)
+            target = env.get(node.args[0].token.text)
+            if target is not None and getattr(target, 'is_var', False):
+                result.add(id(target))
         for arg in node.args:
-            expr(arg)
-    def visit(body):
+            expr(arg, env)
+    def visit(body, env):
         for stmt in body:
-            if isinstance(stmt, Scope): visit(stmt.body)
+            if isinstance(stmt, Scope): visit(stmt.body, env.copy())
             elif isinstance(stmt, Conditional):
-                expr(stmt.condition);visit(stmt.then_body);visit(stmt.else_body)
-            elif isinstance(stmt, While): expr(stmt.condition);visit(stmt.body)
+                expr(stmt.condition, env)
+                visit(stmt.then_body, env.copy());visit(stmt.else_body, env.copy())
+            elif isinstance(stmt, While):
+                expr(stmt.condition, env);visit(stmt.body, env.copy())
             elif isinstance(stmt, Match):
-                expr(stmt.expr)
-                for arm in stmt.arms: visit(arm.body)
+                expr(stmt.expr, env)
+                for arm in stmt.arms:
+                    branch = env.copy()
+                    if arm.binding: branch[arm.binding.text] = None
+                    visit(arm.body, branch)
             elif not isinstance(stmt, LoopControl):
-                expr(stmt.expr)
-                if isinstance(stmt, Update): expr(stmt.target)
-    visit(body)
+                expr(stmt.expr, env)
+                if isinstance(stmt, Update): expr(stmt.target, env)
+                elif isinstance(stmt, Destructure):
+                    for token in stmt.names: env[token.text] = None
+                elif not stmt.is_return and stmt.token.text not in env:
+                    env[stmt.token.text] = stmt
+    visit(body, {})
     return result

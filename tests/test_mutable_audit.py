@@ -60,6 +60,24 @@ class PermissionAudit(unittest.TestCase):
                 else:
                     with self.assertRaises(CompileError):lower(Parser(source).parse())
 
+    def test_only_the_borrowed_declaration_becomes_addressable(self):
+        source=STRUCT+'''fn change(borrow mut value:S)->u32 {value.n=3;return 0}
+fn main()->u32 {
+ {var value=S(7);value.n=value.n+1;if value.n!=8 {return 1}}
+ {var value=S(1);done=change(borrow mut value);if value.n!=3 {return 2}}
+ return 0
+}'''
+        module=lower(Parser(source).parse())
+        main=next(fn for fn in module if fn.name=='main')
+        allocations=[op for b in main.blocks for op in b.operations if op.op=='storage.local']
+        self.assertEqual(len(allocations),1)
+        for body in (
+            '{var value=S(7)} {value=S(1);done=change(borrow mut value)}',
+            'if true {var value=S(7)} else {value=S(1);done=change(borrow mut value)}',
+        ):
+            with self.subTest(body=body),self.assertRaises(CompileError):
+                lower(Parser(STRUCT+'fn change(borrow mut value:S)->u32 {return 0} fn main()->u32 {'+body+' return 0}').parse())
+
     def test_pending_loan_survives_nested_argument_call(self):
         for outer,inner,same in product(('readonly','mutable'),MODES,(False,True)):
             source=STRUCT+f'''fn hold({PREFIX[outer]}s:S,n:u32)->u32 {{return n}}

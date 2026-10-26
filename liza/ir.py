@@ -667,12 +667,9 @@ class Lowerer:
                 value = self.expression(stmt.expr, names, expected)
                 if names.get(name) in self.storage_values:
                     self.emit('storage.write', [names[name], value], source_type=self.types[value], owner_binding=names[name])
-                elif (stmt.is_var and name in self.address_candidates
-                      and self.types[value] in self.structs
-                      and plain_value(self.types[value], self.structs)):
-                    # The name prepass is conservative across sibling scopes.
-                    # A different declaration with the same name must not be
-                    # rejected here; an actual mutable call checks its binding.
+                elif stmt.is_var and id(stmt) in self.address_candidates:
+                    if self.types[value] not in self.structs or not plain_value(self.types[value], self.structs):
+                        raise CompileError(stmt.token, 'mutable borrow requires a resource-free copyable structure')
                     names[name] = self.emit('storage.local', [value], type=self.types[value], storage_relation='local_owner')
                     self.storage_values.add(names[name])
                 else:
