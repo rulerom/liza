@@ -154,7 +154,7 @@ echo $?  # 0
 
 `var` разрешает повторное присваивание имени, сохраняя его тип:
 
-```text
+```liza
 var x: u8 = 10
 snapshot = x
 x = x + 1
@@ -200,7 +200,7 @@ echo $?  # 0
 
 ## Структуры-значения
 
-```text
+```liza
 struct Point { x: i32; y: i32 }
 
 fn shifted(p: Point) -> Point {
@@ -221,7 +221,7 @@ echo $?  # 0
 
 ## Массивы и readonly views
 
-```text
+```liza
 fn first(data: View<u8>) -> u8 {
     return data[0]
 }
