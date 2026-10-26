@@ -58,3 +58,10 @@ pub fn release(text:String)->u32 {
     (storage,length)=move text
     return memory.release(move storage)
 }
+
+// Local readonly descriptor: only the UTF-8 contents, never unused capacity.
+pub fn write(borrow text:String)->Result<u64,IoFailure>:io {
+    bytes=memory.view(text.storage)
+    prefix=view bytes[0..text.length]
+    return console.write_bytes(prefix)
+}

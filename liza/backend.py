@@ -258,7 +258,7 @@ def llvm(module, target=None):
                 value = aliases[value]
             return value
         slots = {canonical(op.args[0]) for b in fn.blocks for op in b.operations
-                 if op.op in ('array.read', 'view.create') and not large(logical[op.args[0]])}
+                 if op.op in ('array.read', 'view.create') and is_array(logical[op.args[0]]) and not large(logical[op.args[0]])}
         calls = [op for b in fn.blocks for op in b.operations if op.op == 'call']
         signatures = {f.name: [p['type'] for p in f.params] for f in functions}
         signatures.update({f.name.text: [t for _,t in f.params] for f in getattr(module,'externals',[])})
@@ -469,7 +469,11 @@ def llvm(module, target=None):
                     lines.append(f'  %{name} = extractvalue {types[op.source_type]} {args[0]}, {index}')
                 elif op.op in ('array.read', 'view.create', 'view.read'):
                     if op.op == 'view.create':
-                        length = array_length(op.source_type)
+                        if is_view(op.source_type):
+                            lines.append(f'  %{name}_parent_length = extractvalue {types[op.source_type]} {args[0]}, 1')
+                            length = f'%{name}_parent_length'
+                        else:
+                            length = array_length(op.source_type)
                         lines.extend([
                             f'  %{name}_order = icmp ugt i32 {args[1]}, {args[2]}',
                             f'  %{name}_end = icmp ugt i32 {args[2]}, {length}',
@@ -478,8 +482,12 @@ def llvm(module, target=None):
                         guard(name, f'%{name}_invalid')
                         lines.append(f'  %{name}_length = sub i32 {args[2]}, {args[1]}')
                         lines.append(f'  %{name}_offset = zext i32 {args[1]} to i64')
-                        storage = args[0] if large(op.source_type) else f'%{canonical(op.args[0])}_storage'
-                        lines.append(f'  %{name}_ptr = getelementptr {types[op.source_type]}, ptr {storage}, i64 0, i64 %{name}_offset')
+                        if is_view(op.source_type):
+                            lines.append(f'  %{name}_parent_base = extractvalue {types[op.source_type]} {args[0]}, 0')
+                            lines.append(f'  %{name}_ptr = getelementptr {types[element_type(op.source_type)]}, ptr %{name}_parent_base, i64 %{name}_offset')
+                        else:
+                            storage = args[0] if large(op.source_type) else f'%{canonical(op.args[0])}_storage'
+                            lines.append(f'  %{name}_ptr = getelementptr {types[op.source_type]}, ptr {storage}, i64 0, i64 %{name}_offset')
                         lines.append(f'  %{name}_base = insertvalue {ty} zeroinitializer, ptr %{name}_ptr, 0')
                         lines.append(f'  %{name} = insertvalue {ty} %{name}_base, i32 %{name}_length, 1')
                     else:
