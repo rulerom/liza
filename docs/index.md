@@ -7,7 +7,7 @@ hide:
 
 <div class="liza-hero">
   <img class="liza-hero-logo" src="assets/images/liza-logo.png" alt="Логотип Liza" width="640" height="640">
-  <p class="liza-eyebrow">LIZA 0.0.30 · ЭКСПЕРИМЕНТАЛЬНЫЙ ЯЗЫК</p>
+  <p class="liza-eyebrow">LIZA · ЭКСПЕРИМЕНТАЛЬНЫЙ ЯЗЫК</p>
   <h1>Сетевые сервисы.<br>Явные ресурсы. Проверяемые свойства.</h1>
   <p class="liza-definition">Liza — системный язык для производительных сетевых сервисов с определённым поведением, контролируемыми ресурсами и математически проверяемыми свойствами.</p>
   <p class="liza-lead"><strong>Сегодня:</strong> нативный TCP-прокси и Message Router; V0–V4 и Relay проверяют выбранные свойства и фрагменты IR.</p>
@@ -169,7 +169,7 @@ build\hello.exe
   <p>Reactor владеет сокетами, а Liza-код управляет фреймингом и backpressure восьми клиентов. Буферы выделяются один раз и переиспользуются. Медленный клиент не блокирует остальных.</p>
   <a href="reactor.html">Владение, память и проверки →</a>
   <p><a href="message-router.html">Message Router и протокольные адресаты</a></p>
-  <p><a href="tcp-proxy.html">На приёмке: L4 TCP Proxy и half-close</a></p>
+  <p><a href="tcp-proxy.html">L4 TCP Proxy и half-close</a></p>
   <p><a href="message-server.html">Blocking message server и фрейминг</a></p>
   <p><a href="tcp.html">Первый TCP echo server</a></p>
   <p><a href="file-output.html">Запись файлов и приложение liza-copy</a></p>
