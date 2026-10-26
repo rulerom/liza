@@ -74,6 +74,7 @@ nav:
   - Performance Parity — JSON ARM64: performance-parity.md
   - Performance Parity — bounded inlining: inlining-policy.md
   - Performance Parity — state and aliasing: state-alias-analysis.md
+  - Performance Parity — guard and CFG: guard-cfg-investigation.md
   - "T2-B: local subviews (plan)": local-subviews.md
   - "JSON performance (plan)": json-performance.md
   - Lowering составных значений: aggregate-lowering.md
