@@ -34,7 +34,7 @@ description: "Каталог исследований, измерений и п�
 - [Performance Parity — state and aliasing](state-alias-analysis.md)
 - [Performance Parity — guard and CFG](guard-cfg-investigation.md)
 - [Production field forwarding](field-forwarding.md)
-- [JSON performance (plan)](json-performance.md)
+- [Производительность JSON: результаты и исторический baseline](json-performance.md)
 - [Lowering составных значений](aggregate-lowering.md)
 
 ## Аудит модели доступа
