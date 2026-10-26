@@ -63,6 +63,7 @@ nav:
   - Основы языка: basics.md
   - CLI-приложение liza-text: cli.md
   - Потоковый JSON: json.md
+  - "T3: bounded StringBuilder": string-builder.md
   - Ресурсные структуры: resource-structures.md
   - Владеющий UTF-8 (T1): owned-string.md
   - Readonly-доступ (T2-A): readonly-access.md

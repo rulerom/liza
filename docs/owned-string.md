@@ -98,6 +98,6 @@ API строки. `release` не возвращает вместимость р�
 Это тестируемый контракт, не доказательство для всех входов. Формальные результаты
 V0–V4 и Relay автоматически на String или новое расширение Core не переносятся.
 Реализованы [T2-A: readonly-доступ](readonly-access.md) и
-[T2-B: локальные subviews и write](local-subviews.md). Далее — T3
-(builder и форматирование), затем самостоятельный
-JSON tokenizer. `liza-json check` остаётся минимальным валидатором; `format` пока нет.
+[T2-B: локальные subviews и write](local-subviews.md). Поверх String реализован [первый builder](string-builder.md) и
+[потоковый format](json.md#format). Далее — самостоятельный JSON tokenizer;
+`json.*` остаётся минимальным валидатором.
