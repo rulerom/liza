@@ -106,7 +106,7 @@ LLM может генерировать код и предлагать инва�
 | 0.0.29 — реализован | [Message Router](message-router.md): протокольные ID, адресная доставка, ограниченные очереди |
 | 0.0.30 — реализован | [Bounded L4 TCP Proxy](tcp-proxy.md): connect, duplex relay, half-close и 32 КиБ буферов |
 | 0.0.31 — первый срез реализован | [TCP Proxy Operations](tcp-proxy-operations.md): net.Address, CLI-конфигурация и connect deadline |
-| 0.0.31 — следующий срез | Idle timeout, управляемое завершение и счётчики |
+| 0.0.31 — lifecycle реализован | Idle timeout, bounded drain, сигналы и итоговые счётчики; далее baseline и независимое воспроизведение |
 | Затем — эксперимент | До 1024 TCP-пар: измерение памяти, readiness и стоимости обхода |
 
 Первый срез 0.0.31 реализован отдельным приложением `liza_proxy_ops.liza`;
