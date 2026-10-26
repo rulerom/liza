@@ -36,28 +36,56 @@ FAULT = r'''
 #undef liza_rt_reactor_finish_connect
 #include <stdio.h>
 #include <errno.h>
-static unsigned long long tick=100,reads,writes,fins,polls,sequence=1;
-static unsigned stop;
-/* Immutable, sequential commands: publish only to a name never opened before.
-   No replacement/deletion of a file while a Windows reader holds it. */
+static unsigned long long tick=100,reads,writes,fins,polls,commands;
+static unsigned stop,command_length;
+static char command[64];
+/* The controller is the sole writer of stdin. Publish only complete records.
+   Peek/poll before a one-byte read keeps the test event loop nonblocking. */
 static void control(void) {
     for(;;) {
-        char path[4096];
-        int n=snprintf(path,sizeof(path),"%s.%llu",getenv("LIFECYCLE_GATE"),sequence);
-        if(n<0 || (size_t)n>=sizeof(path))exit(90);
-        FILE *f=fopen(path,"r");
-        if(!f){if(errno==ENOENT)return;perror("control open");exit(91);}
-        unsigned long long t;unsigned request;
-        if(fscanf(f,"%llu %u",&t,&request)!=2){fclose(f);exit(92);}
-        fclose(f);tick=t;stop=request;sequence++;
+        char byte;
+#ifdef _WIN32
+        HANDLE input=GetStdHandle(STD_INPUT_HANDLE);DWORD available,got;
+        if(!PeekNamedPipe(input,NULL,0,NULL,&available,NULL)) {
+            if(GetLastError()==ERROR_BROKEN_PIPE)return;
+            fputs("control peek failed\n",stderr);exit(91);
+        }
+        if(!available)return;
+        if(!ReadFile(input,&byte,1,&got,NULL)||got!=1)exit(92);
+#else
+        struct pollfd input={0,POLLIN,0};
+        int ready=poll(&input,1,0);
+        if(ready<0){if(errno==EINTR)return;exit(91);}
+        if(!ready || !(input.revents&POLLIN))return;
+        ssize_t got=read(0,&byte,1);
+        if(got<0){if(errno==EINTR)return;exit(92);}
+        if(!got)return;
+#endif
+        if(byte=='\n') {
+            unsigned long long t;unsigned request;char extra;
+            command[command_length]=0;
+            if(sscanf(command,"%llu %u %c",&t,&request,&extra)!=2)exit(93);
+            tick=t;stop=request;commands++;command_length=0;
+        } else {
+            if(command_length>=sizeof(command)-1)exit(94);
+            command[command_length++]=byte;
+        }
     }
 }
 uint32_t liza_rt_reactor_clock(uint64_t*out){control();*out=tick;return 0;}
 uint64_t liza_rt_reactor_shutdown_requested(reactor*r){(void)r;control();return stop;}
 uint64_t liza_rt_reactor_poll(reactor*r,uint32_t t){
     uint64_t result=real_poll(r,t>1?1:t);control();polls++;
-    FILE*f=fopen(getenv("LIFECYCLE_ACK"),"w");
-    if(f){fprintf(f,"%llu %llu %llu %llu %llu %u\n",tick,reads,writes,fins,polls,r->listener_open);fclose(f);}
+    /* A stable snapshot between observable changes, not a truncate on every
+       busy-loop poll. The reader tolerates the bounded publication window. */
+    static unsigned long long old_tick=UINT64_MAX,old_reads,old_writes,old_fins;
+    static unsigned old_open=2;
+    if(tick!=old_tick || reads!=old_reads || writes!=old_writes || fins!=old_fins || r->listener_open!=old_open) {
+        FILE*f=fopen(getenv("LIFECYCLE_ACK"),"w");
+        if(!f){perror("ack open");exit(95);}
+        if(fprintf(f,"%llu %llu %llu %llu %llu %u\n",tick,reads,writes,fins,polls,r->listener_open)<0 || fclose(f))exit(96);
+        old_tick=tick;old_reads=reads;old_writes=writes;old_fins=fins;old_open=r->listener_open;
+    }
     return result;
 }
 uint64_t liza_rt_reactor_read(reactor*r,uint64_t o,uint64_t g,uint64_t s,uint8_t*b,uint32_t l,uint32_t a,uint32_t n){
@@ -94,14 +122,12 @@ class Lifecycle(unittest.TestCase):
     def tearDownClass(cls): cls.temp.cleanup()
     def setUp(self):
         self.case=tempfile.TemporaryDirectory();self.addCleanup(self.case.cleanup)
-        self.gate=Path(self.case.name)/'gate';self.ack=Path(self.case.name)/'ack';self.sequence=0;self.control(100,0)
+        self.ack=Path(self.case.name)/'ack';self.process=None;self.current_control=(100,0)
     def control(self,t,stop):
-        sequence=self.sequence+1
-        destination=Path(str(self.gate)+f'.{sequence}')
-        self.assertFalse(destination.exists(), 'control commands are immutable')
-        tmp=self.gate.with_suffix('.next');tmp.write_text(f'{t} {stop}\n')
-        os.rename(tmp,destination)
-        self.sequence=sequence
+        self.current_control=(t,stop)
+        if self.process is not None and self.process.poll() is None:
+            self.process.stdin.write(f'{t} {stop}\n'.encode('ascii'))
+            self.process.stdin.flush()
     def wait_ack(self,predicate):
         deadline=time.monotonic()+5
         while time.monotonic()<deadline:
@@ -110,14 +136,19 @@ class Lifecycle(unittest.TestCase):
                 if len(values)==6 and predicate(values):return values
             except (OSError,ValueError):pass
             time.sleep(.005)
-        self.fail('runtime did not reach expected controlled transition')
+        code=self.process.poll()
+        error=self.process.stderr.read() if code is not None else b'<process still running>'
+        snapshot=self.ack.read_text() if self.ack.exists() else '<no ack>'
+        self.fail(f'controlled transition timeout: exit={code}, ack={snapshot!r}, stderr={error!r}')
     def listener(self):
         s=socket.socket();self.addCleanup(s.close);s.bind(('127.0.0.1',0));s.listen(8);s.settimeout(5);return s
     def start(self,exe,up,args=(),extra=None):
         self.ack.unlink(missing_ok=True)
-        env=dict(os.environ,LIFECYCLE_GATE=str(self.gate),LIFECYCLE_ACK=str(self.ack));env.update(extra or {})
-        p=subprocess.Popen([str(exe),'--ephemeral','--upstream',f'127.0.0.1:{up.getsockname()[1]}','--metrics',*args],stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env)
+        env=dict(os.environ,LIFECYCLE_ACK=str(self.ack));env.update(extra or {})
+        p=subprocess.Popen([str(exe),'--ephemeral','--upstream',f'127.0.0.1:{up.getsockname()[1]}','--metrics',*args],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env)
+        self.addCleanup(p.stdin.close)
         self.addCleanup(lambda:test_net.NetNative.stop(p))
+        self.process=p;self.control(*self.current_control)
         lines=queue.Queue();threading.Thread(target=lambda:lines.put(p.stdout.readline()),daemon=True).start()
         line=lines.get(timeout=10);self.assertTrue(line.strip().isdigit(),line)
         return p,int(line)
@@ -167,7 +198,7 @@ class Lifecycle(unittest.TestCase):
             c,u=self.connect(port,up);c.sendall(b'x'*3000);c.shutdown(socket.SHUT_WR)
             first=self.wait_ack(lambda x:x[1]==2048)
             self.control(100,1);self.wait_ack(lambda x:x[5]==0)
-            self.control(149,1);last=self.wait_ack(lambda x:x[0]==149 and x[4]>first[4]+3)
+            self.control(149,1);last=self.wait_ack(lambda x:x[0]==149)
             self.assertEqual(last[1:4],[2048,0,0])
             self.control(150,1);m=self.finish(p)
             self.assertEqual((m['discarded'],m['forward_read'],m['forward_written'],m['drain_forced']),(2048,2048,0,1))
@@ -308,38 +339,36 @@ int main(void) {
             subprocess.run(['clang','-O'+opt,str(source),'-I'+str(ROOT/'liza/runtime'),*flags,'-o',str(exe)],check=True,capture_output=True)
             r=subprocess.run([str(exe)],capture_output=True,timeout=5);self.assertEqual(r.returncode,0,r.stderr)
 
-    def test_control_publication_with_live_reader(self):
-        # The child explicitly acknowledges an open handle before publication;
-        # its original command must remain coherent while the next command is published.
+    def test_control_pipe_publishes_only_complete_commands(self):
         source=Path(self.case.name)/'publication.c'
         source.write_text(FAULT+r'''
-int main(int argc,char **argv) {
-    if(argc!=3)return 1;
-    FILE *old=fopen(argv[1],"r");if(!old)return 2;
-    puts("opened");fflush(stdout);
-    if(getchar()!='!')return 3;
-    unsigned long long t;unsigned s;
-    if(fscanf(old,"%llu %u",&t,&s)!=2 || t!=100 || s!=0)return 4;
-    fclose(old);
-    FILE *current=fopen(argv[2],"r");if(!current)return 5;
-    if(fscanf(current,"%llu %u",&t,&s)!=2 || t!=150 || s!=1)return 6;
-    fclose(current);return 0;
+static void pause_reader(void) {
+#ifdef _WIN32
+    Sleep(1);
+#else
+    poll(NULL,0,1);
+#endif
+}
+int main(void) {
+    for(unsigned i=0;i<5000 && command_length<4;i++){control();pause_reader();}
+    if(command_length!=4 || commands || tick!=100 || stop)return 1;
+    puts("partial retained");fflush(stdout);
+    for(unsigned i=0;i<5000 && !commands;i++){control();pause_reader();}
+    if(commands!=1 || tick!=150 || stop!=1 || command_length)return 2;
+    return 0;
 }
 ''')
         m=lower(load_program(ROOT/'examples/apps/liza_proxy_ops.liza'))
         flags=[f for f in link_flags(m) if not Path(f).name.startswith('reactor_')]
         for opt in ('0','2'):
-            self.control(100,0)
             exe=Path(self.case.name)/('publication'+opt+'.exe')
             subprocess.run(['clang','-O'+opt,str(source),'-I'+str(ROOT/'liza/runtime'),*flags,'-o',str(exe)],check=True,capture_output=True)
-            old=Path(str(self.gate)+f'.{self.sequence}')
-            following=Path(str(self.gate)+f'.{self.sequence+1}')
-            p=subprocess.Popen([str(exe),str(old),str(following)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-            self.addCleanup(lambda p=p:test_net.NetNative.stop(p))
+            p=subprocess.Popen([str(exe)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             self.addCleanup(p.stdin.close)
+            self.addCleanup(lambda p=p:test_net.NetNative.stop(p))
+            p.stdin.write(b'150 ');p.stdin.flush()
             lines=queue.Queue()
             threading.Thread(target=lambda:lines.put(p.stdout.readline()),daemon=True).start()
-            self.assertEqual(lines.get(timeout=5).rstrip(b'\r\n'),b'opened')
-            self.control(150,1)  # no retry: a live reader cannot block the next command
-            out,err=p.communicate(b'!',timeout=5)
+            self.assertEqual(lines.get(timeout=5).rstrip(b'\r\n'),b'partial retained')
+            out,err=p.communicate(b'1\n',timeout=5)
             self.assertEqual((p.returncode,out),(0,b''),err)
