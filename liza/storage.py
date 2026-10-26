@@ -174,8 +174,15 @@ class Analysis:
         return False
 
 
+def has_explicit_storage(fn):
+    return any(p.get('mode') in ('mutable', 'readonly') for p in fn.params) or any(
+        op.op.startswith(('storage.', 'loan.')) or 'mutable' in op.parameter_modes
+        for block in fn.blocks for op in block.operations)
+
+
 def owned_variant(fn, structs, large):
     """Prove an acyclic owned variant can return/update its one large argument."""
+    if has_explicit_storage(fn): return None
     params=[p for p in fn.params if large(p['type'])]
     if len(params)!=1 or fn.result_type not in structs or not acyclic(fn): return None
     p=params[0]
@@ -223,6 +230,7 @@ def owned_variant(fn, structs, large):
 
 
 def caller_plan(fn, structs, large, variants):
+    if has_explicit_storage(fn): return Plan()
     a=Analysis(fn,structs,large);plan=Plan()
     physical={}
     def root(n):
@@ -259,6 +267,7 @@ def direct_owned_variant(fn, structs, large, variants):
     The caller must supply exclusive writable storage. The public immutable ABI
     remains available for parameters, snapshots, projections and other observers.
     """
+    if has_explicit_storage(fn): return None
     params = [p for p in fn.params if large(p['type'])]
     if len(params) != 1 or not acyclic(fn):
         return None

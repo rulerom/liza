@@ -61,8 +61,10 @@ function  := "fn" name "(" parameters? ")" "->" type (":" effects)? block
 effects   := "pure" | effect ("," effect)*
 effect    := "io" | "alloc"
 type      := "Text" | "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "bool" | structure_name | enum_name | "Option<" type ">" | "Result<" type "," type ">" | "[" type ";" length "]" | "View" "<" type ">"
+arguments := argument ("," argument)*
+argument  := expression | "borrow" "mut" name
 parameters := parameter ("," parameter)*
-parameter := "borrow"? name ":" type
+parameter := ("borrow" "mut"?)? name ":" type
 block     := "{" statements "}"
 statement := ("var")? name (":" type)? "=" expression
            | "return" expression | conditional | "while" expression block
@@ -90,7 +92,7 @@ binary    := "+" | "-" | "*" | "/" | "%" | "+%" | "-%" | "*%" | "+|" | "-|" | "*
 `wrap` и `saturate` обозначают режим после имени типа, а не методы объектов.
 
 Идентификаторы ASCII: `[A-Za-z_][A-Za-z_0-9]*`. Имена встроенных типов, `fn`, `return`,
-`pure`, `io`, `Text`, `enum`, `match`, `Option`, `Result`, `Some`, `None`, `Ok`, `Err`, `true`, `false`, `if`, `else`, `var`, `while`, `break`, `continue`, `copy`, `move`, `borrow`, `struct`, `view`, `View` зарезервированы.
+`pure`, `io`, `Text`, `enum`, `match`, `Option`, `Result`, `Some`, `None`, `Ok`, `Err`, `true`, `false`, `if`, `else`, `var`, `while`, `break`, `continue`, `copy`, `move`, `borrow`, `mut`, `struct`, `view`, `View` зарезервированы.
 
 ## Имена, функции и ветвления
 
@@ -865,3 +867,18 @@ lowering, а вся программа получает общий Semantic IR �
 Наблюдение копируемого поля создаёт независимое значение. Возвращаемые или
 сохраняемые views, частичное перемещение и mutable borrow не вводятся.
 [Полный контракт и граница T2-A](readonly-access.md).
+
+
+## M0 — явный mutable-доступ
+
+[Первый срез M0](mutable-access.md) добавляет `borrow mut` для копируемых
+структур без ресурсов и хранимых views. На месте вызова требуется
+`f(borrow mut state, ...)`; state — var или mutable-параметр. Право относится
+к существующему storage, действует до возврата вызова и исключает другие
+обращения к тому же корню. Значения-снимки остаются независимыми.
+
+Readonly-параметры разрешены также для этих копируемых структур. Reborrow
+сохраняет корень и временно приостанавливает конфликтующий доступ родителя.
+Займы нельзя хранить или возвращать. Pure запрещает внешние io/alloc, но не
+изменения через mutable-параметр: записи и их порядок явно представлены в IR.
+Err не откатывает изменения; терминальный trap не вводит восстановления.

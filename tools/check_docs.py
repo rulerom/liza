@@ -32,6 +32,7 @@ class CodeBlocks(HTMLParser):
 def check():
     lexer = get_lexer_by_name('liza')
     assert lexer.name == 'Liza', 'Liza Pygments entry point not installed'
+    assert (Keyword, 'mut') in list(lexer.get_tokens('borrow mut value:Holder'))
     assert (Keyword, 'borrow') in list(lexer.get_tokens('borrow value:Holder'))
     sources = sorted((ROOT/'examples').rglob('*.liza'))
     for source in sources:
