@@ -12,7 +12,8 @@ python3 -m liza build examples/apps/liza_json.liza --project-root examples -o bu
 
 На Windows используйте `build/liza-json.exe`. Успешный `check` печатает `OK`;
 `format` печатает только форматированный JSON. Не перенаправляйте stdout
-в исходный файл: shell обнулит его до запуска программы.
+в исходный файл: shell обнулит его до запуска программы. CLI usage также
+напоминает, что вывод потоковый и при ошибке может остаться неполным.
 
 ## Профиль входа
 

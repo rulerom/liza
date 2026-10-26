@@ -153,6 +153,8 @@ class JsonFormatTests(unittest.TestCase):
             self.assertEqual((r.returncode,r.stderr),(3,b'Cannot open file\n'))
             r=subprocess.run([str(exe),'format'],capture_output=True,timeout=10)
             self.assertEqual(r.returncode,2)
+            self.assertIn(b'errors may leave partial output',r.stderr)
+            self.assertIn(b'Do not redirect to the input file',r.stderr)
 
     @unittest.skipUnless(os.name=='posix','closed POSIX pipe')
     def test_output_failure_is_error_not_trap(self):

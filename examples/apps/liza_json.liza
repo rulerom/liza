@@ -136,7 +136,9 @@ fn format(path:Path)->u32:io,alloc {
         closed=memory.close(move region);return status
     }}
 }
-fn usage()->u32:io {return diagnostic("Usage: liza-json <check|format> <file>",2)}
+fn usage()->u32:io {
+    return diagnostic("Usage: liza-json <check|format> <file>\nformat streams to stdout; errors may leave partial output. Do not redirect to the input file.",2)
+}
 fn main()->u32:io,alloc {
     if cli.count()!=3 {return usage()}
     match cli.arg(1) {
