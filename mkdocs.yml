@@ -1,5 +1,5 @@
 site_name: Liza
-site_description: 'Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций.'
+site_description: 'Liza — системный язык для производительных сетевых сервисов с определённым поведением, контролируемыми ресурсами и математически проверяемыми свойствами.'
 site_url: https://liza.rulerom.com/
 repo_url: https://github.com/rulerom/liza
 repo_name: rulerom/liza
@@ -59,6 +59,7 @@ extra_css:
 
 nav:
   - Liza: index.md
+  - Verified Network Gateway: network-gateway.md
   - Быстрый старт: getting-started.md
   - Основы языка: basics.md
   - CLI-приложение liza-text: cli.md
