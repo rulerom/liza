@@ -69,7 +69,6 @@ not_in_nav: |
   state-alias-analysis.md
   guard-cfg-investigation.md
   field-forwarding.md
-  json-performance.md
   aggregate-lowering.md
   verification-pipeline.md
   verified.md
@@ -120,6 +119,7 @@ nav:
       - Message Router: message-router.md
       - L4 TCP Proxy: tcp-proxy.md
       - TCP Proxy Operations: tcp-proxy-operations.md
+  - Бенчмарки: json-performance.md
   - Проект:
       - Verified Network Gateway: network-gateway.md
       - План разработки: roadmap.md
