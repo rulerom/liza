@@ -122,5 +122,6 @@ nav:
   - Бенчмарки: json-performance.md
   - Проект:
       - Verified Network Gateway: network-gateway.md
+      - Gateway R0 reproduction: gateway-reproduction.md
       - План разработки: roadmap.md
       - Milestones: milestones.md

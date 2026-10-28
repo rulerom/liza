@@ -1,0 +1,37 @@
+name: Gateway R0 reproduction
+on:
+  pull_request:
+    paths: ['tools/gateway_r0/**', 'docs/gateway-reproduction.md', 'maintenance/gateway-r0/**', '.github/workflows/gateway-r0.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.17'
+      - name: Hash verification negative controls
+        run: python -m unittest discover -s tools/gateway_r0 -p test_integrity.py -v
+      - name: Verify published macOS pilot evidence
+        run: python tools/gateway_r0/verify.py maintenance/gateway-r0/macos-pilot
+      - name: Reproduce fixed Gateway snapshot in a clean archive
+        run: python tools/gateway_r0/run.py --commit 90c9c2f0eab565397db00ceb4a89cf27116c5bc2 --expect-clang 'Ubuntu clang version 18.1.3 (1ubuntu1)' --output build/gateway-r0
+      - name: Check produced source and artifact hashes
+        run: python tools/gateway_r0/verify.py build/gateway-r0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gateway-r0-linux
+          path: |
+            build/gateway-r0/source.tar
+            build/gateway-r0/report.json
+            build/gateway-r0/*.log
+            build/gateway-r0/build/
+            build/gateway-r0/build_snapshot.py
+          retention-days: 30
