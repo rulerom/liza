@@ -1,0 +1,35 @@
+// Bounded builder operations over the existing owned UTF-8 String.
+// No new owner, allocator, runtime operation or resource mutable borrow.
+import text.string
+
+pub fn append(output:text.string.String,data:View<u8>)->text.string.Appended {
+    return text.string.append(move output,data)
+}
+
+fn number(output:text.string.String,value:u64,negative:bool)->text.string.Appended {
+    var digits:[u8;21]=[0;21]
+    var end:u32=21
+    var n=value
+    while true {
+        end=end-1
+        digits[end]=u8(n%10)+48
+        n=n/10
+        if n==0 {break}
+    }
+    if negative {end=end-1;digits[end]=45}
+    data=view digits[end..21]
+    return text.string.append(move output,data)
+}
+
+pub fn append_u64(output:text.string.String,value:u64)->text.string.Appended {
+    return number(move output,value,false)
+}
+
+pub fn append_i64(output:text.string.String,value:i64)->text.string.Appended {
+    if value<0 {
+        // Avoid negating INT64_MIN. Both arithmetic steps are checked.
+        magnitude=u64(-(value+1))+1
+        return number(move output,magnitude,true)
+    }
+    return number(move output,u64(value),false)
+}

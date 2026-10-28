@@ -742,3 +742,26 @@ fn capacity<T>(borrow value:T)->u32 { return memory.len(value.buffer) }
             (field_expression
               (identifier)
               (identifier))))))))
+
+==================
+Explicit mutable borrow
+==================
+fn update(borrow mut state:State)->u32 { return next(borrow mut state) }
+---
+
+(source_file
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)
+        (type_identifier
+          (identifier))))
+    (builtin_type)
+    (block
+      (return_statement
+        (call_expression
+          (identifier)
+          (arguments
+            (mutable_borrow_expression
+              (identifier))))))))

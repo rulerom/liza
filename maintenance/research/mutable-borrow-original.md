@@ -1,3 +1,5 @@
+> Historical design snapshot. M0 has since been implemented; see `docs/mutable-access.md` for current behavior. Relative links below are historical.
+
 # M0 — Explicit Mutable Borrowing
 
 **Проект контракта; синтаксис и реализация пока отсутствуют.** Первый срез —

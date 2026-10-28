@@ -67,7 +67,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                     raise CompileError(arg.token, str(error)) from None
             else:
                 integers.append((visit(arg), arg.token))
-        elif node.kind in ('copy', 'move'):
+        elif node.kind in ('copy', 'move', 'borrow_mut'):
             unify(var, visit(node.args[0]), token)
         elif node.kind == 'bool':
             bind(var, 'bool', token)
@@ -248,8 +248,8 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                         raise CompileError(token, f"private field {t}.{token.text}")
                     bind(result, fields[token.text], token)
                 else:
-                    if not is_array(t) and not (kind == 'index' and is_view(t)):
-                        raise CompileError(token, 'view requires an array binding' if kind == 'view' else 'index requires array or view')
+                    if not is_array(t) and not is_view(t):
+                        raise CompileError(token, 'view requires an array or view binding' if kind == 'view' else 'index requires array or view')
                     target = element_type(t)
                     bind(result, f'View<{target}>' if kind == 'view' else target, token)
             after = tuple(v.root().type for v in list(variables.values()) + [e for _, e, _, _ in arrays])

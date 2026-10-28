@@ -1,5 +1,5 @@
 pub enum Error { Invalid }
-pub struct Config {pub listener:net.Address;pub upstream:net.Address;pub timeout:u32;pub once:bool}
+pub struct Config {pub listener:net.Address;pub upstream:net.Address;pub timeout:u32;pub once:bool;pub idle:u32;pub drain:u32;pub metrics:bool}
 pub fn endpoint(arg:Arg)->Result<net.Address,Error> {
     var octets:[u8;4]=[0;4]
     var part:u32=0
@@ -76,6 +76,9 @@ pub fn load()->Result<Config,Error>:io {
     var listener=net.ipv4(127,0,0,1,9004)
     var upstream=net.ipv4(127,0,0,1,9003)
     var timeout:u32=5000
+    var idle:u32=30000
+    var drain:u32=5000
+    var metrics=false
     var mode:u32=0
     var seen:u32=0
     var i:u32=1
@@ -83,7 +86,10 @@ pub fn load()->Result<Config,Error>:io {
         match cli.arg(i) {
             None=>{return Err(Error.Invalid)}
             Some(arg)=>{
-                if cli.equals(arg,"--once") || cli.equals(arg,"--ephemeral") {
+                if cli.equals(arg,"--metrics") {
+                    if metrics {return Err(Error.Invalid)}
+                    metrics=true
+                } else if cli.equals(arg,"--once") || cli.equals(arg,"--ephemeral") {
                     if mode!=0 {return Err(Error.Invalid)}
                     mode=2
                     if cli.equals(arg,"--once") {mode=1}
@@ -92,14 +98,18 @@ pub fn load()->Result<Config,Error>:io {
                     if cli.equals(arg,"--listen") {flag=1}
                     if cli.equals(arg,"--upstream") {flag=2}
                     if cli.equals(arg,"--connect-timeout-ms") {flag=4}
+                    if cli.equals(arg,"--idle-timeout-ms") {flag=8}
+                    if cli.equals(arg,"--drain-timeout-ms") {flag=16}
                     if flag==0 || (seen&flag)!=0 || cli.count()-i<2 {return Err(Error.Invalid)}
                     seen=seen|flag
                     i=i+1
                     match cli.arg(i) {
                         None=>{return Err(Error.Invalid)}
                         Some(value)=>{
-                            if flag==4 {
-                                match duration(value) {Err(e)=>{return Err(e)} Ok(n)=>{timeout=n}}
+                            if flag>=4 {
+                                match duration(value) {Err(e)=>{return Err(e)} Ok(n)=>{
+                                    if flag==4 {timeout=n} else if flag==8 {idle=n} else {drain=n}
+                                }}
                             } else {
                                 match endpoint(value) {
                                     Err(e)=>{return Err(e)}
@@ -120,5 +130,5 @@ pub fn load()->Result<Config,Error>:io {
         if (seen&1)!=0 && listener.port!=0 {return Err(Error.Invalid)}
         listener.port=0
     }
-    return Ok(Config(listener,upstream,timeout,mode==1))
+    return Ok(Config(listener,upstream,timeout,mode==1,idle,drain,metrics))
 }

@@ -150,7 +150,7 @@ class OwnedStringTests(unittest.TestCase):
     def test_no_allocator_in_string_module(self):
         for fn in self.module:
             if fn.name.startswith('text.string.'):
-                self.assertEqual(fn.effect_contract,'pure')
+                self.assertEqual(fn.effect_contract,'io' if fn.name=='text.string.write' else 'pure')
                 self.assertFalse(any(op.op in ('region.create','region.alloc','vec.create','vec.reserve') for b in fn.blocks for op in b.operations))
 
     def test_private_and_linear_invariant(self):

@@ -137,3 +137,13 @@ fn net.monotonic_ms()->Result<u64,ReactorError>:io {
     if raw.error==0 {return Ok(raw.value)}
     return Err(__liza_reactor_error(raw.error))
 }
+
+fn net.reactor_watch_shutdown(reactor:net.Reactor)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_watch_shutdown(reactor))
+}
+fn net.reactor_shutdown_requested(reactor:net.Reactor)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_shutdown_requested(reactor))
+}
+fn net.reactor_stop_accepting(reactor:net.Reactor)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_reactor_stop_accepting(reactor))
+}

@@ -1,6 +1,7 @@
 """Verify the installed lexer and rendered example after mkdocs build --strict."""
 from html.parser import HTMLParser
 from pathlib import Path
+import re
 from pygments.lexers import get_lexer_by_name
 from pygments.token import Comment, Error, Keyword, Name, Number, Operator, String
 
@@ -32,6 +33,7 @@ class CodeBlocks(HTMLParser):
 def check():
     lexer = get_lexer_by_name('liza')
     assert lexer.name == 'Liza', 'Liza Pygments entry point not installed'
+    assert (Keyword, 'mut') in list(lexer.get_tokens('borrow mut value:Holder'))
     assert (Keyword, 'borrow') in list(lexer.get_tokens('borrow value:Holder'))
     sources = sorted((ROOT/'examples').rglob('*.liza'))
     for source in sources:
@@ -58,6 +60,20 @@ def check():
     # Existing pages must gain highlighting too, not only the new walkthrough.
     core = CodeBlocks(); core.feed((ROOT/'site/core.html').read_text(encoding='utf-8'))
     assert any({'k', 'kt', 'mi'} <= b['classes'] for b in core.blocks)
+    # Every source example on these pages must use the Liza lexer, including
+    # partial and deliberately invalid examples. Grammar stays plain text.
+    for page in ('core', 'basics', 'connection-table', 'getting-started',
+                 'local-subviews', 'numeric-model'):
+        markdown = (ROOT/'docs'/(page+'.md')).read_text(encoding='utf-8')
+        rendered = CodeBlocks()
+        rendered.feed((ROOT/'site'/(page+'.html')).read_text(encoding='utf-8'))
+        for language, source in re.findall(r'^```([^\n]*)\n(.*?)^```', markdown, re.M | re.S):
+            if language.strip() == 'text':
+                assert not re.search(r'^(?:fn |struct |var |import |.*borrow mut)', source, re.M), (page, source)
+            if language.strip() == 'liza' and '--8<' not in source:
+                matches = [b for b in rendered.blocks if b['text'].strip() == source.strip()]
+                assert matches and all(b['classes'] for b in matches), (page, source)
+
     for page,example in [('utf8','utf8_file'),('utf8-stream','utf8_stream_file')]:
         utf8 = CodeBlocks(); utf8.feed((ROOT/'site'/(page+'.html')).read_text(encoding='utf-8'))
         utf8_source = (ROOT/'examples'/(example+'.liza')).read_text(encoding='utf-8').strip()

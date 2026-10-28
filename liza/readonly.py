@@ -12,7 +12,7 @@ def readonly_root(node, names):
 
 
 def parameter_modes(signature, arguments, readonly_names):
-    return ['readonly' if i in signature.readonly_params or
+    return ['mutable' if i in signature.mutable_params else 'readonly' if i in signature.readonly_params or
             (i in signature.readonly_borrowed_params and readonly_root(arg, readonly_names))
             else 'borrow' if i in signature.borrowed_params else 'value'
             for i,arg in enumerate(arguments)]

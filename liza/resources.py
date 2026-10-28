@@ -71,7 +71,7 @@ def check_resources(fn, types, match_types, structs, signatures):
             pending_borrows = set(active_borrows)
             pending_readonly = set(active_readonly)
             for i, arg in enumerate(node.args):
-                if i in borrowed:
+                if i in borrowed and resource(types[id(arg)]):
                     ro = readonly_root(arg,readonly_names)
                     name = projection_root(arg)
                     if arg.kind != 'name' and ro is None:

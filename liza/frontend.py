@@ -160,6 +160,7 @@ class Function:
     instantiation_chain: list = field(default_factory=list)
     # Source readonly permissions are distinct from non-consuming runtime adapters.
     readonly_params: list = field(default_factory=list)
+    mutable_params: list = field(default_factory=list)
     readonly_borrowed_params: list = field(default_factory=list)
 
 
@@ -188,7 +189,7 @@ class Parser:
         token = self.current
         if token.text.startswith('__liza_') and not self.internal:
             raise CompileError(token, 'reserved implementation name')
-        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'import', 'pub', 'fn', 'return', 'pure', 'io', 'Text', 'File', 'Arg', 'Path', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'borrow', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token.text) or token.text in set(SCALAR_TYPES) | {'import', 'pub', 'fn', 'return', 'pure', 'io', 'Text', 'File', 'Arg', 'Path', 'true', 'false', 'if', 'else', 'var', 'while', 'break', 'continue', 'copy', 'move', 'borrow', 'mut', 'struct', 'view', 'View', 'enum', 'match', 'Option', 'Result', 'Some', 'None', 'Ok', 'Err'}:
             raise CompileError(token, 'expected an identifier')
         return self.take()
 
@@ -474,10 +475,14 @@ class Parser:
             self.take('(')
             params = []
             readonly = []
+            mutable = []
             if self.current.text != ')':
                 while True:
                     if self.current.text == 'borrow':
-                        self.take('borrow');readonly.append(len(params))
+                        self.take('borrow')
+                        if self.current.text == 'mut':
+                            self.take('mut');mutable.append(len(params))
+                        else: readonly.append(len(params))
                     param = self.identifier()
                     self.take(':')
                     params.append((param, self.type_name()))
@@ -500,7 +505,7 @@ class Parser:
                         raise CompileError(next_effect, 'invalid or duplicate effect')
                     effect += ',' + next_effect.text
             body = self.block()
-            functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal, public=public, generic_params=generics, readonly_params=readonly))
+            functions.append(Function(name, params, body, result_type, effect, trusted_library=self.internal, public=public, generic_params=generics, readonly_params=readonly, mutable_params=mutable))
             self.generic_scope = {}
             self.separators()
         return functions
@@ -555,6 +560,9 @@ class Parser:
             end = self.expression()
             self.take(']')
             left = Expr(token, 'view', [owner, start, end])
+        elif token.text == 'borrow':
+            self.take('borrow');self.take('mut')
+            left = Expr(token, 'borrow_mut', [Expr(self.identifier(), 'name', [])])
         elif token.text in ('copy', 'move'):
             left = Expr(self.take(), token.text, [self.expression(11)])
             if token.text == 'move' and left.args[0].kind != 'name':

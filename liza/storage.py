@@ -3,7 +3,8 @@
 No source move is treated as a uniqueness assertion. Projections/copies/views
 keep their backing roots live; phi uses belong to predecessor edges. Owned
 callee variants are restricted to acyclic value transformations returning the
-input value in the first field of a result record. Other shapes use the normal
+input value directly or in the first field of a result record. Direct variants
+compose only through already-proven direct callees. Other shapes use the normal
 immutable ABI.
 """
 from dataclasses import dataclass, field
@@ -75,6 +76,7 @@ class Plan:
     calls: dict = field(default_factory=dict)
     reserve: dict = field(default_factory=dict)
     owned_parameter: str = ''
+    direct: bool = False
 
 
 class Analysis:
@@ -172,8 +174,15 @@ class Analysis:
         return False
 
 
+def has_explicit_storage(fn):
+    return any(p.get('mode') in ('mutable', 'readonly') for p in fn.params) or any(
+        op.op.startswith(('storage.', 'loan.')) or 'mutable' in op.parameter_modes
+        for block in fn.blocks for op in block.operations)
+
+
 def owned_variant(fn, structs, large):
     """Prove an acyclic owned variant can return/update its one large argument."""
+    if has_explicit_storage(fn): return None
     params=[p for p in fn.params if large(p['type'])]
     if len(params)!=1 or fn.result_type not in structs or not acyclic(fn): return None
     p=params[0]
@@ -221,6 +230,7 @@ def owned_variant(fn, structs, large):
 
 
 def caller_plan(fn, structs, large, variants):
+    if has_explicit_storage(fn): return Plan()
     a=Analysis(fn,structs,large);plan=Plan()
     physical={}
     def root(n):
@@ -248,4 +258,83 @@ def caller_plan(fn, structs, large, variants):
             plan.calls[o.result]='__liza_owned_'+o.callee
             physical[o.result]=allocation
             plan.reserve.setdefault(allocation,set()).add(o.type)
+    return plan
+
+
+def direct_owned_variant(fn, structs, large, variants):
+    """Acyclic whole-value transform, composed only with proven owned callees.
+
+    The caller must supply exclusive writable storage. The public immutable ABI
+    remains available for parameters, snapshots, projections and other observers.
+    """
+    if has_explicit_storage(fn): return None
+    params = [p for p in fn.params if large(p['type'])]
+    if len(params) != 1 or not acyclic(fn):
+        return None
+    p = params[0]
+    if p.get('mode') == 'readonly' or fn.result_type != p['type']:
+        return None
+    if any(x['type'].startswith('View<') for x in fn.params):
+        return None
+    a = Analysis(fn, structs, large)
+
+    def lineage(name, active=frozenset()):
+        name = a.canonical(name)
+        if name == p['name']:
+            return True
+        if name in active:
+            return False
+        op = a.ops.get(name)
+        if op is None:
+            return False
+        active = active | {name}
+        if op.op in ('struct.update', 'array.update'):
+            return lineage(op.args[0], active)
+        if op.op == 'phi':
+            return all(lineage(n, active) for n in op.args)
+        if op.op == 'call' and op.callee in variants:
+            index, child = variants[op.callee]
+            return child.direct and lineage(op.args[index], active)
+        return False
+
+    returns = [b.terminator.args[0] for b in fn.blocks if b.terminator.op == 'return']
+    if not returns or not all(lineage(n) for n in returns):
+        return None
+    versions = {n for n, t in a.types.items() if t == p['type'] and lineage(n)}
+    version_roots = set().union(*(a.roots.get(n, set()) for n in versions))
+    plan = Plan(owned_parameter=p['name'], direct=True)
+
+    def observed_after(result, produced):
+        old = version_roots - produced
+        return any(a.roots.get(n, set()) & old for n in a.after[result])
+
+    for chain in a.transactions():
+        end = chain[-1]
+        if not lineage(end.args[0]):
+            return None
+        if observed_after(end.result, {o.result for o in chain}):
+            return None
+        for op in chain:
+            plan.aliases[op.result] = op.args[0]
+            plan.inplace.add(op.result)
+        plan.rebuilt.update(o.result for o in chain[1:])
+
+    for op in a.ops.values():
+        if not large(op.type):
+            continue
+        if op.op == 'call':
+            if not lineage(op.result) or observed_after(op.result, {op.result}):
+                return None
+            index, _ = variants[op.callee]
+            # A second argument can observe a projection even if it is dead
+            # after the call. It may not alias the destructively updated root.
+            if any(a.roots.get(n, set()) & version_roots
+                   for i, n in enumerate(op.args) if i != index):
+                return None
+            plan.calls[op.result] = '__liza_owned_' + op.callee
+        elif op.op in ('array.repeat', 'array.construct', 'struct.construct', 'variant.construct'):
+            return None
+    for name in versions:
+        plan.aliases[name] = '$return'
+    plan.aliases[p['name']] = '$return'
     return plan

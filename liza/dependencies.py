@@ -249,7 +249,7 @@ def check_dependencies(records, structs, signatures, audit=None, expression_maps
         result=join_value(returned,fn.name)
         summaries[name]=result
         active.remove(name)
-        storage_effects = sorted({op.op for block in ir.blocks for op in block.operations if op.op.startswith(('region.','buffer.','vec.'))})
+        storage_effects = sorted({op.op for block in ir.blocks for op in block.operations if op.op.startswith(('region.','buffer.','vec.','storage.'))})
         ir.storage_contract={'requires':['available owned arguments', 'no readonly loans on consumed buffers', 'no dependent values on consumed regions'],
                              'consumes':[p.text for i,(p,t) in enumerate(fn.params) if i not in fn.readonly_params and (shape(t,('p',)).all_regions() or shape(t,('p',)).all_buffers())],
                              'effects':storage_effects,
@@ -258,6 +258,10 @@ def check_dependencies(records, structs, signatures, audit=None, expression_maps
                              'returns':result.describe(),'creation_sites':origins,
                              'normal_exit':'all resource obligations discharged',
                              'trap_cleanup':'not guaranteed'}
+        if fn.mutable_params:
+            ir.storage_contract['requires'][0]='available arguments with their declared access modes'
+            ir.storage_contract['mutable_parameters']=[fn.params[i][0].text for i in fn.mutable_params]
+            ir.storage_contract['requires'].append('exclusive call-scoped access to each mutable parameter storage')
         if fn.readonly_params:
             ir.storage_contract['requires'][0]='available arguments with their declared access modes'
             ir.storage_contract['requires'].append('readonly access to each readonly parameter and its reachable storage')

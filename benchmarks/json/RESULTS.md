@@ -1,39 +1,49 @@
-# First JSON baseline: Apple M4
+# JSON performance — M0 + field forwarding
 
-One machine, 16 GiB RAM, macOS; Apple Clang 21.0.0 and Rust 1.99.1.
-Pinned Liza source: `b3206117a225f6f852cec5bef18928fe1bd43856`.
-Explicit host target and generic CPU, O2; Rust overflow checks enabled.
-Ten samples per cell, ~256 KiB documents, 2048-byte chunks. Core samples repeat
-whole documents to target 4 MiB. These are warm, scalar measurements, not a
-cross-machine language ranking. All 6,785 partitioned cases and 615 CLI checks
-passed before measurement.
+The headline result is the saved six-workload series for mutable JSON with field
+forwarding, the optimization subsequently integrated into the production backend:
+**183.8–329.6 MiB/s**, including **215.9 MiB/s on ASCII**.
 
-Median **core MiB/s** (higher is faster):
+Median **core MiB/s**, all six workloads from the same run (higher is faster):
 
-| Workload | Liza | C++ by-value | C++ in-place | Rust |
-| --- | ---: | ---: | ---: | ---: |
-| ascii | 42.79 | 70.04 | 445.13 | 418.70 |
-| depth64 | 29.98 | 69.50 | 305.75 | 283.17 |
-| escaped | 55.23 | 68.51 | 529.88 | 471.97 |
-| long-string | 65.19 | 70.86 | 632.88 | 589.21 |
-| numbers | 39.48 | 70.26 | 436.62 | 423.02 |
-| unicode | 55.74 | 71.33 | 539.64 | 522.41 |
+| Workload | Liza M0 + field forwarding | Rust |
+| --- | ---: | ---: |
+| ASCII | 215.9 | 400.2 |
+| Unicode | 234.7 | 500.9 |
+| Escapes | 238.7 | 456.0 |
+| Numbers | 264.3 | 399.8 |
+| Long string | 329.6 | 540.5 |
+| Depth 64 | 183.8 | 280.0 |
 
-State size: Liza/C++ **184 bytes**, Rust **176 bytes**. State layout is measured,
-not assumed identical. Clang stack diagnostics for Liza report **4480 bytes** for
-`liza___liza_json_step`, **608 bytes** for `liza_json.feed`, and **224 bytes** for
-the driver bridge `stream_feed`. These are individual frame sizes, not a sum or
-peak call-chain measurement. C++ stack records and all optimized IR/assembly are
-included for inspection.
+Apple M4, macOS, Clang 23.1.4; Rust 1.99.1 / LLVM 23.1.3. O2, generic CPU,
+shared C ABI without LTO; ~256 KiB documents, 2048-byte chunks, ~16 MiB/sample,
+ten shuffled series. Rust uses overflow checks. Both implement scalar streaming
+validation; specialized SIMD JSON libraries are outside this comparison.
 
-The by-value C++ variant is materially slower than the in-place variant on this
-machine. This makes state update/copying a concrete optimization candidate. It
-does not by itself establish that every Liza slowdown comes from copying, or
-that these speeds generalize beyond the corpus. Static memcpy sites are not
-executed copy counts. No compiler optimization is included in this PR.
+These are **P3 measurements**, not a newly timed run of today's HEAD. P3-P
+subsequently produced byte-identical raw LLVM and identical Mach-O text for the
+saved target. It did not repeat throughput timing. This is the strongest saved
+series tied to the shipped field-forwarding implementation, not a selection of
+per-workload maxima across experiments. Forced `alwaysinline` and oversized
+inline-budget ablations are not production results.
 
-Raw timings, min/max, CLI results, commands, source/binary hashes and tool versions
-are in `results/apple-m4/report.json` and `samples.json`. CLI results include
-startup and filesystem costs: C++/Rust share a C I/O driver, while Liza runs its
-actual CLI/runtime. They must not be read as isolated parser measurements.
-Negative inputs are correctness-only in this initial baseline.
+Before timing, O0/O2 variants passed 6,785 partition cases each and 738 CLI checks.
+Input loading and driver allocation are outside the core timer. Results describe
+one machine and this corpus, not general language performance or CLI throughput.
+
+## Evidence and reproduction
+
+- [P3 report, all raw samples and tool versions](https://github.com/rulerom/liza/blob/main/benchmarks/guards/results/apple-m4-llvm23/report.json)
+- [P3 sources, binaries, IR and assembly](https://github.com/rulerom/liza/blob/main/benchmarks/guards/results/apple-m4-llvm23/evidence.tar.gz)
+- [P3 hashes](https://github.com/rulerom/liza/blob/main/benchmarks/guards/results/apple-m4-llvm23/manifest.json)
+- [P3 reproduction commands](https://github.com/rulerom/liza/blob/main/benchmarks/guards/README.md#reproduce)
+- [Production correspondence report](https://github.com/rulerom/liza/blob/main/benchmarks/guards/results/production-macos/report.json)
+- [Production integration and its limits](https://liza.rulerom.com/field-forwarding.html)
+
+## Historical baseline
+
+The [original A0 series](https://github.com/rulerom/liza/blob/main/benchmarks/json/results/apple-m4/README.md) is pinned to `b320611`, before
+mutable JSON and the later lowering improvements. It is retained to reproduce
+the investigation, with original reports, raw samples and IR unchanged. It must
+not be cited as the current compiler's throughput. The runner in this directory
+still reproduces that fixed baseline; use the P3 instructions above for this table.

@@ -1,0 +1,7052 @@
+{
+  "status": "measured",
+  "created_at": "2026-10-25T18:40:39.125455+00:00",
+  "baseline": "b3206117a225f6f852cec5bef18928fe1bd43856",
+  "candidate": "7c1da5df2bae10a18ff67e7551dd363a48180a92",
+  "commands": [
+    [
+      "git",
+      "archive",
+      "b3206117a225f6f852cec5bef18928fe1bd43856"
+    ],
+    [
+      "tar",
+      "-xf",
+      "/private/tmp/liza-aggregate-measured/baseline.tar",
+      "-C",
+      "/private/tmp/liza-aggregate-measured/baseline"
+    ],
+    [
+      "git",
+      "archive",
+      "7c1da5df2bae10a18ff67e7551dd363a48180a92"
+    ],
+    [
+      "tar",
+      "-xf",
+      "/private/tmp/liza-aggregate-measured/candidate.tar",
+      "-C",
+      "/private/tmp/liza-aggregate-measured/candidate"
+    ],
+    [
+      "/usr/bin/clang",
+      "--version"
+    ],
+    [
+      "/Library/Developer/CommandLineTools/usr/bin/python3",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/aggregate/emit.py",
+      "A0",
+      "/private/tmp/liza-aggregate-measured/A0/module.ll",
+      "/usr/bin/clang"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-S",
+      "-emit-llvm",
+      "/private/tmp/liza-aggregate-measured/A0/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A0/optimized.ll"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-fstack-usage",
+      "-c",
+      "/private/tmp/liza-aggregate-measured/A0/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A0/module.o"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-S",
+      "/private/tmp/liza-aggregate-measured/A0/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A0/module.s"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O2",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/json/driver.c",
+      "/private/tmp/liza-aggregate-measured/A0/module.o",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A0/probe"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O0",
+      "/private/tmp/liza-aggregate-measured/A0/counted.ll",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/aggregate/copy_counts.c",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/json/driver.c",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A0/counted"
+    ],
+    [
+      "/Library/Developer/CommandLineTools/usr/bin/python3",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/aggregate/emit.py",
+      "A1",
+      "/private/tmp/liza-aggregate-measured/A1/module.ll",
+      "/usr/bin/clang"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-S",
+      "-emit-llvm",
+      "/private/tmp/liza-aggregate-measured/A1/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A1/optimized.ll"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-fstack-usage",
+      "-c",
+      "/private/tmp/liza-aggregate-measured/A1/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A1/module.o"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-S",
+      "/private/tmp/liza-aggregate-measured/A1/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A1/module.s"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O2",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/json/driver.c",
+      "/private/tmp/liza-aggregate-measured/A1/module.o",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A1/probe"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O0",
+      "/private/tmp/liza-aggregate-measured/A1/counted.ll",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/aggregate/copy_counts.c",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/json/driver.c",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A1/counted"
+    ],
+    [
+      "/Library/Developer/CommandLineTools/usr/bin/python3",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/aggregate/emit.py",
+      "A2",
+      "/private/tmp/liza-aggregate-measured/A2/module.ll",
+      "/usr/bin/clang"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-S",
+      "-emit-llvm",
+      "/private/tmp/liza-aggregate-measured/A2/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A2/optimized.ll"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-fstack-usage",
+      "-c",
+      "/private/tmp/liza-aggregate-measured/A2/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A2/module.o"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-S",
+      "/private/tmp/liza-aggregate-measured/A2/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A2/module.s"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O2",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/json/driver.c",
+      "/private/tmp/liza-aggregate-measured/A2/module.o",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A2/probe"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O0",
+      "/private/tmp/liza-aggregate-measured/A2/counted.ll",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/aggregate/copy_counts.c",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/json/driver.c",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A2/counted"
+    ],
+    [
+      "/Library/Developer/CommandLineTools/usr/bin/python3",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/aggregate/emit.py",
+      "A3",
+      "/private/tmp/liza-aggregate-measured/A3/module.ll",
+      "/usr/bin/clang"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-S",
+      "-emit-llvm",
+      "/private/tmp/liza-aggregate-measured/A3/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A3/optimized.ll"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-fstack-usage",
+      "-c",
+      "/private/tmp/liza-aggregate-measured/A3/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A3/module.o"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-Werror=override-module",
+      "-O2",
+      "-S",
+      "/private/tmp/liza-aggregate-measured/A3/module.ll",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A3/module.s"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O2",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/json/driver.c",
+      "/private/tmp/liza-aggregate-measured/A3/module.o",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A3/probe"
+    ],
+    [
+      "/usr/bin/clang",
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic",
+      "-O0",
+      "/private/tmp/liza-aggregate-measured/A3/counted.ll",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/aggregate/copy_counts.c",
+      "/private/tmp/liza-aggregate-measured/candidate/benchmarks/json/driver.c",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/A3/counted"
+    ],
+    [
+      "/Library/Developer/CommandLineTools/usr/bin/python3",
+      "-m",
+      "liza",
+      "build",
+      "examples/apps/liza_json.liza",
+      "-O",
+      "2",
+      "--clang",
+      "/usr/bin/clang",
+      "-o",
+      "/private/tmp/liza-aggregate-measured/liza-json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "check",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-depth64.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-numbers.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A2/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-escaped.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A1/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-ascii.json",
+      "2048",
+      "16"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A0/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-long-string.json",
+      "2048",
+      "15"
+    ],
+    [
+      "/private/tmp/liza-aggregate-measured/A3/probe",
+      "bench",
+      "/private/tmp/liza-aggregate-measured/corpus/bench-unicode.json",
+      "2048",
+      "16"
+    ],
+    [
+      "sysctl",
+      "-n",
+      "machdep.cpu.brand_string",
+      "hw.memsize"
+    ]
+  ],
+  "machine": "macOS-26.4.1-arm64-arm-64bit",
+  "architecture": "arm64",
+  "variants": {
+    "A0": "Unchanged compiler at b320611",
+    "A1": "Research-only readonly/nocapture JsonState input + noalias sret",
+    "A2": "Research-only acyclic local storage/slot reuse; immutable ABI",
+    "A3": "Production direct owned callee variants; no JSON source changes"
+  },
+  "limits": [
+    "Core-only, one machine; no CLI speed or liveness claim.",
+    "A1/A2 are explicit experimental emitters, not shipped compiler behavior.",
+    "Copy counters count executed memcpy/memmove sites in optimized IR, not every scalar/register copy.",
+    "Instrumented builds use O0 after optimized-IR instrumentation; never timed.",
+    "Frames are individual Clang stack-usage records, not peak call-chain sizes."
+  ],
+  "study_driver_sha256": "10c2bd5322bf7db9080643c9a7d7609f9d8c20d8a9439abb3772af4e98467bbe",
+  "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "target": {
+    "triple": "arm64-apple-macosx26.0.0",
+    "data_layout": "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32",
+    "flags": [
+      "--target=arm64-apple-macosx26.0.0",
+      "-mcpu=generic"
+    ],
+    "pointer_bits": 64,
+    "pointer_align": 8,
+    "i64_align": 8,
+    "i32_align": 4,
+    "little_endian": 1
+  },
+  "correctness": {
+    "status": "passed",
+    "cli_cases": 615,
+    "cases": 6785,
+    "documents": 123,
+    "manifest": [
+      {
+        "file": "corpus/000.bin",
+        "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "bytes": 1,
+        "expected": [
+          0,
+          1
+        ],
+        "partitions": 9
+      },
+      {
+        "file": "corpus/001.bin",
+        "sha256": "ed3ef146ac68bb4c27ac5785f50ca0f628920d455d4cfb8f5cbe795dd8384ac9",
+        "bytes": 10,
+        "expected": [
+          0,
+          10
+        ],
+        "partitions": 18
+      },
+      {
+        "file": "corpus/002.bin",
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "bytes": 4,
+        "expected": [
+          0,
+          4
+        ],
+        "partitions": 12
+      },
+      {
+        "file": "corpus/003.bin",
+        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "bytes": 5,
+        "expected": [
+          0,
+          5
+        ],
+        "partitions": 13
+      },
+      {
+        "file": "corpus/004.bin",
+        "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bytes": 4,
+        "expected": [
+          0,
+          4
+        ],
+        "partitions": 12
+      },
+      {
+        "file": "corpus/005.bin",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "bytes": 2,
+        "expected": [
+          0,
+          2
+        ],
+        "partitions": 10
+      },
+      {
+        "file": "corpus/006.bin",
+        "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "bytes": 2,
+        "expected": [
+          0,
+          2
+        ],
+        "partitions": 10
+      },
+      {
+        "file": "corpus/007.bin",
+        "sha256": "f01ed152a3cc369e3c8ddfd1771f7bf9e419b17c2418466b98945ba0d10b2c22",
+        "bytes": 19,
+        "expected": [
+          0,
+          19
+        ],
+        "partitions": 27
+      },
+      {
+        "file": "corpus/008.bin",
+        "sha256": "4f887982e8fd4017a35d991e0a39832a8b827657a5e5e5b8db924f203bcd9ca2",
+        "bytes": 14,
+        "expected": [
+          0,
+          14
+        ],
+        "partitions": 22
+      },
+      {
+        "file": "corpus/009.bin",
+        "sha256": "700174b26850d224c7a156cb6a45cea08031eab640fcfc1eaf7f770ab9aeaa66",
+        "bytes": 8,
+        "expected": [
+          0,
+          8
+        ],
+        "partitions": 16
+      },
+      {
+        "file": "corpus/010.bin",
+        "sha256": "1a4cd7eb340c8b45c33ce25b7b39463ab1ac03a5d6755d4a71a0f07a33d59c81",
+        "bytes": 14,
+        "expected": [
+          0,
+          14
+        ],
+        "partitions": 22
+      },
+      {
+        "file": "corpus/011.bin",
+        "sha256": "76a877bda060f5f70c131d89f71a1b3ad0c0717a12586e0e1b6906fecae95627",
+        "bytes": 18,
+        "expected": [
+          0,
+          18
+        ],
+        "partitions": 26
+      },
+      {
+        "file": "corpus/012.bin",
+        "sha256": "bf0a606482171ecda04bb63bd541f902aa28d8e95ac5620e18194955ca43eb73",
+        "bytes": 18,
+        "expected": [
+          0,
+          18
+        ],
+        "partitions": 26
+      },
+      {
+        "file": "corpus/013.bin",
+        "sha256": "d38245cfdb5d2239d67fe2a719312768b668a6928d8d97d04fbce83215e50b44",
+        "bytes": 13,
+        "expected": [
+          0,
+          13
+        ],
+        "partitions": 21
+      },
+      {
+        "file": "corpus/014.bin",
+        "sha256": "f0244ae1938270f711155b0a26a4307cde7050495140dd858a88a1cfc378cf40",
+        "bytes": 129,
+        "expected": [
+          0,
+          129
+        ],
+        "partitions": 137
+      },
+      {
+        "file": "corpus/015.bin",
+        "sha256": "42a9021084a90bf3f8b5e55bfc3cea03d34d9ae04ea6a91135396aa5af6a9aec",
+        "bytes": 20002,
+        "expected": [
+          0,
+          20002
+        ],
+        "partitions": 6
+      },
+      {
+        "file": "corpus/016.bin",
+        "sha256": "f8beb38faca63df1e981acc8363186378428df0dde3403133049311ef13c2a10",
+        "bytes": 20001,
+        "expected": [
+          0,
+          20001
+        ],
+        "partitions": 6
+      },
+      {
+        "file": "corpus/017.bin",
+        "sha256": "0e63f5a4423a8c82a27c64b14118a0bff0d3ebd673d387e15f021e5acfcde05d",
+        "bytes": 20002,
+        "expected": [
+          0,
+          20002
+        ],
+        "partitions": 6
+      },
+      {
+        "file": "corpus/018.bin",
+        "sha256": "399c4537ddd86d65366bf4d0bb3a237c53a96968aa62321e606f13e14752ccd3",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/019.bin",
+        "sha256": "4606bdb874460c406a4c06f9cc9ef731440252ed9a25f5b1705194e0259ab36c",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/020.bin",
+        "sha256": "f11ab96c8c55f795da265653241ed2c68aba57116682995388ee755cad76c53b",
+        "bytes": 63,
+        "expected": [
+          0,
+          63
+        ],
+        "partitions": 71
+      },
+      {
+        "file": "corpus/021.bin",
+        "sha256": "650ea8627068bde54fbc9a25b5c0c938187940bbbaf40eb8e46e6dd0404b07d6",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/022.bin",
+        "sha256": "3e44ceb02c0f2cfad7ad74dfcbbde240b2eb4cdd5845365b8c0c9ecddabc3ada",
+        "bytes": 61,
+        "expected": [
+          0,
+          61
+        ],
+        "partitions": 69
+      },
+      {
+        "file": "corpus/023.bin",
+        "sha256": "e5de748484076299cc35c091c14869efb84a54f2671e541c75cc191e2fa00046",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/024.bin",
+        "sha256": "8bcaffdb211d57e0bed08f3c06e26c5cb9d38cdbcf17a5ac1ff284df7aeecd4e",
+        "bytes": 61,
+        "expected": [
+          0,
+          61
+        ],
+        "partitions": 69
+      },
+      {
+        "file": "corpus/025.bin",
+        "sha256": "b097966086f9035a4258bb2debca549e43bcccc10466e6b77f6ecc31cfad6732",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/026.bin",
+        "sha256": "f00a94025dea0ed76e513c5fc608002eb45e8974207a543f2a6254f4664dea01",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/027.bin",
+        "sha256": "b30369044e1d6a2307f45baecc88bae9b5f5b37345658117262e583011eb8c3e",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/028.bin",
+        "sha256": "c3997f8e8e45e193b659ea12adbd90cd36cb675e7680153e02cfab3886b33811",
+        "bytes": 63,
+        "expected": [
+          0,
+          63
+        ],
+        "partitions": 71
+      },
+      {
+        "file": "corpus/029.bin",
+        "sha256": "1880b3344cfaa966d58e25967324e6b3b5784b4d4a08799976674fabf94af6c0",
+        "bytes": 72,
+        "expected": [
+          0,
+          72
+        ],
+        "partitions": 80
+      },
+      {
+        "file": "corpus/030.bin",
+        "sha256": "dc71968d66925cdcc844685122333f61a774968e81279b6f406f6d0c5e2f8f81",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/031.bin",
+        "sha256": "8958d89b7c267dda6964142e19ca06b09c71aeaeb19bbe81a4ea85ea3fca71bd",
+        "bytes": 73,
+        "expected": [
+          0,
+          73
+        ],
+        "partitions": 81
+      },
+      {
+        "file": "corpus/032.bin",
+        "sha256": "514e5dd24197f9baa2df6c73dede7e8323dce13afc58bec641bfdc2c3861e568",
+        "bytes": 63,
+        "expected": [
+          0,
+          63
+        ],
+        "partitions": 71
+      },
+      {
+        "file": "corpus/033.bin",
+        "sha256": "7cca688e1501dffd3b2a8e3b3eec7c582e23495726e45c365b5f93e7c7619f94",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/034.bin",
+        "sha256": "2a92cf3ce7ac31dc56d1a4b05be7e5c493597943f5aa6acea481fabbf846b10f",
+        "bytes": 63,
+        "expected": [
+          0,
+          63
+        ],
+        "partitions": 71
+      },
+      {
+        "file": "corpus/035.bin",
+        "sha256": "d13178c269c1323d51bb3024972277fa7eb30c6afbaf53728b33107058eaf913",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/036.bin",
+        "sha256": "7961a42279783ccd5839ed8239ed745b9a6f6b1e8d21383a5471898c919e3788",
+        "bytes": 64,
+        "expected": [
+          0,
+          64
+        ],
+        "partitions": 72
+      },
+      {
+        "file": "corpus/037.bin",
+        "sha256": "860dfc6cbcf04f5dab730dd6a0ea7a4bc2ec43d0377d1e0e15fc669a108a41c7",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/038.bin",
+        "sha256": "fc0225b72f657eb15f709bc25bb6de1ec43e7d8115c53c27029b03f8c7aff4ac",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/039.bin",
+        "sha256": "2047c2230dcbd441d05e6d4cc1cae4410e7f7278e1bebde80a3fef202a7e333b",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/040.bin",
+        "sha256": "df527d809c614ab4e26df6cd113fbe0b70c103b5f014be4bc3977dfc9558e22e",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/041.bin",
+        "sha256": "183f0ab8a1550952f4fdaa61e8ce3717b18bcddb1850609bb7e6bc16d1dd47f3",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/042.bin",
+        "sha256": "d3b712391c99f953561d45984e46e8010c91f9227a80cb00b0f3a3a68024ead5",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/043.bin",
+        "sha256": "12b78d345a708dc49a227a77930a1f240432d30a131ee38700a7bd231e1875cb",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/044.bin",
+        "sha256": "fc7941251959eb09a94cde8362928f2c226d2ff8191bdc1f4dd5103d82103619",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/045.bin",
+        "sha256": "aed0cc05770e13aa94e602d895cf21eff04e7233ce83bef03a02b8f2213e1e35",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/046.bin",
+        "sha256": "8de47e5aea11863fbf81aed7ac9ca22dcde118885104de62ab33208a2f1563dd",
+        "bytes": 64,
+        "expected": [
+          0,
+          64
+        ],
+        "partitions": 72
+      },
+      {
+        "file": "corpus/047.bin",
+        "sha256": "f38441f53d9645fde4c3670121887f034e3a5010aac91d0a6e6cee5c3e761fd8",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/048.bin",
+        "sha256": "1e6c2b0c3a6ce911c9633c74c150e58e1d2b5c18a68a6f6d7c7e6bb8fa67e771",
+        "bytes": 64,
+        "expected": [
+          0,
+          64
+        ],
+        "partitions": 72
+      },
+      {
+        "file": "corpus/049.bin",
+        "sha256": "f922c5ec338aed569bffbc99e924b02008d75577dd94f04e37a9e99d8eccc09a",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/050.bin",
+        "sha256": "50ae053a712d91cf003abc043489d3fd6d902d5ae8a88c4f904fe61959c80288",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/051.bin",
+        "sha256": "8cc3e8d9539dca355ccf87f18db0e2772de1d65e26de84f076f4da502b62cb75",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/052.bin",
+        "sha256": "c47bd1ec4df8f65eed05c837bbd866f4f299e1045b0bdef9af97b322539c846f",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/053.bin",
+        "sha256": "bed609385bc10e9883ed265bef54ea4d7096529e5f4706fb9ef4d9c9dafba913",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/054.bin",
+        "sha256": "36b6f0b64fef49f575ecb35e57e29b990627f725ee16de42c48d4fca06c98069",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/055.bin",
+        "sha256": "0b872bc4663a31d5a4975112a5f4d3707361dff22838c769cfc67b44d79f8110",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/056.bin",
+        "sha256": "3b778bc60329cc41c7a236bf1e1d3be2fbb494c388446343912d1a00eb04c070",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/057.bin",
+        "sha256": "7b35626b2c492fef1898a7e1a5f5e77a584e51340498fe9e63970d24f0003027",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/058.bin",
+        "sha256": "e8491fef8b2a1dc4a34e504a4c60cfe4e61cba6bf60bd86f06d0011dd00a558e",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/059.bin",
+        "sha256": "b86369672d23060d35c0ee8d6287b451fb78653b0515bc734bc58faf09ae9b6f",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/060.bin",
+        "sha256": "2d13f65a3040040b0e4e66f32f582e399c029bd52bad3760d16bb2a56cea6769",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/061.bin",
+        "sha256": "975c35bc453ae9d02151e37e43eb1ad441066eea9d66babe7c2cf14770342af0",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/062.bin",
+        "sha256": "28097677542f158946ba1f79240e3d11d2ad78b32537b6bccac560afc44e9399",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/063.bin",
+        "sha256": "004fd39af5d55ae203b3c7d910c8ef6c0e982f4120f00bd005f38fb2d906adea",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/064.bin",
+        "sha256": "d8826a17dc54cb1904559066248fa02942ce5d665157955e9576a2b40b7f4473",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/065.bin",
+        "sha256": "f56632bd993a86bf4c07f90151d917cab58b0abf5040acb5bac2a08060f9b7dc",
+        "bytes": 72,
+        "expected": [
+          0,
+          72
+        ],
+        "partitions": 80
+      },
+      {
+        "file": "corpus/066.bin",
+        "sha256": "8fd200bbe36e1d4969b44ee1db6262aae12a3d01bf66d43127902a76c83f35f0",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/067.bin",
+        "sha256": "fc13c4534d4f6553b97f3189c53aa21f1e81812e20c3cddbfcb2694cb350f214",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/068.bin",
+        "sha256": "46e5d36bda13ac3a9b8203cddda05a384e8016948d930d9a02518f745397754a",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/069.bin",
+        "sha256": "0b4970012082d81f1da9a2a43264b4fd4905aa663d1b1a20e619ddf99586d682",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/070.bin",
+        "sha256": "550b5f6753677c01a4ef1dcd23049060dacccdbadd42c06909a9c273212145ed",
+        "bytes": 63,
+        "expected": [
+          0,
+          63
+        ],
+        "partitions": 71
+      },
+      {
+        "file": "corpus/071.bin",
+        "sha256": "b3fe9db5bff0928ed76dcd2590baa65b435fafc5fcac7b92e74d6fd3901c6076",
+        "bytes": 72,
+        "expected": [
+          0,
+          72
+        ],
+        "partitions": 80
+      },
+      {
+        "file": "corpus/072.bin",
+        "sha256": "fb3b4e6624871d0389c837e94aeba3dccd11818ee9cdec23f66788afc97cd784",
+        "bytes": 63,
+        "expected": [
+          0,
+          63
+        ],
+        "partitions": 71
+      },
+      {
+        "file": "corpus/073.bin",
+        "sha256": "891f1ffcc4ac9998163ece8415f61b20f94efc21b3bc388d9baf199c0bd34292",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/074.bin",
+        "sha256": "f4935459bd0ad6e93356a4cd76b2a60271f1d133ebb94052bc139f6d26a23d10",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/075.bin",
+        "sha256": "78cd03dab3f55df95467c1b2173e8f73dcac788d2abcd4e8e8718a9c7ef91812",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/076.bin",
+        "sha256": "3cb1bad95da6ea9ee1c2b70c86346c5901707441694473b461eff5eb795ecb4e",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/077.bin",
+        "sha256": "b6939b81c0b12a02e59230c0dcf52416343b1bdfc58409e82d2bf99eb70d659a",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/078.bin",
+        "sha256": "0ab8987700c30ba3d51e9921d51081f53260995a1f03700f169bbaa922a70286",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/079.bin",
+        "sha256": "72907cc1988d9f75ea5be7c0e89595609538f894a45986741d8bc56644f56239",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/080.bin",
+        "sha256": "151393bf24e0536afe2546daa140fd79d9567ae267228b5adbe92720b454ad80",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/081.bin",
+        "sha256": "34a541c6686a3be429394f28ff576f4a55e11ef457a38f9e8ef8ee67db07d8a1",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/082.bin",
+        "sha256": "1a03955e17fe8eae93876cc46877d677c7c51ee097aac6ba9e9232cda45956ec",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/083.bin",
+        "sha256": "6a1281db69e32de4935bdb7a4420afbb7f1bdcfdd0b29d75882b79ca64eaea16",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/084.bin",
+        "sha256": "8b2f194320315f6e36135b1e5e30c15d6c1c91667dfaee65e9689aa6b66c3598",
+        "bytes": 63,
+        "expected": [
+          0,
+          63
+        ],
+        "partitions": 71
+      },
+      {
+        "file": "corpus/085.bin",
+        "sha256": "3552430133a2eaf0b9a441094ee02d48281b18e94cea557095238e5ab41911c6",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/086.bin",
+        "sha256": "020ad1a9f89219552ebd678bdd4dd9c1e0ca12a5d630ae76bdc6711d562b9b4b",
+        "bytes": 64,
+        "expected": [
+          0,
+          64
+        ],
+        "partitions": 72
+      },
+      {
+        "file": "corpus/087.bin",
+        "sha256": "fb930b1f31d781ee3703fe8e175497f3c16b3dd3010176ea842bb13faa178b13",
+        "bytes": 68,
+        "expected": [
+          0,
+          68
+        ],
+        "partitions": 76
+      },
+      {
+        "file": "corpus/088.bin",
+        "sha256": "1cf039e8a3e5348ad8387a9211d86e2bfc49cd2aa235026ff1087c7a89d4cb44",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/089.bin",
+        "sha256": "333bdb72231c14cf938bc03522b8bb02b49e601ccebdcafa237008e5179ddff4",
+        "bytes": 72,
+        "expected": [
+          0,
+          72
+        ],
+        "partitions": 80
+      },
+      {
+        "file": "corpus/090.bin",
+        "sha256": "d7375cdb2461345090c15f1893b68ab53bc4dcff3aa90bcc723687629850e971",
+        "bytes": 67,
+        "expected": [
+          0,
+          67
+        ],
+        "partitions": 75
+      },
+      {
+        "file": "corpus/091.bin",
+        "sha256": "36968b8204a62ac212dd3e86b5b3758bcde683f2ee5d8d22e6138bb230037341",
+        "bytes": 73,
+        "expected": [
+          0,
+          73
+        ],
+        "partitions": 81
+      },
+      {
+        "file": "corpus/092.bin",
+        "sha256": "d26d4e5bdd93c5f10ba8b4a18099ce71a269a33d9f90e2624111a8d2057fa209",
+        "bytes": 62,
+        "expected": [
+          0,
+          62
+        ],
+        "partitions": 70
+      },
+      {
+        "file": "corpus/093.bin",
+        "sha256": "1862fe626e36b2be853c141fdba6b8b63df736dc6f521b15a172de470bdf10ce",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/094.bin",
+        "sha256": "dd17482da70724417d9429b67204f7fc202b0b84e3ff1769e2c69722764724fe",
+        "bytes": 63,
+        "expected": [
+          0,
+          63
+        ],
+        "partitions": 71
+      },
+      {
+        "file": "corpus/095.bin",
+        "sha256": "d5affc229e638987a3d645c7e56efb13ceda203eb93d1870578df5d7b55e4244",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/096.bin",
+        "sha256": "f83a9320c317eda9e5fe2d60839e6bc701c2f3f6b32a93cfd9e2aa41e6d1ab94",
+        "bytes": 65,
+        "expected": [
+          0,
+          65
+        ],
+        "partitions": 73
+      },
+      {
+        "file": "corpus/097.bin",
+        "sha256": "7aee23d5fcb5e444e874880c692d603eddad2a733949aa538c9a307492d9168d",
+        "bytes": 66,
+        "expected": [
+          0,
+          66
+        ],
+        "partitions": 74
+      },
+      {
+        "file": "corpus/098.bin",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0,
+        "expected": [
+          6,
+          0
+        ],
+        "partitions": 8
+      },
+      {
+        "file": "corpus/099.bin",
+        "sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+        "bytes": 1,
+        "expected": [
+          6,
+          1
+        ],
+        "partitions": 9
+      },
+      {
+        "file": "corpus/100.bin",
+        "sha256": "886ad6246ed150b2930495926ba07d579307bc7fecaf4b391650dca8bae7bc66",
+        "bytes": 4,
+        "expected": [
+          1,
+          3
+        ],
+        "partitions": 12
+      },
+      {
+        "file": "corpus/101.bin",
+        "sha256": "aa99a5ce3eb0dd8355f0bfb15376ea1d862ad75d0d278af1f8c280ca8c02c640",
+        "bytes": 8,
+        "expected": [
+          1,
+          7
+        ],
+        "partitions": 16
+      },
+      {
+        "file": "corpus/102.bin",
+        "sha256": "938db8c9f82c8cb58d3f3ef4fd250036a48d26a712753d2fde5abd03a85cabf4",
+        "bytes": 2,
+        "expected": [
+          2,
+          1
+        ],
+        "partitions": 10
+      },
+      {
+        "file": "corpus/103.bin",
+        "sha256": "c977dbe785221d34114d345fdf8ff4e18bb4af66750751dbea29407f9738735f",
+        "bytes": 2,
+        "expected": [
+          6,
+          2
+        ],
+        "partitions": 10
+      },
+      {
+        "file": "corpus/104.bin",
+        "sha256": "fb346aaddef670dedd5e4209580bc32df6dde4b89ba9abd9a18fe3e0779cbb9f",
+        "bytes": 3,
+        "expected": [
+          6,
+          3
+        ],
+        "partitions": 11
+      },
+      {
+        "file": "corpus/105.bin",
+        "sha256": "2ea670c13c4a45083501106ce8e18f566de0bfbfb8030e4cff04b42b0dd38211",
+        "bytes": 3,
+        "expected": [
+          2,
+          2
+        ],
+        "partitions": 11
+      },
+      {
+        "file": "corpus/106.bin",
+        "sha256": "722cd80a90dd9305fea073dd4dfeeace433b327fccf462fcf466cd13551c6aa9",
+        "bytes": 4,
+        "expected": [
+          3,
+          2
+        ],
+        "partitions": 12
+      },
+      {
+        "file": "corpus/107.bin",
+        "sha256": "e80cfa92d92a790fdff049d7c6dc8534cc46933a828de306c6de80f897bbcc07",
+        "bytes": 8,
+        "expected": [
+          3,
+          5
+        ],
+        "partitions": 16
+      },
+      {
+        "file": "corpus/108.bin",
+        "sha256": "9c66cc4a9d0085223e9c74ec02f84e44c037d52ccad9e54447ee1c62c55977fa",
+        "bytes": 8,
+        "expected": [
+          4,
+          1
+        ],
+        "partitions": 16
+      },
+      {
+        "file": "corpus/109.bin",
+        "sha256": "2cf40f7847a1ced3a9a04ff5f86f3d7f0900063c023836eebe2c3b22ed85893a",
+        "bytes": 9,
+        "expected": [
+          4,
+          1
+        ],
+        "partitions": 17
+      },
+      {
+        "file": "corpus/110.bin",
+        "sha256": "1e6160ad0ee65c564c3897f256d5daca1b0f1c5f7ebc21db809e0e6fce3c8b54",
+        "bytes": 14,
+        "expected": [
+          4,
+          1
+        ],
+        "partitions": 22
+      },
+      {
+        "file": "corpus/111.bin",
+        "sha256": "b18200a0848de8b2fd4ad1ec0a5969f22ab8b6bbfeff959b07a4d226e6117483",
+        "bytes": 7,
+        "expected": [
+          4,
+          1
+        ],
+        "partitions": 15
+      },
+      {
+        "file": "corpus/112.bin",
+        "sha256": "ee4a76500d4d714ca691afe56c1fd9e0a5fbcb42d6c8f8d7178aae4ddb683cf7",
+        "bytes": 5,
+        "expected": [
+          5,
+          1
+        ],
+        "partitions": 13
+      },
+      {
+        "file": "corpus/113.bin",
+        "sha256": "c941a1e5c613e8af81f18a82a26ef5454a715e79d5ef235940e91d7150e34fa3",
+        "bytes": 3,
+        "expected": [
+          5,
+          1
+        ],
+        "partitions": 11
+      },
+      {
+        "file": "corpus/114.bin",
+        "sha256": "0f151cbb5d550fbf041dc1ad9f141ae0901c7e8ab31744079b8ec7881108bbf9",
+        "bytes": 4,
+        "expected": [
+          1,
+          2
+        ],
+        "partitions": 12
+      },
+      {
+        "file": "corpus/115.bin",
+        "sha256": "aa25e978046d680ef8740d837e6de5bc1e2a2dc6089dbda1012544b538d53f65",
+        "bytes": 5,
+        "expected": [
+          1,
+          0
+        ],
+        "partitions": 13
+      },
+      {
+        "file": "corpus/116.bin",
+        "sha256": "a43f70bbdd267f9361cefb9635c6f291ca52d7f60d29ba1a6536ac2914f876bb",
+        "bytes": 10,
+        "expected": [
+          1,
+          5
+        ],
+        "partitions": 18
+      },
+      {
+        "file": "corpus/117.bin",
+        "sha256": "ef3b4942419b48593473651c4baa4ac5426a5a150b60402b082894f556f08c75",
+        "bytes": 7,
+        "expected": [
+          1,
+          5
+        ],
+        "partitions": 15
+      },
+      {
+        "file": "corpus/118.bin",
+        "sha256": "a89ab0d186c122dcd07ff699273f06a26ca1ebd231de6138a3d4c8a2338c2105",
+        "bytes": 2,
+        "expected": [
+          1,
+          1
+        ],
+        "partitions": 10
+      },
+      {
+        "file": "corpus/119.bin",
+        "sha256": "d5b592c05dc25b5032553f1b27f4139be95e881f73db33b02b05ab20c3f9981e",
+        "bytes": 3,
+        "expected": [
+          1,
+          0
+        ],
+        "partitions": 11
+      },
+      {
+        "file": "corpus/120.bin",
+        "sha256": "8a70002db54be459f863a4e832ffa4a86f9663ea2c1f3928ffdcc762327c7d3b",
+        "bytes": 9,
+        "expected": [
+          1,
+          0
+        ],
+        "partitions": 17
+      },
+      {
+        "file": "corpus/121.bin",
+        "sha256": "2574b71c86249bc36bf15157b4883f41da049924b6ddd4477f68af56d73d76b2",
+        "bytes": 131,
+        "expected": [
+          7,
+          64
+        ],
+        "partitions": 139
+      },
+      {
+        "file": "corpus/122.bin",
+        "sha256": "e6dbbb971f63691e8e01374748b33555751dadc14e2389900470e732a5e29f6a",
+        "bytes": 10002,
+        "expected": [
+          2,
+          1
+        ],
+        "partitions": 6
+      }
+    ],
+    "probe_sha256": "a50a8f45d3aa2f4db50174e6a26e29995c48cd67426a5f8ffca7b556d85f08f3"
+  },
+  "diagnostics": {
+    "A0": {
+      "copy_sites": 140,
+      "stack_usage": [
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_status\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_value\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_pending\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_start\t144\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_feed\t224\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_main\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_utf8_stream.create\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_utf8_stream.feed_byte\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_utf8_stream.finish\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_utf8_stream.status\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_json.create\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza___liza_json_fail\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza___liza_json_done\t784\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza___liza_json_space\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza___liza_json_digit\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza___liza_json_hex\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza___liza_json_step\t4480\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_json.feed\t608\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_json.status\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:liza_json.finish\t416\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:example_entry\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:stream_start\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:stream_feed\t224\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:stream_status\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:stream_pending\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:stream_value\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A0/module.ll:stream_size\t0\tstatic"
+      ],
+      "executed_copies": {
+        "ascii": {
+          "copy_calls": 4522102,
+          "copy_bytes": 377730084,
+          "passes": 2,
+          "input_bytes": 262121,
+          "copy_bytes_per_input_byte": 720.5261768419928
+        },
+        "unicode": {
+          "copy_calls": 5122188,
+          "copy_bytes": 324062740,
+          "passes": 2,
+          "input_bytes": 262133,
+          "copy_bytes_per_input_byte": 618.1265617072249
+        },
+        "escaped": {
+          "copy_calls": 3565432,
+          "copy_bytes": 294234748,
+          "passes": 2,
+          "input_bytes": 262126,
+          "copy_bytes_per_input_byte": 561.2467820818996
+        },
+        "numbers": {
+          "copy_calls": 5036394,
+          "copy_bytes": 492295298,
+          "passes": 2,
+          "input_bytes": 262120,
+          "copy_bytes_per_input_byte": 939.0647375247978
+        },
+        "long-string": {
+          "copy_calls": 5243424,
+          "copy_bytes": 306253554,
+          "passes": 2,
+          "input_bytes": 262146,
+          "copy_bytes_per_input_byte": 584.1278409741136
+        },
+        "depth64": {
+          "copy_calls": 5249040,
+          "copy_bytes": 526179340,
+          "passes": 2,
+          "input_bytes": 262017,
+          "copy_bytes_per_input_byte": 1004.0938946709565
+        }
+      }
+    },
+    "A1": {
+      "copy_sites": 125,
+      "stack_usage": [
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_status\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_value\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_pending\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_start\t144\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_feed\t224\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_main\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_utf8_stream.create\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_utf8_stream.feed_byte\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_utf8_stream.finish\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_utf8_stream.status\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_json.create\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza___liza_json_fail\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza___liza_json_done\t784\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza___liza_json_space\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza___liza_json_digit\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza___liza_json_hex\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza___liza_json_step\t3952\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_json.feed\t608\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_json.status\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:liza_json.finish\t416\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:example_entry\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:stream_start\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:stream_feed\t224\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:stream_status\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:stream_pending\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:stream_value\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A1/module.ll:stream_size\t0\tstatic"
+      ],
+      "executed_copies": {
+        "ascii": {
+          "copy_calls": 4482784,
+          "copy_bytes": 376157364,
+          "passes": 2,
+          "input_bytes": 262121,
+          "copy_bytes_per_input_byte": 717.5261882870888
+        },
+        "unicode": {
+          "copy_calls": 5122188,
+          "copy_bytes": 324062740,
+          "passes": 2,
+          "input_bytes": 262133,
+          "copy_bytes_per_input_byte": 618.1265617072249
+        },
+        "escaped": {
+          "copy_calls": 3334762,
+          "copy_bytes": 287692108,
+          "passes": 2,
+          "input_bytes": 262126,
+          "copy_bytes_per_input_byte": 548.7668296925906
+        },
+        "numbers": {
+          "copy_calls": 4988736,
+          "copy_bytes": 489817082,
+          "passes": 2,
+          "input_bytes": 262120,
+          "copy_bytes_per_input_byte": 934.3374828322906
+        },
+        "long-string": {
+          "copy_calls": 5243424,
+          "copy_bytes": 306253554,
+          "passes": 2,
+          "input_bytes": 262146,
+          "copy_bytes_per_input_byte": 584.1278409741136
+        },
+        "depth64": {
+          "copy_calls": 5249040,
+          "copy_bytes": 526179340,
+          "passes": 2,
+          "input_bytes": 262017,
+          "copy_bytes_per_input_byte": 1004.0938946709565
+        }
+      }
+    },
+    "A2": {
+      "copy_sites": 124,
+      "stack_usage": [
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_status\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_value\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_pending\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_start\t144\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_feed\t224\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_main\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_utf8_stream.create\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_utf8_stream.feed_byte\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_utf8_stream.finish\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_utf8_stream.status\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_json.create\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza___liza_json_fail\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza___liza_json_done\t784\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza___liza_json_space\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza___liza_json_digit\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza___liza_json_hex\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza___liza_json_step\t3184\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_json.feed\t608\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_json.status\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:liza_json.finish\t416\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:example_entry\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:stream_start\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:stream_feed\t224\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:stream_status\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:stream_pending\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:stream_value\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A2/module.ll:stream_size\t0\tstatic"
+      ],
+      "executed_copies": {
+        "ascii": {
+          "copy_calls": 2870748,
+          "copy_bytes": 405042996,
+          "passes": 2,
+          "input_bytes": 262121,
+          "copy_bytes_per_input_byte": 772.6259933389541
+        },
+        "unicode": {
+          "copy_calls": 2279066,
+          "copy_bytes": 345295440,
+          "passes": 2,
+          "input_bytes": 262133,
+          "copy_bytes_per_input_byte": 658.6264224649319
+        },
+        "escaped": {
+          "copy_calls": 2579844,
+          "copy_bytes": 400028406,
+          "passes": 2,
+          "input_bytes": 262126,
+          "copy_bytes_per_input_byte": 763.0460274829662
+        },
+        "numbers": {
+          "copy_calls": 4956966,
+          "copy_bytes": 503796770,
+          "passes": 2,
+          "input_bytes": 262120,
+          "copy_bytes_per_input_byte": 961.004063024569
+        },
+        "long-string": {
+          "copy_calls": 2097694,
+          "copy_bytes": 327225084,
+          "passes": 2,
+          "input_bytes": 262146,
+          "copy_bytes_per_input_byte": 624.1275548740015
+        },
+        "depth64": {
+          "copy_calls": 4978838,
+          "copy_bytes": 561535132,
+          "passes": 2,
+          "input_bytes": 262017,
+          "copy_bytes_per_input_byte": 1071.5624024395363
+        }
+      }
+    },
+    "A3": {
+      "copy_sites": 139,
+      "stack_usage": [
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_status\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_value\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_pending\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_start\t144\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_feed\t224\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_main\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_utf8_stream.create\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_utf8_stream.feed_byte\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_utf8_stream.finish\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_utf8_stream.status\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_json.create\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza___liza_json_fail\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza___liza_json_done\t784\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza___liza_json_space\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza___liza_json_digit\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza___liza_json_hex\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza___liza_json_step\t3696\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_json.feed\t416\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_json.status\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza_json.finish\t208\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza___liza_owned___liza_json_fail\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza___liza_owned___liza_json_done\t512\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:liza___liza_owned___liza_json_step\t720\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:example_entry\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:stream_start\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:stream_feed\t224\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:stream_status\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:stream_pending\t0\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:stream_value\t16\tstatic",
+        "/private/tmp/liza-aggregate-measured/A3/module.ll:stream_size\t0\tstatic"
+      ],
+      "executed_copies": {
+        "ascii": {
+          "copy_calls": 1048996,
+          "copy_bytes": 134271488,
+          "passes": 2,
+          "input_bytes": 262121,
+          "copy_bytes_per_input_byte": 256.12501096821694
+        },
+        "unicode": {
+          "copy_calls": 1049044,
+          "copy_bytes": 134277632,
+          "passes": 2,
+          "input_bytes": 262133,
+          "copy_bytes_per_input_byte": 256.12500524542884
+        },
+        "escaped": {
+          "copy_calls": 1049016,
+          "copy_bytes": 134274048,
+          "passes": 2,
+          "input_bytes": 262126,
+          "copy_bytes_per_input_byte": 256.12500858365826
+        },
+        "numbers": {
+          "copy_calls": 1048992,
+          "copy_bytes": 134270976,
+          "passes": 2,
+          "input_bytes": 262120,
+          "copy_bytes_per_input_byte": 256.12501144513965
+        },
+        "long-string": {
+          "copy_calls": 1049100,
+          "copy_bytes": 134284800,
+          "passes": 2,
+          "input_bytes": 262146,
+          "copy_bytes_per_input_byte": 256.12597560138244
+        },
+        "depth64": {
+          "copy_calls": 1048580,
+          "copy_bytes": 134218240,
+          "passes": 2,
+          "input_bytes": 262017,
+          "copy_bytes_per_input_byte": 256.1250605876718
+        }
+      }
+    }
+  },
+  "workloads": [
+    {
+      "name": "ascii",
+      "sha256": "ced574339e9ee8bd530bd93877bcf52ba0e8d69eed00690ee740464b37db2292",
+      "bytes": 262121
+    },
+    {
+      "name": "unicode",
+      "sha256": "b6203649b5df7f43ee65531228d3c209143bb7f782e8cc854846fcd51c9e8e03",
+      "bytes": 262133
+    },
+    {
+      "name": "escaped",
+      "sha256": "c5ed7bb4d3c5cde1a11fe753dd75774ef54c0dbb1144b59854ccee4cc73d15dc",
+      "bytes": 262126
+    },
+    {
+      "name": "numbers",
+      "sha256": "aa45299ed90f6320ac2044cf1c0b619b38abf2b7eacf1d330e38ba0bdc340ee1",
+      "bytes": 262120
+    },
+    {
+      "name": "long-string",
+      "sha256": "2cbde7b6e7c15a72c903257b25fc493fd3f385056c907685762507b2dae57dc4",
+      "bytes": 262146
+    },
+    {
+      "name": "depth64",
+      "sha256": "791d64394d1063e5f688d9cf1afd8be2847ac5adb3f43a4fda262dcf86c08741",
+      "bytes": 262017
+    }
+  ],
+  "samples": [
+    {
+      "seconds": 0.101366,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 0,
+      "mib_s": 39.45735048302686
+    },
+    {
+      "seconds": 0.103905,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 0,
+      "mib_s": 38.49317924125403
+    },
+    {
+      "seconds": 0.09452,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 0,
+      "mib_s": 42.31537291421458
+    },
+    {
+      "seconds": 0.040131,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 0,
+      "mib_s": 99.66444367353168
+    },
+    {
+      "seconds": 0.150409,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 0,
+      "mib_s": 26.58126929764218
+    },
+    {
+      "seconds": 0.102892,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 0,
+      "mib_s": 38.87230346238349
+    },
+    {
+      "seconds": 0.076637,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 0,
+      "mib_s": 52.19191974268712
+    },
+    {
+      "seconds": 0.090864,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 0,
+      "mib_s": 44.017972440697775
+    },
+    {
+      "seconds": 0.072369,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 0,
+      "mib_s": 55.269965777063554
+    },
+    {
+      "seconds": 0.055877,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 0,
+      "mib_s": 71.57952373698592
+    },
+    {
+      "seconds": 0.068601,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 0,
+      "mib_s": 58.304184221758796
+    },
+    {
+      "seconds": 0.041285,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 0,
+      "mib_s": 96.88342384208096
+    },
+    {
+      "seconds": 0.079264,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 0,
+      "mib_s": 50.4398230443715
+    },
+    {
+      "seconds": 0.133633,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 0,
+      "mib_s": 29.91822479319526
+    },
+    {
+      "seconds": 0.070982,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 0,
+      "mib_s": 56.34995003409755
+    },
+    {
+      "seconds": 0.100363,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 0,
+      "mib_s": 39.85167630563554
+    },
+    {
+      "seconds": 0.071641,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 0,
+      "mib_s": 55.83011602011244
+    },
+    {
+      "seconds": 0.062186,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 0,
+      "mib_s": 60.30342215658657
+    },
+    {
+      "seconds": 0.091606,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 0,
+      "mib_s": 43.66226384512886
+    },
+    {
+      "seconds": 0.031269,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 0,
+      "mib_s": 119.92799930376707
+    },
+    {
+      "seconds": 0.058976,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 0,
+      "mib_s": 63.58567231127056
+    },
+    {
+      "seconds": 0.059279,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 0,
+      "mib_s": 63.26065909056314
+    },
+    {
+      "seconds": 0.044409,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 0,
+      "mib_s": 90.0656475443463
+    },
+    {
+      "seconds": 0.133969,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 0,
+      "mib_s": 29.84318860175908
+    },
+    {
+      "seconds": 0.105377,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 1,
+      "mib_s": 37.955472152960326
+    },
+    {
+      "seconds": 0.106247,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 1,
+      "mib_s": 37.64481865701208
+    },
+    {
+      "seconds": 0.039866,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 1,
+      "mib_s": 100.32693997548036
+    },
+    {
+      "seconds": 0.100718,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 1,
+      "mib_s": 39.71121139282452
+    },
+    {
+      "seconds": 0.072416,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 1,
+      "mib_s": 55.23409403060529
+    },
+    {
+      "seconds": 0.059935,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 1,
+      "mib_s": 62.568259117869225
+    },
+    {
+      "seconds": 0.108267,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 1,
+      "mib_s": 36.94231657903609
+    },
+    {
+      "seconds": 0.031904,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 1,
+      "mib_s": 117.54101712103473
+    },
+    {
+      "seconds": 0.042251,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 1,
+      "mib_s": 94.6683428397035
+    },
+    {
+      "seconds": 0.09247,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 1,
+      "mib_s": 43.253477320769576
+    },
+    {
+      "seconds": 0.132034,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 1,
+      "mib_s": 30.280549962805505
+    },
+    {
+      "seconds": 0.075134,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 1,
+      "mib_s": 53.23598042590987
+    },
+    {
+      "seconds": 0.058006,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 1,
+      "mib_s": 64.64897786831521
+    },
+    {
+      "seconds": 0.071091,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 1,
+      "mib_s": 56.26204922981636
+    },
+    {
+      "seconds": 0.057742,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 1,
+      "mib_s": 64.94455699888283
+    },
+    {
+      "seconds": 0.132835,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 1,
+      "mib_s": 30.09795711814704
+    },
+    {
+      "seconds": 0.045199,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 1,
+      "mib_s": 88.49145648790625
+    },
+    {
+      "seconds": 0.081364,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 1,
+      "mib_s": 49.13797421204786
+    },
+    {
+      "seconds": 0.071813,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 1,
+      "mib_s": 55.69788413407478
+    },
+    {
+      "seconds": 0.091624,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 1,
+      "mib_s": 43.653686171711286
+    },
+    {
+      "seconds": 0.09356,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 1,
+      "mib_s": 42.74956228999105
+    },
+    {
+      "seconds": 0.071665,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 1,
+      "mib_s": 55.81141898830496
+    },
+    {
+      "seconds": 0.149539,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 1,
+      "mib_s": 26.735915940250116
+    },
+    {
+      "seconds": 0.055765,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 1,
+      "mib_s": 71.72328607283355
+    },
+    {
+      "seconds": 0.134049,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 2,
+      "mib_s": 29.825378285470705
+    },
+    {
+      "seconds": 0.133497,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 2,
+      "mib_s": 29.948703969295657
+    },
+    {
+      "seconds": 0.10165,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 2,
+      "mib_s": 39.34726067733952
+    },
+    {
+      "seconds": 0.076224,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 2,
+      "mib_s": 52.474708140747175
+    },
+    {
+      "seconds": 0.092984,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 2,
+      "mib_s": 43.014379332482605
+    },
+    {
+      "seconds": 0.058472,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 2,
+      "mib_s": 64.13374966188076
+    },
+    {
+      "seconds": 0.032417,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 2,
+      "mib_s": 115.68092698983533
+    },
+    {
+      "seconds": 0.100828,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 2,
+      "mib_s": 39.66788777980819
+    },
+    {
+      "seconds": 0.045347,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 2,
+      "mib_s": 88.20264497754813
+    },
+    {
+      "seconds": 0.073224,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 2,
+      "mib_s": 54.62460604884072
+    },
+    {
+      "seconds": 0.092665,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 2,
+      "mib_s": 43.16328000644121
+    },
+    {
+      "seconds": 0.102934,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 2,
+      "mib_s": 38.85629421826122
+    },
+    {
+      "seconds": 0.092977,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 2,
+      "mib_s": 43.01761777484283
+    },
+    {
+      "seconds": 0.061424,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 2,
+      "mib_s": 61.0515207448146
+    },
+    {
+      "seconds": 0.149334,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 2,
+      "mib_s": 26.772617982435765
+    },
+    {
+      "seconds": 0.10173,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 2,
+      "mib_s": 39.31616818109211
+    },
+    {
+      "seconds": 0.070765,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 2,
+      "mib_s": 56.52274646110807
+    },
+    {
+      "seconds": 0.056817,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 2,
+      "mib_s": 70.39528746416676
+    },
+    {
+      "seconds": 0.080741,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 2,
+      "mib_s": 49.51712430845621
+    },
+    {
+      "seconds": 0.041329,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 2,
+      "mib_s": 96.78027906119947
+    },
+    {
+      "seconds": 0.071637,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 2,
+      "mib_s": 55.833233410065674
+    },
+    {
+      "seconds": 0.039916,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 2,
+      "mib_s": 100.20126738807747
+    },
+    {
+      "seconds": 0.058969,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 2,
+      "mib_s": 63.59322034000054
+    },
+    {
+      "seconds": 0.073159,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 2,
+      "mib_s": 54.67167869704171
+    },
+    {
+      "seconds": 0.031903,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 3,
+      "mib_s": 117.5447014459296
+    },
+    {
+      "seconds": 0.07217,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 3,
+      "mib_s": 55.42088598859464
+    },
+    {
+      "seconds": 0.071091,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 3,
+      "mib_s": 56.263551691779725
+    },
+    {
+      "seconds": 0.091178,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 3,
+      "mib_s": 43.86721952441241
+    },
+    {
+      "seconds": 0.042122,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 3,
+      "mib_s": 94.95826772993478
+    },
+    {
+      "seconds": 0.103523,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 3,
+      "mib_s": 38.63521912099244
+    },
+    {
+      "seconds": 0.055499,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 3,
+      "mib_s": 72.06704711529149
+    },
+    {
+      "seconds": 0.04032,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 3,
+      "mib_s": 99.197266593812
+    },
+    {
+      "seconds": 0.135872,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 3,
+      "mib_s": 29.425210004924214
+    },
+    {
+      "seconds": 0.045317,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 3,
+      "mib_s": 88.26103541269005
+    },
+    {
+      "seconds": 0.135056,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 3,
+      "mib_s": 29.602995304089134
+    },
+    {
+      "seconds": 0.07704,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 3,
+      "mib_s": 51.91890126324393
+    },
+    {
+      "seconds": 0.103147,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 3,
+      "mib_s": 38.77605542635753
+    },
+    {
+      "seconds": 0.103572,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 3,
+      "mib_s": 38.61708809187389
+    },
+    {
+      "seconds": 0.095242,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 3,
+      "mib_s": 41.99459322411922
+    },
+    {
+      "seconds": 0.071965,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 3,
+      "mib_s": 55.5787583102463
+    },
+    {
+      "seconds": 0.073458,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 3,
+      "mib_s": 54.45059970759227
+    },
+    {
+      "seconds": 0.05699,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 3,
+      "mib_s": 65.8015197443322
+    },
+    {
+      "seconds": 0.148164,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 3,
+      "mib_s": 26.98403211164023
+    },
+    {
+      "seconds": 0.100339,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 3,
+      "mib_s": 39.86120839416877
+    },
+    {
+      "seconds": 0.058848,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 3,
+      "mib_s": 63.723977199386425
+    },
+    {
+      "seconds": 0.091541,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 3,
+      "mib_s": 43.69243342165328
+    },
+    {
+      "seconds": 0.060598,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 3,
+      "mib_s": 61.883702601232585
+    },
+    {
+      "seconds": 0.079846,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 3,
+      "mib_s": 50.0721655911262
+    },
+    {
+      "seconds": 0.040103,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 4,
+      "mib_s": 99.73402960034161
+    },
+    {
+      "seconds": 0.061654,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 4,
+      "mib_s": 60.823768291262404
+    },
+    {
+      "seconds": 0.095426,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 4,
+      "mib_s": 41.913619431303445
+    },
+    {
+      "seconds": 0.03139,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 4,
+      "mib_s": 119.46570915035018
+    },
+    {
+      "seconds": 0.081656,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 4,
+      "mib_s": 48.96225793314713
+    },
+    {
+      "seconds": 0.058139,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 4,
+      "mib_s": 64.50108550593391
+    },
+    {
+      "seconds": 0.044146,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 4,
+      "mib_s": 90.60221405782801
+    },
+    {
+      "seconds": 0.094757,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 4,
+      "mib_s": 42.20953647594967
+    },
+    {
+      "seconds": 0.104609,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 4,
+      "mib_s": 38.23427284317375
+    },
+    {
+      "seconds": 0.13371,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 4,
+      "mib_s": 29.900995690592048
+    },
+    {
+      "seconds": 0.069554,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 4,
+      "mib_s": 57.50532452190923
+    },
+    {
+      "seconds": 0.090082,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 4,
+      "mib_s": 44.40093849822245
+    },
+    {
+      "seconds": 0.10107,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 4,
+      "mib_s": 39.57290777740675
+    },
+    {
+      "seconds": 0.070182,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 4,
+      "mib_s": 56.99227940668993
+    },
+    {
+      "seconds": 0.054519,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 4,
+      "mib_s": 73.36248001341849
+    },
+    {
+      "seconds": 0.07473,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 4,
+      "mib_s": 53.52378098916516
+    },
+    {
+      "seconds": 0.099645,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 4,
+      "mib_s": 40.138830739751114
+    },
+    {
+      "seconds": 0.100594,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 4,
+      "mib_s": 39.76016252522516
+    },
+    {
+      "seconds": 0.131672,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 4,
+      "mib_s": 30.363798938187784
+    },
+    {
+      "seconds": 0.149594,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 4,
+      "mib_s": 26.726086165147414
+    },
+    {
+      "seconds": 0.072679,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 4,
+      "mib_s": 55.0342210723911
+    },
+    {
+      "seconds": 0.059124,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 4,
+      "mib_s": 63.426503792529125
+    },
+    {
+      "seconds": 0.072205,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 4,
+      "mib_s": 55.3940217685323
+    },
+    {
+      "seconds": 0.042476,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 4,
+      "mib_s": 94.16687431303119
+    },
+    {
+      "seconds": 0.03969,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 5,
+      "mib_s": 100.77182638101536
+    },
+    {
+      "seconds": 0.073396,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 5,
+      "mib_s": 54.49659590877312
+    },
+    {
+      "seconds": 0.061185,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 5,
+      "mib_s": 61.28999934999578
+    },
+    {
+      "seconds": 0.136145,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 5,
+      "mib_s": 29.36620613161749
+    },
+    {
+      "seconds": 0.13634,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 5,
+      "mib_s": 29.32420517668375
+    },
+    {
+      "seconds": 0.060264,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 5,
+      "mib_s": 62.226679447588815
+    },
+    {
+      "seconds": 0.093699,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 5,
+      "mib_s": 42.686144439658506
+    },
+    {
+      "seconds": 0.082565,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 5,
+      "mib_s": 48.42320757935036
+    },
+    {
+      "seconds": 0.106606,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 5,
+      "mib_s": 37.51790508097574
+    },
+    {
+      "seconds": 0.100975,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 5,
+      "mib_s": 39.61013903503343
+    },
+    {
+      "seconds": 0.030558,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 5,
+      "mib_s": 122.71839159072886
+    },
+    {
+      "seconds": 0.094131,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 5,
+      "mib_s": 42.49024283022131
+    },
+    {
+      "seconds": 0.09374,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 5,
+      "mib_s": 42.66828826324808
+    },
+    {
+      "seconds": 0.07177,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 5,
+      "mib_s": 55.72976650128013
+    },
+    {
+      "seconds": 0.102362,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 5,
+      "mib_s": 39.07357269154142
+    },
+    {
+      "seconds": 0.042222,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 5,
+      "mib_s": 94.73336538582521
+    },
+    {
+      "seconds": 0.151892,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 5,
+      "mib_s": 26.32174264470191
+    },
+    {
+      "seconds": 0.046239,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 5,
+      "mib_s": 86.50112117037295
+    },
+    {
+      "seconds": 0.055733,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 5,
+      "mib_s": 71.76446715324067
+    },
+    {
+      "seconds": 0.072624,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 5,
+      "mib_s": 55.07589988599241
+    },
+    {
+      "seconds": 0.076433,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 5,
+      "mib_s": 52.3312201970394
+    },
+    {
+      "seconds": 0.073006,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 5,
+      "mib_s": 54.78625512693306
+    },
+    {
+      "seconds": 0.102848,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 5,
+      "mib_s": 38.88878528568859
+    },
+    {
+      "seconds": 0.062326,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 5,
+      "mib_s": 60.167965379287814
+    },
+    {
+      "seconds": 0.092136,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 6,
+      "mib_s": 43.411102520153634
+    },
+    {
+      "seconds": 0.071104,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 6,
+      "mib_s": 56.251762795298085
+    },
+    {
+      "seconds": 0.102323,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 6,
+      "mib_s": 39.088465426654444
+    },
+    {
+      "seconds": 0.062727,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 6,
+      "mib_s": 59.78332472825883
+    },
+    {
+      "seconds": 0.097402,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 6,
+      "mib_s": 41.06331541294391
+    },
+    {
+      "seconds": 0.058667,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 6,
+      "mib_s": 63.92057903471274
+    },
+    {
+      "seconds": 0.072418,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 6,
+      "mib_s": 55.23109367556236
+    },
+    {
+      "seconds": 0.041907,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 6,
+      "mib_s": 95.44544236810825
+    },
+    {
+      "seconds": 0.0789,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 6,
+      "mib_s": 50.694957583273926
+    },
+    {
+      "seconds": 0.055717,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 6,
+      "mib_s": 71.78507543212237
+    },
+    {
+      "seconds": 0.101876,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 6,
+      "mib_s": 39.25982359989105
+    },
+    {
+      "seconds": 0.057191,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 6,
+      "mib_s": 65.5702577368728
+    },
+    {
+      "seconds": 0.135865,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 6,
+      "mib_s": 29.42672604268253
+    },
+    {
+      "seconds": 0.093651,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 6,
+      "mib_s": 42.7080228492121
+    },
+    {
+      "seconds": 0.073643,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 6,
+      "mib_s": 54.313813306360586
+    },
+    {
+      "seconds": 0.134604,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 6,
+      "mib_s": 29.702402111297307
+    },
+    {
+      "seconds": 0.045808,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 6,
+      "mib_s": 87.31499610978159
+    },
+    {
+      "seconds": 0.105545,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 6,
+      "mib_s": 37.89505698102705
+    },
+    {
+      "seconds": 0.10249,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 6,
+      "mib_s": 39.02462473473022
+    },
+    {
+      "seconds": 0.032283,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 6,
+      "mib_s": 116.1610943911499
+    },
+    {
+      "seconds": 0.152907,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 6,
+      "mib_s": 26.14701834310439
+    },
+    {
+      "seconds": 0.040921,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 6,
+      "mib_s": 97.74037264637961
+    },
+    {
+      "seconds": 0.082999,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 6,
+      "mib_s": 48.170003660153284
+    },
+    {
+      "seconds": 0.072521,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 6,
+      "mib_s": 55.15412298948322
+    },
+    {
+      "seconds": 0.05558,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 7,
+      "mib_s": 71.96201957271613
+    },
+    {
+      "seconds": 0.032062,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 7,
+      "mib_s": 116.96178061972093
+    },
+    {
+      "seconds": 0.135232,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 7,
+      "mib_s": 29.564467979391438
+    },
+    {
+      "seconds": 0.04014,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 7,
+      "mib_s": 99.6420973857125
+    },
+    {
+      "seconds": 0.081785,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 7,
+      "mib_s": 48.88502945269992
+    },
+    {
+      "seconds": 0.093458,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 7,
+      "mib_s": 42.797035479005274
+    },
+    {
+      "seconds": 0.135608,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 7,
+      "mib_s": 29.482494644778054
+    },
+    {
+      "seconds": 0.072148,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 7,
+      "mib_s": 55.43926586073505
+    },
+    {
+      "seconds": 0.072131,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 7,
+      "mib_s": 55.4508511152885
+    },
+    {
+      "seconds": 0.103463,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 7,
+      "mib_s": 38.657771839706584
+    },
+    {
+      "seconds": 0.061782,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 7,
+      "mib_s": 60.697753556529285
+    },
+    {
+      "seconds": 0.058997,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 7,
+      "mib_s": 63.563038971973015
+    },
+    {
+      "seconds": 0.150182,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 7,
+      "mib_s": 26.621446869725148
+    },
+    {
+      "seconds": 0.092761,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 7,
+      "mib_s": 43.1177870856455
+    },
+    {
+      "seconds": 0.076932,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 7,
+      "mib_s": 51.99178694587834
+    },
+    {
+      "seconds": 0.071954,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 7,
+      "mib_s": 55.58873937960797
+    },
+    {
+      "seconds": 0.102136,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 7,
+      "mib_s": 39.15988279414212
+    },
+    {
+      "seconds": 0.044889,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 7,
+      "mib_s": 89.10257171683207
+    },
+    {
+      "seconds": 0.041384,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 7,
+      "mib_s": 96.65165651750225
+    },
+    {
+      "seconds": 0.058143,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 7,
+      "mib_s": 64.49664809572076
+    },
+    {
+      "seconds": 0.073823,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 7,
+      "mib_s": 54.179935003953716
+    },
+    {
+      "seconds": 0.103578,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 7,
+      "mib_s": 38.61470378905269
+    },
+    {
+      "seconds": 0.095455,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 7,
+      "mib_s": 41.900885735179536
+    },
+    {
+      "seconds": 0.10317,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 7,
+      "mib_s": 38.767410963094896
+    },
+    {
+      "seconds": 0.105352,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 8,
+      "mib_s": 37.96447897583814
+    },
+    {
+      "seconds": 0.095097,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 8,
+      "mib_s": 42.05862485516433
+    },
+    {
+      "seconds": 0.103972,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 8,
+      "mib_s": 38.46852083110417
+    },
+    {
+      "seconds": 0.151969,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 8,
+      "mib_s": 26.30840588402281
+    },
+    {
+      "seconds": 0.135089,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 8,
+      "mib_s": 29.595763783794855
+    },
+    {
+      "seconds": 0.059658,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 8,
+      "mib_s": 62.85877183662697
+    },
+    {
+      "seconds": 0.04058,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 8,
+      "mib_s": 98.56170007546821
+    },
+    {
+      "seconds": 0.102829,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 8,
+      "mib_s": 38.89597087458304
+    },
+    {
+      "seconds": 0.073026,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 8,
+      "mib_s": 54.772713188731586
+    },
+    {
+      "seconds": 0.094205,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 8,
+      "mib_s": 42.456865854801364
+    },
+    {
+      "seconds": 0.093164,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 8,
+      "mib_s": 42.93209117037563
+    },
+    {
+      "seconds": 0.073771,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 8,
+      "mib_s": 54.21812557504812
+    },
+    {
+      "seconds": 0.061379,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 8,
+      "mib_s": 61.096280653472554
+    },
+    {
+      "seconds": 0.045762,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 8,
+      "mib_s": 87.40276521561285
+    },
+    {
+      "seconds": 0.057535,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 8,
+      "mib_s": 65.17821517736147
+    },
+    {
+      "seconds": 0.071583,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 8,
+      "mib_s": 55.87535227354086
+    },
+    {
+      "seconds": 0.134537,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 8,
+      "mib_s": 29.717194034273568
+    },
+    {
+      "seconds": 0.055735,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 8,
+      "mib_s": 71.76189195032856
+    },
+    {
+      "seconds": 0.073429,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 8,
+      "mib_s": 54.472104390912484
+    },
+    {
+      "seconds": 0.075943,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 8,
+      "mib_s": 52.66887209249454
+    },
+    {
+      "seconds": 0.041251,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 8,
+      "mib_s": 96.96327733437522
+    },
+    {
+      "seconds": 0.080656,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 8,
+      "mib_s": 49.56930834394294
+    },
+    {
+      "seconds": 0.030642,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 8,
+      "mib_s": 122.38197931693402
+    },
+    {
+      "seconds": 0.099574,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 8,
+      "mib_s": 40.167451232877056
+    },
+    {
+      "seconds": 0.091348,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "ascii",
+      "repeat": 9,
+      "mib_s": 43.78474676896662
+    },
+    {
+      "seconds": 0.133395,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "depth64",
+      "repeat": 9,
+      "mib_s": 29.971604136504833
+    },
+    {
+      "seconds": 0.075693,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "unicode",
+      "repeat": 9,
+      "mib_s": 52.84282765011709
+    },
+    {
+      "seconds": 0.072083,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "unicode",
+      "repeat": 9,
+      "mib_s": 55.4892575686405
+    },
+    {
+      "seconds": 0.072543,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "escaped",
+      "repeat": 9,
+      "mib_s": 55.135924097388795
+    },
+    {
+      "seconds": 0.100051,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "numbers",
+      "repeat": 9,
+      "mib_s": 39.975950156045414
+    },
+    {
+      "seconds": 0.061326,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A2",
+      "workload": "long-string",
+      "repeat": 9,
+      "mib_s": 61.14908212225634
+    },
+    {
+      "seconds": 0.079692,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "depth64",
+      "repeat": 9,
+      "mib_s": 50.168927041472955
+    },
+    {
+      "seconds": 0.134204,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "depth64",
+      "repeat": 9,
+      "mib_s": 29.79093122253482
+    },
+    {
+      "seconds": 0.031253,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1687552,
+      "variant": "A3",
+      "workload": "long-string",
+      "repeat": 9,
+      "mib_s": 119.9893965452754
+    },
+    {
+      "seconds": 0.073161,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "unicode",
+      "repeat": 9,
+      "mib_s": 54.671644090708334
+    },
+    {
+      "seconds": 0.103582,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A0",
+      "workload": "numbers",
+      "repeat": 9,
+      "mib_s": 38.61321261476415
+    },
+    {
+      "seconds": 0.039949,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "numbers",
+      "repeat": 9,
+      "mib_s": 100.11849580871862
+    },
+    {
+      "seconds": 0.103793,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "ascii",
+      "repeat": 9,
+      "mib_s": 38.534863120360356
+    },
+    {
+      "seconds": 0.070558,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "escaped",
+      "repeat": 9,
+      "mib_s": 56.687056631379505
+    },
+    {
+      "seconds": 0.149927,
+      "status": 0,
+      "value": 262017,
+      "iterations": 16,
+      "checksum": 4454289,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "depth64",
+      "repeat": 9,
+      "mib_s": 26.66672536493802
+    },
+    {
+      "seconds": 0.045544,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "escaped",
+      "repeat": 9,
+      "mib_s": 87.82112554445975
+    },
+    {
+      "seconds": 0.059727,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A1",
+      "workload": "long-string",
+      "repeat": 9,
+      "mib_s": 62.786153837117084
+    },
+    {
+      "seconds": 0.05538,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "ascii",
+      "repeat": 9,
+      "mib_s": 72.22190407821529
+    },
+    {
+      "seconds": 0.10349,
+      "status": 0,
+      "value": 262120,
+      "iterations": 16,
+      "checksum": 4456040,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "numbers",
+      "repeat": 9,
+      "mib_s": 38.64753878696009
+    },
+    {
+      "seconds": 0.093004,
+      "status": 0,
+      "value": 262126,
+      "iterations": 16,
+      "checksum": 4456142,
+      "state_bytes": 184,
+      "max_rss_bytes": 1638400,
+      "variant": "A2",
+      "workload": "escaped",
+      "repeat": 9,
+      "mib_s": 43.00594965589517
+    },
+    {
+      "seconds": 0.093558,
+      "status": 0,
+      "value": 262121,
+      "iterations": 16,
+      "checksum": 4456057,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A1",
+      "workload": "ascii",
+      "repeat": 9,
+      "mib_s": 42.750476152243124
+    },
+    {
+      "seconds": 0.058512,
+      "status": 0,
+      "value": 262146,
+      "iterations": 15,
+      "checksum": 4194336,
+      "state_bytes": 184,
+      "max_rss_bytes": 1654784,
+      "variant": "A0",
+      "workload": "long-string",
+      "repeat": 9,
+      "mib_s": 64.08990651882506
+    },
+    {
+      "seconds": 0.042707,
+      "status": 0,
+      "value": 262133,
+      "iterations": 16,
+      "checksum": 4456261,
+      "state_bytes": 184,
+      "max_rss_bytes": 1671168,
+      "variant": "A3",
+      "workload": "unicode",
+      "repeat": 9,
+      "mib_s": 93.65753045918262
+    }
+  ],
+  "summary": [
+    {
+      "variant": "A0",
+      "workload": "ascii",
+      "median_mib_s": 42.88359003241694,
+      "min_mib_s": 42.05862485516433,
+      "max_mib_s": 44.017972440697775
+    },
+    {
+      "variant": "A1",
+      "workload": "ascii",
+      "median_mib_s": 42.38611938450797,
+      "min_mib_s": 41.06331541294391,
+      "max_mib_s": 43.253477320769576
+    },
+    {
+      "variant": "A2",
+      "workload": "ascii",
+      "median_mib_s": 38.63742996579023,
+      "min_mib_s": 37.64481865701208,
+      "max_mib_s": 39.34726067733952
+    },
+    {
+      "variant": "A3",
+      "workload": "ascii",
+      "median_mib_s": 71.77477129268152,
+      "min_mib_s": 70.39528746416676,
+      "max_mib_s": 73.36248001341849
+    },
+    {
+      "variant": "A0",
+      "workload": "unicode",
+      "median_mib_s": 55.59357085135764,
+      "min_mib_s": 54.772713188731586,
+      "max_mib_s": 56.99227940668993
+    },
+    {
+      "variant": "A1",
+      "workload": "unicode",
+      "median_mib_s": 54.64812506977452,
+      "min_mib_s": 54.313813306360586,
+      "max_mib_s": 55.58873937960797
+    },
+    {
+      "variant": "A2",
+      "workload": "unicode",
+      "median_mib_s": 52.40296416889329,
+      "min_mib_s": 50.694957583273926,
+      "max_mib_s": 53.52378098916516
+    },
+    {
+      "variant": "A3",
+      "workload": "unicode",
+      "median_mib_s": 95.2018550490215,
+      "min_mib_s": 93.65753045918262,
+      "max_mib_s": 96.96327733437522
+    },
+    {
+      "variant": "A0",
+      "workload": "escaped",
+      "median_mib_s": 55.18350888647558,
+      "min_mib_s": 54.179935003953716,
+      "max_mib_s": 55.83011602011244
+    },
+    {
+      "variant": "A1",
+      "workload": "escaped",
+      "median_mib_s": 56.06355753441947,
+      "min_mib_s": 55.4508511152885,
+      "max_mib_s": 58.304184221758796
+    },
+    {
+      "variant": "A2",
+      "workload": "escaped",
+      "median_mib_s": 43.28719126329742,
+      "min_mib_s": 42.66828826324808,
+      "max_mib_s": 44.40093849822245
+    },
+    {
+      "variant": "A3",
+      "workload": "escaped",
+      "median_mib_s": 88.23184019511909,
+      "min_mib_s": 86.50112117037295,
+      "max_mib_s": 90.60221405782801
+    },
+    {
+      "variant": "A0",
+      "workload": "numbers",
+      "median_mib_s": 38.96029780465663,
+      "min_mib_s": 38.61321261476415,
+      "max_mib_s": 39.85167630563554
+    },
+    {
+      "variant": "A1",
+      "workload": "numbers",
+      "median_mib_s": 39.53374475903014,
+      "min_mib_s": 37.955472152960326,
+      "max_mib_s": 40.167451232877056
+    },
+    {
+      "variant": "A2",
+      "workload": "numbers",
+      "median_mib_s": 38.564199181123236,
+      "min_mib_s": 36.94231657903609,
+      "max_mib_s": 39.76016252522516
+    },
+    {
+      "variant": "A3",
+      "workload": "numbers",
+      "median_mib_s": 99.69923663693665,
+      "min_mib_s": 97.74037264637961,
+      "max_mib_s": 100.77182638101536
+    },
+    {
+      "variant": "A0",
+      "workload": "long-string",
+      "median_mib_s": 64.49886680082733,
+      "min_mib_s": 62.226679447588815,
+      "max_mib_s": 65.8015197443322
+    },
+    {
+      "variant": "A1",
+      "workload": "long-string",
+      "median_mib_s": 63.49477138225107,
+      "min_mib_s": 61.28999934999578,
+      "max_mib_s": 64.64897786831521
+    },
+    {
+      "variant": "A2",
+      "workload": "long-string",
+      "median_mib_s": 60.9376445180385,
+      "min_mib_s": 59.78332472825883,
+      "max_mib_s": 62.568259117869225
+    },
+    {
+      "variant": "A3",
+      "workload": "long-string",
+      "median_mib_s": 118.50520529813988,
+      "min_mib_s": 115.68092698983533,
+      "max_mib_s": 122.71839159072886
+    },
+    {
+      "variant": "A0",
+      "workload": "depth64",
+      "median_mib_s": 29.763890198384004,
+      "min_mib_s": 29.36620613161749,
+      "max_mib_s": 30.363798938187784
+    },
+    {
+      "variant": "A1",
+      "workload": "depth64",
+      "median_mib_s": 29.754062628404192,
+      "min_mib_s": 29.32420517668375,
+      "max_mib_s": 30.280549962805505
+    },
+    {
+      "variant": "A2",
+      "workload": "depth64",
+      "median_mib_s": 26.644086117331582,
+      "min_mib_s": 26.14701834310439,
+      "max_mib_s": 26.98403211164023
+    },
+    {
+      "variant": "A3",
+      "workload": "depth64",
+      "median_mib_s": 49.327549260252034,
+      "min_mib_s": 48.170003660153284,
+      "max_mib_s": 50.4398230443715
+    }
+  ],
+  "evidence": {
+    "A0/module.semantic.txt": "b6398248702e2628e6fb2aa4d337c963d8da9476e77b52c2ba3edd3ecfeb61af",
+    "A0/counted": "a90954be3935cc3e47929e25dd00568351640f6408bae2c5371286f5158a54b9",
+    "A0/module.su": "dd6fb1224ed653fa1960fa1bbab4a14c005e33eedd23df8fe33709f1b40db8e3",
+    "A0/module.ll": "e578534c880001a77ab38dad18226deeae3a09cdb9d8caa4fdc5490512b4e002",
+    "A0/optimized.ll": "7b77981a65a265e59ab27957057bee60f1c125037ee69116e7ad79c13fabd719",
+    "A0/module.o": "8ddfb1ee73ca3929d90c60aaa56aa2630c991dfd2b00c886f470417638f938bf",
+    "A0/module.s": "cbf955ed65e990cdbc075b977ea18c5e4dcbfb42dfb8e12ed4d795e93e70c89a",
+    "A0/module.target.json": "458e1c544c0de41e100d729ddb2140bb9ba63a05f29830f1a8bdd5b06db5c461",
+    "A0/probe": "a36100fb54aaf935b761f5609dc7439f5cc41b122b9599e6dd625ece4f95a41b",
+    "A0/counted.ll": "0fc947d1275ef84a46d9b8e3e0abe34ac3a4743a0d0f985fa6632a23814922ee",
+    "A1/module.semantic.txt": "b6398248702e2628e6fb2aa4d337c963d8da9476e77b52c2ba3edd3ecfeb61af",
+    "A1/counted": "89202e6c0a7a5faeddd07c79fc2cf531e0ef34f039a7da8f3767cde81035f47f",
+    "A1/module.su": "07c425775f7cb860a590beb5e328675f2c309e9b3f19a153ec5d4f4daa24162c",
+    "A1/module.ll": "d006727bccf9567911557e844b71e2c9da9f2c9460f0214b10ac9de9d88f67a2",
+    "A1/optimized.ll": "8bdecae4cafd5c7cfdf02a158df7a291fe1c8d7b40c075c2212652cb0f06cc94",
+    "A1/module.o": "440db860145cd9beb2a8dc51b2c4e911622b10f5a640f334557b9b61609e1ffd",
+    "A1/module.s": "eb8a7c65f4d6912ea01f43536d62295d5f444203a335fb655c8884333aee240e",
+    "A1/module.target.json": "458e1c544c0de41e100d729ddb2140bb9ba63a05f29830f1a8bdd5b06db5c461",
+    "A1/probe": "8fbdd1be56140014741a4c70cba31bcf63f2dafe81f4eee3a9171a05047997cb",
+    "A1/counted.ll": "e01b350ecb633a1987821872b31b9c6d4a43478dcfc41b64fe1455a2c24595e7",
+    "A2/module.semantic.txt": "b6398248702e2628e6fb2aa4d337c963d8da9476e77b52c2ba3edd3ecfeb61af",
+    "A2/counted": "2692e4aabe940a1655f53746746b0a19c0b10830a911a76a548d0816d876c771",
+    "A2/module.su": "d1459a86ffa3f8da721755c57bd238f3f1a9ba273673ededb0bd02094ff1585e",
+    "A2/module.ll": "8e182fb65d8e83736002c707993a7f113ca2a8cb63bfb46cc2d6c4a99b092b33",
+    "A2/optimized.ll": "d7b7ba0c1eb049d592fcf64c516c68318ae2a77e27323e93010ce50493161217",
+    "A2/module.o": "7438e8ee705115239d8636c559688d97b640771a6e0c1eaec8ddb4cc8e417c0d",
+    "A2/module.s": "c04b4846fc34873babdfd22e946be853ec7bf96991522c29ea779d945eaaca88",
+    "A2/module.target.json": "458e1c544c0de41e100d729ddb2140bb9ba63a05f29830f1a8bdd5b06db5c461",
+    "A2/probe": "f79d585450ba914f3fee23aca83cf8f518c32068bf9515654e6c6dc45ada6c2f",
+    "A2/counted.ll": "ce75b41d24f3945b84af03454fbb9fca216ea86badfedbe409c7630533aef9ee",
+    "A3/module.semantic.txt": "b6398248702e2628e6fb2aa4d337c963d8da9476e77b52c2ba3edd3ecfeb61af",
+    "A3/counted": "a6942f5490fcb86c5ca5b1b565717f39376134e56da501f0f4886d3d4218d7a0",
+    "A3/module.su": "ca9dda43f75ab773c5d33725a05bfda1c54fb8da5aaa91efbc3846924a6e5378",
+    "A3/module.ll": "262186c6aedad5e42e8a59e6d9d2a669308c2096a815e0824505b8a4493b81d5",
+    "A3/optimized.ll": "ec551162e1e17bd9f178a17c6c92e780f9c53a49c4a40d40e99df9cc0d6a6c32",
+    "A3/module.o": "d32cd49cec69b2fcb2a6d0b51162ae12b1b90d27bb13601d49e6d46c556e6ca9",
+    "A3/module.s": "c088a649919fd2bc28890e7240c6b1a6853f835c142c71ed94131dcb31d77921",
+    "A3/module.target.json": "458e1c544c0de41e100d729ddb2140bb9ba63a05f29830f1a8bdd5b06db5c461",
+    "A3/probe": "51bab9fcf7af36b18efadffa452d2daf19873fccc76eed60c8ceb3be55717b0c",
+    "A3/counted.ll": "7525641b9889207448c6dbefe6258a5e667fbb5b31b53ede42d4ad0f38929412"
+  },
+  "hardware": "Apple M4\n17179869184\n"
+}

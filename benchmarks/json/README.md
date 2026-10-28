@@ -1,4 +1,12 @@
-# JSON Benchmark Baseline
+# JSON benchmarks
+
+**Performance results: [M0 + field forwarding](RESULTS.md), 183.8–329.6 MiB/s
+on Apple M4 (ASCII: 215.9 MiB/s).** All six workloads, Rust comparison and
+reproducible evidence are linked there.
+
+## Historical baseline harness
+
+The runner below reproduces the original A0 experiment, not current performance.
 
 Equivalent scalar streaming automata, pinned to Liza
 `b3206117a225f6f852cec5bef18928fe1bd43856` (before T2-B). This is an experimental
@@ -88,5 +96,5 @@ the report records their hashes and the runner reconstructs them from the pinned
 commit. Rebuilding on a different toolchain need not reproduce binary hashes or
 absolute timings. This is not a portable proof certificate.
 
-T2-B will be compared separately with this immutable baseline; the runner does
+Later M0 and field-forwarding results are reported separately; the runner does
 not silently substitute the current working tree for the pinned Liza source.
