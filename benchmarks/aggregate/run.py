@@ -100,7 +100,7 @@ def main():
         # Same independent expected outcomes/partitions as the baseline. Each
         # ablation's file driver is checked as well; timing below is core-only.
         cli=out/'liza-json'
-        run([sys.executable,'-m','liza','build','examples/apps/liza_json.liza','-O','2','--clang',clang,'-o',cli],cwd=snapshots['candidate'],env={**os.environ,'PYTHONPATH':str(snapshots['candidate'])})
+        run([sys.executable,'-m','liza','build','examples/apps/liza_json.liza','--project-root','examples','-O','2','--clang',clang,'-o',cli],cwd=snapshots['candidate'],env={**os.environ,'PYTHONPATH':str(snapshots['candidate'])})
         report['correctness']=base.correctness(exes,cli,out)
         print('A0/A1/A2/A3 agree on all partitioned cases and CLI probes',flush=True)
         paths={};manifest=[]

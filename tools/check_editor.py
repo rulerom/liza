@@ -10,7 +10,23 @@ GRAMMAR = ROOT / 'editors/tree-sitter-liza'
 CLI = GRAMMAR / 'node_modules/tree-sitter-cli/cli.js'
 
 
+def check_grammar_pin():
+    # Zed builds this revision, not the parser in the current worktree.
+    manifest = (ROOT/'editors/zed/extension.toml').read_text()
+    section = manifest.split('[grammars.liza]', 1)[1]
+    revision = re.search(r'^rev = "([0-9a-f]{40})"$', section, re.M).group(1)
+    for relative in ('grammar.js', 'src/parser.c', 'src/grammar.json', 'src/node-types.json'):
+        path = 'editors/tree-sitter-liza/' + relative
+        pinned = subprocess.run(['git', 'show', revision+':'+path], cwd=ROOT,
+                                capture_output=True, check=True).stdout
+        if pinned != (GRAMMAR/relative).read_bytes():
+            raise AssertionError('Zed grammar pin is stale for '+path+
+                                 '; commit the grammar and update extension.toml rev')
+    print('Zed pinned grammar matches the tested parser:', revision)
+
+
 def check():
+    check_grammar_pin()
     with tempfile.TemporaryDirectory(prefix='liza-editor-') as temp:
         env = dict(os.environ, XDG_CACHE_HOME=temp)
         def run(*args):

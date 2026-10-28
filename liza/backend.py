@@ -2,6 +2,7 @@
 from .types import is_vec, is_product, product_args
 from dataclasses import replace
 from .storage import owned_variant, caller_plan, direct_owned_variant
+from .field_forwarding import analyze as field_forwarding
 from .types import INTEGER_TYPES, width, signed, bounds, convert_integer, is_array, is_view, element_type, array_length, is_buffer
 
 
@@ -191,6 +192,7 @@ def llvm(module, target=None):
                 changed = True
     functions = list(module) + [replace(fn,name='__liza_owned_'+fn.name) for fn in module if fn.name in owned]
     for fn in functions:
+        forwarded_fields = field_forwarding(fn, structs, large).roots
         plan = owned_plans.get(fn.name) or caller_plan(fn, structs, large, owned)
         params = ', '.join((f'ptr %{p["name"]}'
                             if large(p["type"]) or p.get('mode') in ('mutable','readonly') and p['type'] in structs and structs[p['type']].properties['copyable'] else f'{types[p["type"]]} %{p["name"]}') for p in fn.params)
@@ -539,6 +541,8 @@ def llvm(module, target=None):
                         lines.append(f'  %{result} = insertvalue {ty} {aggregate}, {types[field_type]} {value}, {index}')
                         aggregate = f'%{result}'
                 elif op.op == 'struct.field':
+                    if name in forwarded_fields:
+                        args = [refs[forwarded_fields[name]]]
                     names = [field for field, _ in structs[op.source_type].fields]
                     index = names.index(op.field_name)
                     lines.append(f'  %{name} = extractvalue {types[op.source_type]} {args[0]}, {index}')
