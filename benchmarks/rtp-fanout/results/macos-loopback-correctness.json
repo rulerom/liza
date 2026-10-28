@@ -1,0 +1,331 @@
+{
+  "status": "measured",
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+  "command": [
+    "clang",
+    "-std=c11",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-pthread",
+    "/private/tmp/liza-network-benchmark/benchmarks/rtp-fanout/fanout.c",
+    "-o",
+    "/var/folders/gv/9t97l9_1193bb2mghgz6j90c0000gn/T/liza-rtp-b9bwagdn/fanout"
+  ],
+  "results": [
+    {
+      "workers": 1,
+      "receivers": 16,
+      "publishers": 1,
+      "input_sent": 50,
+      "fanout_expected": 800,
+      "fanout_observed": 800,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 50,
+        "sent": 800,
+        "errors": 0
+      },
+      "p50_ms": 0.3161255,
+      "p99_ms": 0.891708
+    },
+    {
+      "workers": 2,
+      "receivers": 16,
+      "publishers": 1,
+      "input_sent": 50,
+      "fanout_expected": 800,
+      "fanout_observed": 800,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 50,
+        "sent": 800,
+        "errors": 0
+      },
+      "p50_ms": 0.47039549999999997,
+      "p99_ms": 0.824292
+    },
+    {
+      "workers": 4,
+      "receivers": 16,
+      "publishers": 1,
+      "input_sent": 50,
+      "fanout_expected": 800,
+      "fanout_observed": 800,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 50,
+        "sent": 800,
+        "errors": 0
+      },
+      "p50_ms": 0.45875,
+      "p99_ms": 0.981458
+    },
+    {
+      "workers": 8,
+      "receivers": 16,
+      "publishers": 1,
+      "input_sent": 50,
+      "fanout_expected": 800,
+      "fanout_observed": 800,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 50,
+        "sent": 800,
+        "errors": 0
+      },
+      "p50_ms": 0.544709,
+      "p99_ms": 1.283375
+    },
+    {
+      "workers": 1,
+      "receivers": 64,
+      "publishers": 1,
+      "input_sent": 50,
+      "fanout_expected": 3200,
+      "fanout_observed": 3200,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 50,
+        "sent": 3200,
+        "errors": 0
+      },
+      "p50_ms": 0.5855005,
+      "p99_ms": 1.485458
+    },
+    {
+      "workers": 2,
+      "receivers": 64,
+      "publishers": 1,
+      "input_sent": 50,
+      "fanout_expected": 3200,
+      "fanout_observed": 3200,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 50,
+        "sent": 3200,
+        "errors": 0
+      },
+      "p50_ms": 0.749979,
+      "p99_ms": 1.831625
+    },
+    {
+      "workers": 4,
+      "receivers": 64,
+      "publishers": 1,
+      "input_sent": 50,
+      "fanout_expected": 3200,
+      "fanout_observed": 3200,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 50,
+        "sent": 3200,
+        "errors": 0
+      },
+      "p50_ms": 0.779521,
+      "p99_ms": 2.28225
+    },
+    {
+      "workers": 8,
+      "receivers": 64,
+      "publishers": 1,
+      "input_sent": 50,
+      "fanout_expected": 3200,
+      "fanout_observed": 3200,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 50,
+        "sent": 3200,
+        "errors": 0
+      },
+      "p50_ms": 0.8483745,
+      "p99_ms": 2.145833
+    },
+    {
+      "workers": 1,
+      "receivers": 16,
+      "publishers": 2,
+      "input_sent": 100,
+      "fanout_expected": 1600,
+      "fanout_observed": 1600,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 100,
+        "sent": 1600,
+        "errors": 0
+      },
+      "p50_ms": 0.4287085,
+      "p99_ms": 0.771167
+    },
+    {
+      "workers": 2,
+      "receivers": 16,
+      "publishers": 2,
+      "input_sent": 100,
+      "fanout_expected": 1600,
+      "fanout_observed": 1600,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 100,
+        "sent": 1600,
+        "errors": 0
+      },
+      "p50_ms": 0.416833,
+      "p99_ms": 0.851375
+    },
+    {
+      "workers": 4,
+      "receivers": 16,
+      "publishers": 2,
+      "input_sent": 100,
+      "fanout_expected": 1600,
+      "fanout_observed": 1600,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 100,
+        "sent": 1600,
+        "errors": 0
+      },
+      "p50_ms": 0.4981245,
+      "p99_ms": 1.252083
+    },
+    {
+      "workers": 8,
+      "receivers": 16,
+      "publishers": 2,
+      "input_sent": 100,
+      "fanout_expected": 1600,
+      "fanout_observed": 1600,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 100,
+        "sent": 1600,
+        "errors": 0
+      },
+      "p50_ms": 0.564021,
+      "p99_ms": 1.128541
+    },
+    {
+      "workers": 1,
+      "receivers": 64,
+      "publishers": 2,
+      "input_sent": 100,
+      "fanout_expected": 6400,
+      "fanout_observed": 6400,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 100,
+        "sent": 6400,
+        "errors": 0
+      },
+      "p50_ms": 0.9196875,
+      "p99_ms": 2.411
+    },
+    {
+      "workers": 2,
+      "receivers": 64,
+      "publishers": 2,
+      "input_sent": 100,
+      "fanout_expected": 6400,
+      "fanout_observed": 6400,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 100,
+        "sent": 6400,
+        "errors": 0
+      },
+      "p50_ms": 0.9724999999999999,
+      "p99_ms": 2.352
+    },
+    {
+      "workers": 4,
+      "receivers": 64,
+      "publishers": 2,
+      "input_sent": 100,
+      "fanout_expected": 6400,
+      "fanout_observed": 6400,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 100,
+        "sent": 6400,
+        "errors": 0
+      },
+      "p50_ms": 1.102271,
+      "p99_ms": 2.8475
+    },
+    {
+      "workers": 8,
+      "receivers": 64,
+      "publishers": 2,
+      "input_sent": 100,
+      "fanout_expected": 6400,
+      "fanout_observed": 6400,
+      "missing": 0,
+      "duplicates": 0,
+      "invalid": 0,
+      "reordered": 0,
+      "sender": {
+        "packets": 100,
+        "sent": 6400,
+        "errors": 0
+      },
+      "p50_ms": 1.145583,
+      "p99_ms": 3.485958
+    }
+  ],
+  "limits": [
+    "Loopback and shared Python collector; no NIC or isolated CPU measurement",
+    "Stop-and-wait one-packet-in-flight design; not Liza or VideoGrace",
+    "Packet is a synthetic framed payload, not parsed RTP",
+    "Loss can arise in generator, sender, OS, or collector; no attribution",
+    "Latency uses same-host monotonic clock; no CPU or syscall metrics",
+    "Fixed sequential case order, one run; not a comparative performance baseline"
+  ]
+}
