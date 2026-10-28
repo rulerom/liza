@@ -114,6 +114,7 @@ nav:
       - Разбор программы Vec: bounded-vec-walkthrough.md
       - CLI-приложение liza-text: cli.md
       - Запись файлов и liza-copy: file-output.md
+      - UDP: udp.md
       - TCP echo server: tcp.md
       - TCP message server: message-server.md
       - TCP reactor: reactor.md

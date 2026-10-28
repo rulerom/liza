@@ -1,5 +1,6 @@
 // Blocking loopback TCP. Handles are opaque linear resources.
 enum NetError { AddressInUse; PermissionDenied; Interrupted; WouldBlock; Disconnected; InvalidRange; Other }
+struct __liza_NetDatagram { handle:net.DatagramSocket; error:u32 }
 struct __liza_NetListener { handle:net.Listener; error:u32 }
 struct __liza_NetStream { handle:net.Stream; error:u32 }
 fn __liza_net_error(code:u32)->NetError {
@@ -147,3 +148,39 @@ fn net.reactor_shutdown_requested(reactor:net.Reactor)->Result<u32,ReactorError>
 fn net.reactor_stop_accepting(reactor:net.Reactor)->Result<u32,ReactorError>:io {
     return __liza_reactor_status(__liza_reactor_stop_accepting(reactor))
 }
+
+enum UdpError { AddressInUse; PermissionDenied; Interrupted; WouldBlock; Disconnected; InvalidRange; Other; Truncated }
+fn __liza_udp_error(code:u32)->UdpError {
+    if code==1 {return UdpError.AddressInUse}
+    if code==2 {return UdpError.PermissionDenied}
+    if code==3 {return UdpError.Interrupted}
+    if code==4 {return UdpError.WouldBlock}
+    if code==5 {return UdpError.Disconnected}
+    if code==6 {return UdpError.InvalidRange}
+    if code==8 {return UdpError.Truncated}
+    return UdpError.Other
+}
+// UDP datagrams: packed receive metadata is ipv4:32 | port:16 | length:16.
+fn net.udp_bind(address:net.Address)->Result<net.DatagramSocket,UdpError>:io {
+    raw=__liza_net_udp_bind(net.ipv4_bits(address),address.port)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_udp_error(raw.error))
+}
+fn net.udp_port(socket:net.DatagramSocket)->Result<u16,UdpError>:io {
+    raw=__liza_net_udp_port(socket)
+    if raw>>32==0 {return Ok(u16(raw))}
+    return Err(__liza_udp_error(u32(raw>>32)))
+}
+fn net.udp_close(socket:net.DatagramSocket)->Result<u32,UdpError>:io {
+    code=__liza_net_udp_close(socket)
+    if code==0 {return Ok(0)}
+    return Err(__liza_udp_error(code))
+}
+fn net.udp_send(socket:net.DatagramSocket,data:View<u8>,start:u32,count:u32,address:net.Address)->Result<u32,UdpError>:io {
+    raw=__liza_net_udp_send(socket,data,start,count,net.ipv4_bits(address),address.port)
+    if raw>>32==0 {return Ok(u32.wrap(raw))}
+    return Err(__liza_udp_error(u32(raw>>32)))
+}
+fn net.udp_length(meta:u64)->u32 {return u32.wrap(meta & 65535)}
+fn net.udp_source_ip(meta:u64)->u32 {return u32.wrap(meta >> 32)}
+fn net.udp_source_port(meta:u64)->u16 {return u16.wrap(meta >> 16)}

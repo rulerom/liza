@@ -25,7 +25,7 @@ def llvm(module, target=None):
     types['bool'] = 'i1'
     types['memory.Region'] = 'ptr'
     types['Arg'] = types['Path'] = 'i32'  # Opaque indices into immutable process arguments.
-    types['net.Listener'] = types['net.Stream'] = 'i64'
+    types['net.Listener'] = types['net.Stream'] = types['net.DatagramSocket'] = 'i64'
     types['net.Reactor'] = 'ptr'
     types['net.Connection'] = '[3 x i64]'
     types['File'] = 'i64'  # Private runtime token, never a source-level integer.
