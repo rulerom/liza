@@ -99,8 +99,8 @@ The [instrumented report](results/macos-nb1a.json.gz) records 64 recipients,
 1000 offered packets per sample, three shuffled repeats per variant at 5k, 10k
 and 20k input packets/s, and 0.5 seconds external drain before the stop marker.
 It records received, accepted, invalid, wrong SSRC and truncated counts, send
-attempt/success/failure, stop reason and collector unique output. Generator
-intervals are not yet retained; per-output latencies are conditional on receipt.
+attempt/success/failure, stop reason and collector unique output. This first instrumented report did not retain generator intervals; per-output
+latencies are conditional on receipt.
 
 All 18 processes stopped normally via the control marker. At 5k and 10k, each
 received 1000 inputs, reported 64000 successful local sends, and the collector
@@ -120,3 +120,12 @@ can still force termination after the deadline and records that fact; this is
 not a hard real-time guarantee. The old fixed-count pilot above is retained as a
 historical comparison, not an instrumented result. NB1-B still requires an
 independent generator/collector, CPU/RSS and socket-level loss metrics.
+
+A [follow-up series with generator intervals and send errors](results/macos-nb1a-intervals.json.gz)
+repeated the same configuration at commit `7b9b2b7`. All 18 runs stopped
+normally, with no generator send errors. At 5k and 10k each variant received
+1000 inputs and all 64000 successful outputs reached the collector. At 20k,
+Liza received 857–931 and C 930–937 of 1000 inputs; all corresponding reported
+successful sends were observed. Delivered-only p99 at 10k was 109.6–120.3 ms
+for Liza and 112.9–115.9 ms for C. Results remain short loopback samples, not
+isolated throughput limits or evidence that one implementation is faster.
