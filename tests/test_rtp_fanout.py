@@ -38,6 +38,8 @@ class FanoutNative(unittest.TestCase):
                             for data in inputs:sender.sendto(data,('127.0.0.1',port))
                         out,err=p.communicate(timeout=10)
                         self.assertEqual(p.returncode,0,out+err)
+                        metrics={k:int(v) for k,v in (line.split('=') for line in err.splitlines())}
+                        self.assertEqual(metrics,{'received':6,'accepted_valid':2,'invalid':2,'wrong_ssrc':1,'truncated':1,'send_attempted':4,'send_succeeded':4,'send_failed':0,'stop_reason':0})
                         for r in receivers:
                             self.assertEqual(r.recvfrom(4096)[0],good1)
                             self.assertEqual(r.recvfrom(4096)[0],good2)
@@ -46,6 +48,29 @@ class FanoutNative(unittest.TestCase):
                     finally:
                         if p.poll() is None:p.kill();p.communicate()
                         for r in receivers:r.close()
+    def test_control_stop_before_input_count(self):
+        with tempfile.TemporaryDirectory(prefix='liza-fanout-stop-') as tmp:
+            exe=Path(tmp)/('fanout.exe' if sys.platform=='win32' else 'fanout')
+            built=subprocess.run([sys.executable,'-m','liza','build',str(APP),'-O','2','-o',str(exe)],cwd=ROOT,text=True,capture_output=True,timeout=60)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as receiver:
+                receiver.bind(('127.0.0.1',0));receiver.settimeout(5)
+                p=subprocess.Popen([str(exe),'1000','42',str(receiver.getsockname()[1])],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                try:
+                    q=queue.Queue();threading.Thread(target=lambda:q.put(p.stdout.readline()),daemon=True).start()
+                    port=int(q.get(timeout=10).strip())
+                    with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sender:
+                        data=packet(42,5);sender.sendto(data,('127.0.0.1',port))
+                        self.assertEqual(receiver.recvfrom(2048)[0],data)
+                        sender.sendto(b'LZSTOP01',('127.0.0.1',port))
+                    out,err=p.communicate(timeout=5);self.assertEqual(p.returncode,0,out+err)
+                    metrics={k:int(v) for k,v in (line.split('=') for line in err.splitlines())}
+                    self.assertEqual(metrics['received'],1);self.assertEqual(metrics['accepted_valid'],1)
+                    self.assertEqual(metrics['send_attempted'],1);self.assertEqual(metrics['send_succeeded'],1)
+                    self.assertEqual(metrics['stop_reason'],1)
+                finally:
+                    if p.poll() is None:p.kill();p.communicate()
+
     def test_invalid_arguments_fail_before_binding(self):
         with tempfile.TemporaryDirectory(prefix='liza-fanout-') as tmp:
             exe=Path(tmp)/('fanout.exe' if sys.platform=='win32' else 'fanout')

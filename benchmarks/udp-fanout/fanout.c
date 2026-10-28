@@ -72,22 +72,31 @@ int main(int argc,char **argv) {
     if(getsockname(fd,(struct sockaddr *)&addr,&addrlen)<0){perror("getsockname");close(fd);return 1;}
     if(printf("%u\n",(unsigned)ntohs(addr.sin_port))<0 || fflush(stdout)!=0){close(fd);return 1;}
     unsigned errors=0;
+    uint64_t rx=0, valid=0, invalid=0, wrong=0, truncated=0, attempted=0, succeeded=0, failed=0, reason=0;
     for(uint32_t i=0;i<packets && !errors;i++) {
         uint8_t data[MAX_PACKET];struct iovec vec={data,sizeof(data)};struct msghdr msg;
         memset(&msg,0,sizeof(msg));msg.msg_iov=&vec;msg.msg_iovlen=1;
         ssize_t n=recvmsg(fd,&msg,0);
         if(n<0){perror("recvmsg");errors++;continue;}
+        if(msg.msg_flags&MSG_TRUNC){rx++;truncated++;continue;}
+        if(n==8 && memcmp(data,"LZSTOP01",8)==0){reason=1;break;}
+        rx++;
         struct rtp_header header;
-        if((msg.msg_flags&MSG_TRUNC) || !parse_rtp(data,(size_t)n,&header) || header.ssrc!=ssrc)continue;
+        if(!parse_rtp(data,(size_t)n,&header)){invalid++;continue;}
+        if(header.ssrc!=ssrc){wrong++;continue;}
+        valid++;
         for(unsigned j=0;j<count;j++) {
             if(!receivers[j].active || !receivers[j].known)continue;
             struct sockaddr_in destination;memset(&destination,0,sizeof(destination));
             destination.sin_family=AF_INET;destination.sin_addr.s_addr=htonl(receivers[j].ipv4);
             destination.sin_port=htons(receivers[j].port);
+            attempted++;
             ssize_t sent=sendto(fd,data,(size_t)n,0,(struct sockaddr *)&destination,sizeof(destination));
-            if(sent!=n)errors++;
+            if(sent!=n){errors++;failed++;} else succeeded++;
         }
     }
     if(close(fd)<0)errors++;
+    if(errors)reason=2;
+    if(fprintf(stderr,"received=%llu\naccepted_valid=%llu\ninvalid=%llu\nwrong_ssrc=%llu\ntruncated=%llu\nsend_attempted=%llu\nsend_succeeded=%llu\nsend_failed=%llu\nstop_reason=%llu\n",(unsigned long long)rx,(unsigned long long)valid,(unsigned long long)invalid,(unsigned long long)wrong,(unsigned long long)truncated,(unsigned long long)attempted,(unsigned long long)succeeded,(unsigned long long)failed,(unsigned long long)reason)<0)errors++;
     return errors?3:0;
 }

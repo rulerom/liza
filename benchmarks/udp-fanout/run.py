@@ -73,6 +73,15 @@ def run_case(binary, payloads, expected, receiver_count, interval, timeout=8, ss
         stop.set();thread.join(timeout=3)
         if thread.is_alive() or errors:raise RuntimeError('collector failure: '+repr(errors))
         if proc.returncode:raise RuntimeError(f'fanout failed: {proc.returncode}, {err}')
+        metrics={}
+        for line in err.splitlines():
+            if '=' in line:
+                key,value=line.split('=',1)
+                if value.isdigit():metrics[key]=int(value)
+        required=('received','accepted_valid','invalid','wrong_ssrc','truncated','send_attempted','send_succeeded','send_failed','stop_reason')
+        if any(k not in metrics for k in required):raise RuntimeError('missing counters '+err)
+        if metrics['received']!=len(payloads) or metrics['accepted_valid']!=len(expected) or metrics['received']!=sum(metrics[k] for k in ('accepted_valid','invalid','wrong_ssrc','truncated')) or metrics['send_attempted']!=len(expected)*receiver_count or metrics['send_succeeded']!=metrics['send_attempted'] or metrics['send_failed'] or metrics['stop_reason']!=0:
+            raise RuntimeError('incorrect counters '+repr(metrics))
         wanted={(i,payload) for i in range(receiver_count) for payload in expected}
         actual=[(i,data) for i,data,source,_ in received]
         # Data in each test case is deliberately unique, so duplicate observations are unambiguous.
@@ -86,7 +95,7 @@ def run_case(binary, payloads, expected, receiver_count, interval, timeout=8, ss
             durations.append((stamp-sent_times[mapping[data]])/1e6)
         elapsed=(time.perf_counter_ns()-start)/1e9
         return {'input_count':len(payloads),'valid_count':len(expected),'receiver_count':receiver_count,'output_received':len(actual),'elapsed_including_drain_s':elapsed,
-                'latencies_ms':durations,'duplicates':duplicates,'missing':len(missing),'unknown':len(unknown)}
+                'fanout_metrics':metrics,'latencies_ms':durations,'duplicates':duplicates,'missing':len(missing),'unknown':len(unknown)}
     finally:
         stop.set()
         if proc.poll() is None:proc.kill();proc.communicate()

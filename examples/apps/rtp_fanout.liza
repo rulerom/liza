@@ -48,11 +48,32 @@ fn setup(borrow mut table:rtp.receivers.Receivers)->Result<u32,u32>:io {
 fn parse_arg(index:u32,limit:u32)->Result<u32,u32>:io {
     match cli.arg(index) {None=>{return Err(1)} Some(arg)=>{return number(arg,limit)}}
 }
+// Benchmark-only loopback stop marker: not part of RTP or a secure control API.
+fn is_stop(data:View<u8>)->bool {
+    if data.len!=8 {return false}
+    return data[0]==76 && data[1]==90 && data[2]==83 && data[3]==84 && data[4]==79 && data[5]==80 && data[6]==48 && data[7]==49
+}
+fn metric(name:Text,value:u64)->bool:io {
+    match console.err(name) {Err(e)=>{return false} Ok(n)=>{}}
+    match console.err_u64(value) {Err(e)=>{return false} Ok(n)=>{}}
+    match console.err("\n") {Err(e)=>{return false} Ok(n)=>{}}
+    return true
+}
 fn main()->u32:io,alloc {
     var recipients=rtp.receivers.empty()
     var status:u32=0
     var count:u32=0
     var expected:u32=0
+    var rx:u64=0
+    var valid:u64=0
+    var invalid:u64=0
+    var wrong_ssrc:u64=0
+    var truncated:u64=0
+    var attempted:u64=0
+    var succeeded:u64=0
+    var failed:u64=0
+    var reason:u64=0
+    var stop=false
     match setup(borrow mut recipients) {Err(e)=>{return 2} Ok(done)=>{}}
     recipient_count=cli.count()-3
     match parse_arg(1,2147483647) {Err(e)=>{return 2} Ok(v)=>{count=v}}
@@ -75,14 +96,14 @@ fn main()->u32:io,alloc {
                                     printed=console.print_u64(u64(port))
                                     newline=console.write("\n")
                                     var received:u32=0
-                                    while received<count && status==0 {
+                                    while received<count && status==0 && !stop {
                                         (next,result)=net.udp_receive(socket,move buffer)
                                         buffer=move next
                                         received=received+1
                                         match result {
                                             Err(error)=>{
                                                 match error {
-                                                    UdpError.Truncated=>{}
+                                                    UdpError.Truncated=>{rx=rx+1;truncated=truncated+1}
                                                     UdpError.AddressInUse=>{status=3}
                                                     UdpError.PermissionDenied=>{status=3}
                                                     UdpError.Interrupted=>{status=3}
@@ -96,24 +117,32 @@ fn main()->u32:io,alloc {
                                                 {
                                                     bytes=memory.view(buffer)
                                                     packet=view bytes[0..net.udp_length(meta)]
+                                                    if is_stop(packet) {
+                                                        stop=true
+                                                        reason=1
+                                                    } else {
+                                                    rx=rx+1
                                                     match rtp.packet.parse(packet) {
-                                                        Err(error)=>{}
+                                                        Err(error)=>{invalid=invalid+1}
                                                         Ok(header)=>{
                                                             if header.ssrc==expected {
+                                                                valid=valid+1
                                                                 var slot:u32=0
                                                                 while slot<recipient_count {
                                                                     match rtp.receivers.destination(recipients,slot) {
                                                                         None=>{}
                                                                         Some(endpoint)=>{
                                                                             dest=net.ipv4(127,0,0,1,endpoint.port)
+                                                                            attempted=attempted+1
                                                                             sent=net.udp_send(socket,packet,0,net.udp_length(meta),dest)
-                                                                            match sent {Err(e)=>{status=3} Ok(n)=>{}}
+                                                                            match sent {Err(e)=>{failed=failed+1;status=3} Ok(n)=>{succeeded=succeeded+1}}
                                                                         }
                                                                     }
                                                                     slot=slot+1
                                                                 }
-                                                            }
+                                                            } else {wrong_ssrc=wrong_ssrc+1}
                                                         }
+                                                    }
                                                     }
                                                 }
                                             }
@@ -128,6 +157,16 @@ fn main()->u32:io,alloc {
                 }
             }
             closed=net.udp_close(move socket)
+            if status!=0 {reason=2}
+            if !metric("received=",rx) {status=3}
+            if !metric("accepted_valid=",valid) {status=3}
+            if !metric("invalid=",invalid) {status=3}
+            if !metric("wrong_ssrc=",wrong_ssrc) {status=3}
+            if !metric("truncated=",truncated) {status=3}
+            if !metric("send_attempted=",attempted) {status=3}
+            if !metric("send_succeeded=",succeeded) {status=3}
+            if !metric("send_failed=",failed) {status=3}
+            if !metric("stop_reason=",reason) {status=3}
             return status
         }
     }
