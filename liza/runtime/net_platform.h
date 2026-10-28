@@ -1,6 +1,6 @@
 #ifndef LIZA_NET_PLATFORM_H
 #define LIZA_NET_PLATFORM_H
-/* Private blocking TCP boundary. No application allocation or payload copies. */
+/* Private blocking TCP and UDP boundary. No application allocation or payload copies. */
 #include <stdint.h>
 #include <limits.h>
 #include <string.h>

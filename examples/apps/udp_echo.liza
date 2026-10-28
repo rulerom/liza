@@ -1,0 +1,65 @@
+fn main()->u32:io,alloc {
+    match net.udp_bind(net.ipv4(127,0,0,1,0)) {
+        Err(error)=>{return 1}
+        Ok(socket)=>{
+            var status:u32=0
+            match net.udp_port(socket) {
+                Err(error)=>{status=2}
+                Ok(port)=>{
+                    shown=console.print_u64(u64(port))
+                    newline=console.write("\n")
+                    match memory.create(4096) {
+                        Err(error)=>{status=3}
+                        Ok(region)=>{
+                            allocation=memory.alloc<u8>(region,8,0)
+                            match move allocation {
+                                Err(error)=>{status=4}
+                                Ok(input)=>{
+                                    var buffer=move input
+                                    var i:u32=0
+                                    while i<3 {
+                                        (next,result)=net.udp_receive(socket,move buffer)
+                                        buffer=move next
+                                        match result {
+                                            Err(error)=>{
+                                                match error {
+                                                    UdpError.Truncated=>{if i!=2 {status=5}}
+                                                    UdpError.AddressInUse=>{status=6}
+                                                    UdpError.PermissionDenied=>{status=6}
+                                                    UdpError.Interrupted=>{status=6}
+                                                    UdpError.WouldBlock=>{status=6}
+                                                    UdpError.Disconnected=>{status=6}
+                                                    UdpError.InvalidRange=>{status=6}
+                                                    UdpError.Other=>{status=6}
+                                                }
+                                            }
+                                            Ok(meta)=>{
+                                                if i==2 {status=7}
+                                                if net.udp_source_ip(meta)!=2130706433 {status=8}
+                                                if i==0 && net.udp_length(meta)!=0 {status=9}
+                                                if i==1 && net.udp_length(meta)!=8 {status=10}
+                                                ip=net.udp_source_ip(meta)
+                                                remote_port=net.udp_source_port(meta)
+                                                address=net.ipv4(u8.wrap(ip>>24),u8.wrap(ip>>16),u8.wrap(ip>>8),u8.wrap(ip),remote_port)
+                                                {
+                                                    bytes=memory.view(buffer)
+                                                    sent=net.udp_send(socket,bytes,0,net.udp_length(meta),address)
+                                                    match sent { Err(error)=>{status=11} Ok(count)=>{if count!=net.udp_length(meta) {status=12}} }
+                                                }
+                                            }
+                                        }
+                                        i=i+1
+                                    }
+                                    released=memory.release(move buffer)
+                                }
+                            }
+                            closed=memory.close(move region)
+                        }
+                    }
+                }
+            }
+            closed=net.udp_close(move socket)
+            return status
+        }
+    }
+}

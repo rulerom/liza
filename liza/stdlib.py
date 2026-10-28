@@ -28,7 +28,7 @@ def attach(program):
             fn.module = '__liza_framing'
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
             fn.module = '__liza_utf8_stream'
-        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_create_at','net.reactor_close')) or fn.name.text in ('net.accept','net.local_port','net.write','file.read_chunk', 'file.write_chunk', 'file.flush'):
+        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_create_at','net.reactor_close')) or fn.name.text in ('net.accept','net.local_port','net.write','net.udp_port','net.udp_send','file.read_chunk', 'file.write_chunk', 'file.flush'):
             fn.borrowed_params = [0]
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
@@ -81,6 +81,11 @@ def attach(program):
     ])
     from .types import product_type
     net_externals = [
+        ('__liza_net_udp_bind',['u32','u16'],'__liza_NetDatagram',[]),
+        ('__liza_net_udp_port',['net.DatagramSocket'],'u64',[0]),
+        ('__liza_net_udp_close',['net.DatagramSocket'],'u32',[]),
+        ('__liza_net_udp_send',['net.DatagramSocket','View<u8>','u32','u32','u32','u16'],'u64',[0]),
+        ('net.udp_receive',['net.DatagramSocket','memory.Buffer<u8>'],product_type('memory.Buffer<u8>','Result<u64,UdpError>'),[0]),
         ('__liza_net_listen',['u16'],'__liza_NetListener',[]),
         ('__liza_net_accept',['net.Listener'],'__liza_NetStream',[0]),
         ('__liza_net_port',['net.Listener'],'u64',[0]),
@@ -129,7 +134,7 @@ def link_flags(module):
     names = {fn.name.text for fn in module.externals}
     file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk','__liza_file_open_path','__liza_file_create_path','__liza_file_write','__liza_file_flush'}
     reactor_names = {n for n in names if n.startswith('__liza_reactor_') or n in ('net.reactor_read','net.connection_slot')}
-    net_names = reactor_names | {n for n in names if n.startswith('__liza_net_') or n=='net.read'}
+    net_names = reactor_names | {n for n in names if n.startswith('__liza_net_') or n in ('net.read','net.udp_receive')}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
     libraries = (['console'] if names-file_names-cli_names-net_names else []) + (['file'] if names & file_names else [])
     if net_names: libraries.append('net')
