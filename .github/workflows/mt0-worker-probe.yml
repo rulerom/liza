@@ -1,0 +1,21 @@
+name: MT0 native worker probe
+on:
+  pull_request:
+    paths:
+      - 'experiments/mt0_workers/**'
+      - '.github/workflows/mt0-worker-probe.yml'
+  workflow_dispatch:
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run native worker probe
+        run: python -m unittest discover -s experiments/mt0_workers -v
