@@ -35,13 +35,15 @@ def trial(exe,receivers,packets,rate,drain):
             except Exception as e:errors.append(repr(e))
         collector=threading.Thread(target=collect);collector.start()
         if not ready.wait(5):raise RuntimeError('collector startup timeout')
-        start=time.perf_counter_ns();sent=0
+        start=time.perf_counter_ns();sent=0;send_errors=[];successful_times=[]
         for i in range(packets):
             target=start+int(i*1e9/rate);delay=(target-time.perf_counter_ns())/1e9
             if delay>0:time.sleep(delay)
             data=baseline.packet(i);times[i]=time.perf_counter_ns()
-            if sender.sendto(data,('127.0.0.1',port))!=len(data):raise RuntimeError('short send')
-            sent+=1
+            try:
+                if sender.sendto(data,('127.0.0.1',port))!=len(data):raise OSError('short UDP send')
+                sent+=1;successful_times.append(times[i])
+            except OSError as e:send_errors.append({'sequence':i,'error':str(e)})
         offered_s=(time.perf_counter_ns()-start)/1e9
         # Drain time begins after the generator's last send. A benchmark-only
         # local control datagram requests clean termination; retries are bounded.
@@ -70,7 +72,7 @@ def trial(exe,receivers,packets,rate,drain):
         time.sleep(.2);done.set();collector.join(5)
         if collector.is_alive() or errors:raise RuntimeError('collector error '+repr(errors))
         values=sorted(latencies)
-        return {'requested_input_pps':rate,'input_sent':sent,'offered_duration_s':offered_s,'actual_offered_pps':sent/offered_s,
+        return {'requested_input_pps':rate,'offered_attempted':packets,'input_sent':sent,'offered_send_errors':send_errors,'offered_intervals_us':[(b-a)/1000 for a,b in zip(successful_times,successful_times[1:])],'offered_duration_s':offered_s,'actual_offered_pps':sent/offered_s,
                 'receivers':receivers,'expected_outputs':sent*receivers,'unique_outputs':len(seen),'missing_outputs':sent*receivers-len(seen),
                 'duplicate_outputs':duplicates,'invalid_outputs':invalid,'process_exited_normally':exited and p.returncode==0,
                 'process_returncode':p.returncode,'stderr':err[-1000:],'stop_requests':stop_sent,'forced':forced,'drain_seconds':drain,'fanout_metrics':metrics,
