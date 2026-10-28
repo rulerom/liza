@@ -5,7 +5,6 @@ pub struct Done {}
 pub enum Error {InvalidUtf8(Utf8Error);Full}
 pub struct Appended {pub text:String;pub status:Result<Done,Error>}
 pub struct Info {pub text:String;pub length:u32;pub capacity:u32}
-pub struct Byte {pub text:String;pub value:Option<u8>}
 
 // Takes an already allocated buffer; its old contents are not text.
 // The logical string starts empty, with exactly the supplied capacity.
@@ -37,25 +36,32 @@ pub fn clear(text:String)->String {
     return String(move storage,0)
 }
 
-// Until borrowed user parameters exist, even observations return the owner.
+// T1 consuming inspection remains available; T2 observations are below.
 pub fn inspect(text:String)->Info {
     (storage,length)=move text
     capacity=memory.len(storage)
     return Info(String(move storage,length),length,capacity)
 }
 
-// Byte index, not code-point index. Out-of-range access is an expected None.
-pub fn byte_at(text:String,index:u32)->Byte {
-    (storage,length)=move text
-    var value:Option<u8> = None
-    if index<length {
-        data=memory.view(storage)
-        value=Some(data[index])
-    }
-    return Byte(String(move storage,length),value)
+// Non-consuming observations. Borrow never exposes the private buffer as owned.
+pub fn length(borrow text:String)->u32 {return text.length}
+pub fn capacity(borrow text:String)->u32 {return memory.len(text.storage)}
+
+// Byte index, not code-point index. The local view never leaves this function.
+pub fn byte_at(borrow text:String,index:u32)->Option<u8> {
+    if index>=text.length {return None}
+    data=memory.view(text.storage)
+    return Some(data[index])
 }
 
 pub fn release(text:String)->u32 {
     (storage,length)=move text
     return memory.release(move storage)
+}
+
+// Local readonly descriptor: only the UTF-8 contents, never unused capacity.
+pub fn write(borrow text:String)->Result<u64,IoFailure>:io {
+    bytes=memory.view(text.storage)
+    prefix=view bytes[0..text.length]
+    return console.write_bytes(prefix)
 }

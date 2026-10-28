@@ -4,9 +4,9 @@
 
 [Документация](https://liza.rulerom.com/) · [Быстрый старт](https://liza.rulerom.com/getting-started.html)
 
-**Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций.**
+**Liza — системный язык для производительных сетевых сервисов с определённым поведением, контролируемыми ресурсами и математически проверяемыми свойствами.**
 
-*Liza — a systems programming language for portable computation with well-defined semantics and explicit control over execution costs.*
+*Liza — a systems programming language for high-performance network services with well-defined behavior, controlled resources, and mathematically verifiable properties.*
 
 Контролируемая стоимость — пока проектная цель, а не реализованная гарантия. Она означает возможность управлять аллокациями, копированием и другими затратами, а не одинаковую производительность на всех процессорах.
 
@@ -17,6 +17,15 @@
 Цель — лаконичный язык для сложных систем, включая HA-мессенджеры и ВКС,
 с нативной компиляцией, без универсальных указателей и обязательного GC.
 Это цель проекта, а не описание уже готовых возможностей.
+
+Следующий большой рубеж — **Liza Verified Network Gateway**: эксплуатационный
+L4-прокси с проверяемым ядром, bounded-ресурсами, управляемым завершением и
+измеренной производительностью. Проверки пока охватывают выбранные свойства
+и фрагменты; runtime, весь сервис и машинный код целиком не доказаны.
+[Приоритеты и критерии](https://liza.rulerom.com/network-gateway.html).
+
+Python остаётся основным языком реализации компилятора. Self-hosting отложен
+без планового срока. JSON и stdlib развиваются под потребности сетевых сервисов.
 
 ## Что работает сейчас
 
@@ -77,15 +86,15 @@ python3 -m unittest discover -s tests -v
 ## Границы прототипа
 
 Реализованы чтение и запись файлов, региональные буферы, `Vec<T>` с явным
-`reserve`, блокирующий TCP и ограниченный неблокирующий reactor на IPv4 loopback. Вызов `file.read` ограничен
+`reserve`, блокирующий TCP и ограниченный неблокирующий reactor на IPv4 (loopback по умолчанию). Вызов `file.read` ограничен
 2 КиБ; `file.read_chunk` позволяет читать файлы произвольного размера чанками.
 
-Пока нет пользовательских ресурсных типов, задач и многопоточности.
+Пользовательские ресурсные структуры поддерживаются; задач и многопоточности пока нет.
 Коллекции не растут автоматически: `push` не
 выделяет память, рост запрашивается через `vec.reserve`. Старое размещение
 остаётся занятым до закрытия региона. TCP echo обслуживает одного клиента
-за раз; новый `liza-reactor` — до восьми в одном потоке. Есть тайм-аут poll,
-но пока нет idle deadlines и управляемого завершения по сигналу.
+за раз; новый `liza-reactor` — до восьми в одном потоке. В `liza_proxy_ops.liza` есть connect/idle deadlines, ограниченный drain
+по уведомлению остановки и итоговые метрики; [контракт и ограничения](docs/tcp-proxy-operations.md).
 
 Нет обещания оптимального исполнения на любой архитектуре. Поддерживается
 нативная сборка для хоста на Linux, macOS и Windows. Параметр `--target`
@@ -171,7 +180,9 @@ python3 -m liza run examples/utf8_stream_file.liza
 [Ресурсные структуры](https://liza.rulerom.com/resource-structures.html) позволяют
 собрать String обычным модулем Liza поверх `memory.Buffer<u8>`. Append проверяет
 UTF-8 и вместимость до записи; ошибка сохраняет прежнюю строку. Память выделяется
-явно, автоматического роста нет. Срезы и StringBuilder остаются следующими этапами.
+явно, автоматического роста нет. [T2-A](https://liza.rulerom.com/readonly-access.html)
+добавляет readonly-параметры и непотребляющие length/capacity/byte_at.
+Subviews и StringBuilder остаются следующими этапами.
 
 ```sh
 python3 -m liza run examples/owned_string.liza
@@ -183,11 +194,13 @@ python3 -m liza run examples/owned_string.liza
 
 Потоковая проверка JSON на самой Liza: UTF-8, escapes и surrogate pairs,
 лексические числа, точные байтовые смещения ошибок. Стек ограничен 64 уровнями,
-память не зависит от размера файла; `format` и дерево объектов пока не реализованы.
+память не зависит от размера файла. `format` выводит JSON с отступами в stdout,
+сохраняя числа и строковые escapes; дерево объектов не строится.
 
 ```sh
-python3 -m liza build examples/apps/liza_json.liza -o build/liza-json
+python3 -m liza build examples/apps/liza_json.liza --project-root examples -o build/liza-json
 ./build/liza-json check config.json
+./build/liza-json format config.json > formatted.json
 ```
 
 [Контракт и ограничения](https://liza.rulerom.com/json.html).

@@ -48,3 +48,26 @@
   .liza-concepts { grid-template-columns: 1fr; }
   .liza-actions { flex-direction: column; align-items: stretch; text-align: center; }
 }
+
+/* Keep the supplied square artwork intact in both color schemes. */
+.liza-hero { display: flow-root; }
+.md-typeset .liza-hero-logo {
+  float: right;
+  width: clamp(8rem, 22vw, 13rem);
+  height: auto;
+  margin: 0 0 1rem 1.5rem;
+  border-radius: .6rem;
+}
+.md-header .md-logo img, .md-nav__title .md-logo img {
+  background: white;
+  border-radius: .15rem;
+}
+@media (max-width: 640px) {
+  .md-typeset .liza-hero-logo {
+    float: none;
+    display: block;
+    width: 10rem;
+    max-width: 100%;
+    margin: 0 auto 1.2rem;
+  }
+}

@@ -1,0 +1,146 @@
+// M0 mutable counterpart: same transition rules, explicit caller-owned state.
+// Return the sticky error code (0 on success); no rollback on error.
+fn __liza_json_mut_fail(code:u32,offset:u64,borrow mut n:JsonState)->u32 {
+    n.error=code;n.offset=offset;return n.error
+}
+fn __liza_json_mut_done(borrow mut n:JsonState)->u32 {
+    if n.depth==0 {n.root_done=true}
+    else {
+        slot=n.depth-1
+        if n.stack[slot]==1 || n.stack[slot]==3 {n.stack[slot]=2}
+        else {n.stack[slot]=7}
+    }
+    return n.error
+}
+fn __liza_json_mut_step(b:u8,borrow mut n:JsonState)->u32 {
+    if n.mode==1 {
+        if b<32 {return __liza_json_mut_fail(1,n.position,borrow mut n)}
+        if b==34 {
+            n.mode=0
+            if n.key {n.stack[n.depth-1]=5;return n.error}
+            return __liza_json_mut_done(borrow mut n)
+        }
+        if b==92 {n.mode=2;n.escape_start=n.position}
+        return n.error
+    }
+    if n.mode==2 {
+        if b==34 || b==92 || b==47 || b==98 || b==102 || b==110 || b==114 || b==116 {n.mode=1;return n.error}
+        if b==117 {n.mode=3;n.digits=0;n.unit=0;return n.error}
+        return __liza_json_mut_fail(3,n.position,borrow mut n)
+    }
+    if n.mode==4 {
+        if b!=92 {return __liza_json_mut_fail(4,n.high_start,borrow mut n)}
+        n.mode=5;return n.error
+    }
+    if n.mode==5 {
+        if b!=117 {return __liza_json_mut_fail(4,n.high_start,borrow mut n)}
+        n.mode=6;n.digits=0;n.unit=0;return n.error
+    }
+    if n.mode==3 || n.mode==6 {
+        hex=__liza_json_hex(b)
+        if hex==16 {return __liza_json_mut_fail(3,n.position,borrow mut n)}
+        n.unit=n.unit*16+hex;n.digits=n.digits+1
+        if n.digits==4 {
+            if n.mode==6 {
+                if n.unit<56320 || n.unit>57343 {return __liza_json_mut_fail(4,n.high_start,borrow mut n)}
+                n.mode=1;return n.error
+            }
+            if n.unit>=55296 && n.unit<=56319 {n.mode=4;n.high_start=n.escape_start;return n.error}
+            if n.unit>=56320 && n.unit<=57343 {return __liza_json_mut_fail(4,n.escape_start,borrow mut n)}
+            n.mode=1
+        }
+        return n.error
+    }
+    if n.mode==20 {
+        var expected:u8=0
+        var length:u32=4
+        if n.word==1 {
+            if n.index==1 {expected=114}
+            if n.index==2 {expected=117}
+            if n.index==3 {expected=101}
+        }
+        if n.word==2 {
+            length=5
+            if n.index==1 {expected=97}
+            if n.index==2 {expected=108}
+            if n.index==3 {expected=115}
+            if n.index==4 {expected=101}
+        }
+        if n.word==3 {
+            if n.index==1 {expected=117} else {expected=108}
+        }
+        if b!=expected {return __liza_json_mut_fail(1,n.position,borrow mut n)}
+        n.index=n.index+1
+        if n.index==length {n.mode=0;return __liza_json_mut_done(borrow mut n)}
+        return n.error
+    }
+    if n.mode>=10 && n.mode<=17 {
+        if __liza_json_digit(b) {
+            if n.mode==11 {return __liza_json_mut_fail(2,n.position,borrow mut n)}
+            if n.mode==10 {if b==48 {n.mode=11} else {n.mode=12}}
+            if n.mode==13 {n.mode=14}
+            if n.mode==15 || n.mode==16 {n.mode=17}
+            return n.error
+        }
+        if (n.mode==11 || n.mode==12) && b==46 {n.mode=13;return n.error}
+        if (n.mode==11 || n.mode==12 || n.mode==14) && (b==101 || b==69) {n.mode=15;return n.error}
+        if n.mode==15 && (b==43 || b==45) {n.mode=16;return n.error}
+        if n.mode==10 || n.mode==13 || n.mode==15 || n.mode==16 {return __liza_json_mut_fail(2,n.position,borrow mut n)}
+        if !(__liza_json_space(b) || b==44 || b==93 || b==125) {return __liza_json_mut_fail(2,n.position,borrow mut n)}
+        n.mode=0;done=__liza_json_mut_done(borrow mut n)
+        // Delimiter still belongs to the structural grammar below.
+    }
+    if __liza_json_space(b) {return n.error}
+    var context:u8=0
+    if n.depth>0 {context=n.stack[n.depth-1]}
+    if b==93 && (context==1 || context==2) {n.depth=n.depth-1;return n.error}
+    if b==125 && (context==4 || context==7) {n.depth=n.depth-1;return n.error}
+    if context==2 || context==7 {
+        if b!=44 {return __liza_json_mut_fail(1,n.position,borrow mut n)}
+        if context==2 {n.stack[n.depth-1]=3} else {n.stack[n.depth-1]=8}
+        return n.error
+    }
+    if context==5 {
+        if b!=58 {return __liza_json_mut_fail(1,n.position,borrow mut n)}
+        n.stack[n.depth-1]=6;return n.error
+    }
+    if context==4 || context==8 {
+        if b!=34 {return __liza_json_mut_fail(1,n.position,borrow mut n)}
+        n.key=true;n.mode=1;return n.error
+    }
+    if n.depth==0 && n.root_done {return __liza_json_mut_fail(1,n.position,borrow mut n)}
+    if b==91 || b==123 {
+        if n.depth==64 {return __liza_json_mut_fail(7,n.position,borrow mut n)}
+        done=__liza_json_mut_done(borrow mut n)
+        if b==91 {n.stack[n.depth]=1} else {n.stack[n.depth]=4}
+        n.depth=n.depth+1;return n.error
+    }
+    if b==34 {n.key=false;n.mode=1;return n.error}
+    if b==45 {n.mode=10;return n.error}
+    if __liza_json_digit(b) {if b==48 {n.mode=11} else {n.mode=12};return n.error}
+    if b==116 || b==102 || b==110 {
+        n.mode=20;n.index=1
+        if b==116 {n.word=1} else {if b==102 {n.word=2} else {n.word=3}}
+        return n.error
+    }
+    return __liza_json_mut_fail(1,n.position,borrow mut n)
+}
+fn json.feed_mut(borrow mut n:JsonState,data:View<u8>)->u32 {
+    if n.error!=0 {return n.error}
+    var i:u32=0
+    while i<data.len {
+        byte=data[i]
+        n.encoding=utf8_stream.feed_byte(n.encoding,byte)
+        match utf8_stream.status(n.encoding) {
+            None=>{}
+            Some(e)=>{match e.kind {
+                Utf8StreamErrorKind.InvalidEncoding=>{return __liza_json_mut_fail(5,e.offset,borrow mut n)}
+                Utf8StreamErrorKind.SizeOverflow=>{return __liza_json_mut_fail(8,e.offset,borrow mut n)}
+            }}
+        }
+        step=__liza_json_mut_step(byte,borrow mut n)
+        if n.error!=0 {return n.error}
+        n.position=n.position+1;i=i+1
+    }
+    return n.error
+}

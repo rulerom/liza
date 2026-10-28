@@ -1,10 +1,8 @@
 # T1: владеющий UTF-8 на Liza
 
-Реализован и слит в PR #15 (`f41efbd`).
-
 `examples/text/string.liza` — обычный импортируемый модуль, использующий
 [ресурсные структуры](resource-structures.md). Компилятор не знает имён
-`String`, `Appended`, `Info` или `Byte`; специальных строковых операций IR,
+`String`, `Appended` или `Info`; специальных строковых операций IR,
 нового runtime и автоматического выделения памяти нет.
 
 ```sh
@@ -52,13 +50,15 @@ released=text.string.release(move empty)
 | `append(move text, data:View<u8>)` | Возвращает String и `Result<Done,Error>` |
 | `clear(move text)` | Возвращает тот же владелец с нулевой логической длиной |
 | `inspect(move text)` | Возвращает String, длину в байтах и вместимость |
-| `byte_at(move text, index)` | Возвращает String и `Option<u8>`; вне длины — None |
+| `length(text)` / `capacity(text)` | Непотребляющие длина и вместимость (T2-A) |
+| `byte_at(text, index)` | Непотребляющий `Option<u8>`; вне длины — None (T2-A) |
 | `release(move text)` | Завершает владение и зависимость от региона |
 
 Имена в примере — новые привязки. В цикле используйте `(next,status)=...`,
-затем `current=move next`. Пользовательских заимствованных параметров ещё нет:
-поэтому даже наблюдающие операции **возвращают владельца**. Это явная временная
-граница API, а не особая модель заимствования для строк.
+затем `current=move next`. Потребляющий `inspect` сохранён для совместимости.
+[T2-A](readonly-access.md) добавляет непотребляющие `length/capacity/byte_at`.
+Прежний `byte_at(move current,index)` с результатом Byte заменён на
+`byte_at(current,index)->Option<u8>`; владельца возвращать и разбирать больше не нужно.
 
 `append` сначала проверяет **весь** вход через `utf8.validate`, затем вместимость,
 и только после успеха обеих проверок копирует байты. `InvalidUtf8(Utf8Error)`
@@ -74,7 +74,9 @@ TextView, readonly view или срез: это следующий этап с �
 
 ## Стоимость
 
-Все функции модуля pure и не аллоцируют. `from_buffer`, `inspect`, `byte_at`,
+Функции модуля не аллоцируют. Операции над содержимым pure; добавленный T2-B
+`write(borrow text:String)->Result<u64,IoFailure>:io` выводит только
+`[0,length)` через локальный subview и возвращает результат console. `from_buffer`, `inspect`, `byte_at`,
 `clear`, `release` имеют постоянную работу относительно размера содержимого.
 Они передают дескрипторы и скаляры, а не копируют всю вместимость.
 `append(n)` проверяет n байтов и при успехе записывает ровно n байтов; уже
@@ -95,6 +97,7 @@ API строки. `release` не возвращает вместимость р�
 
 Это тестируемый контракт, не доказательство для всех входов. Формальные результаты
 V0–V4 и Relay автоматически на String или новое расширение Core не переносятся.
-Дальше — [T2: readonly-доступ на время вызова](readonly-resources.md),
-T3 (builder и форматирование), затем самостоятельный
-JSON tokenizer. `liza-json check` остаётся минимальным валидатором; `format` пока нет.
+Реализованы [T2-A: readonly-доступ](readonly-access.md) и
+[T2-B: локальные subviews и write](local-subviews.md). Поверх String реализован [первый builder](string-builder.md) и
+[потоковый format](json.md#format). Далее — самостоятельный JSON tokenizer;
+`json.*` остаётся минимальным валидатором.

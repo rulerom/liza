@@ -5,12 +5,15 @@ explicit transfers and no implicit dropping of resource aggregates.
 Loops must preserve outer obligations on every backedge; joins must agree.
 """
 from .types import consumed_components
+from .readonly import readonly_root, projection_root
 from .frontend import CompileError, Conditional, While, LoopControl, Match, Update, Scope, Destructure
 
 
 def check_resources(fn, types, match_types, structs, signatures):
     if fn.trusted_library:
         return  # Audited library adapters alone can handle invalid raw handles.
+
+    readonly_names = {fn.params[i][0].text for i in fn.readonly_params}
 
     def resource(t):
         return t is not None and not structs.ensure(t)['copyable']
@@ -31,10 +34,20 @@ def check_resources(fn, types, match_types, structs, signatures):
             fail(token, 'resource ownership must agree on every continuing path')
         return paths[0].copy()
 
-    def expr(node, state, active_borrows=frozenset()):
+    def expr(node, state, active_borrows=frozenset(), active_readonly=frozenset()):
         t = types[id(node)]
+        root = readonly_root(node, readonly_names)
+        if node.kind == 'field' and root is not None:
+            if resource(t):
+                fail(node.token, 'readonly resource projection cannot become an owned value')
+            return  # Copyable field snapshot; privacy and path types were checked.
         if node.kind == 'name' and resource(t):
+            if root is not None:
+                fail(node.token, 'readonly parameter cannot become an owned value')
             fail(node.token, 'resource transfer requires explicit move')
+        if node.kind in ('copy','move') and readonly_root(node.args[0],readonly_names):
+            if resource(types[id(node.args[0])]):
+                fail(node.token, 'cannot copy or move a readonly resource')
         if node.kind == 'copy' and resource(t):
             fail(node.token, 'resource values cannot be copied')
         if node.kind == 'move' and resource(t):
@@ -46,26 +59,37 @@ def check_resources(fn, types, match_types, structs, signatures):
             state[name] = False
             return
         if node.kind == 'binary' and node.token.text in ('&&', '||'):
-            expr(node.args[0], state, active_borrows)
+            expr(node.args[0], state, active_borrows, active_readonly)
             right = state.copy()
-            expr(node.args[1], right, active_borrows)
+            expr(node.args[1], right, active_borrows, active_readonly)
             state.update(merge([state, right], node.token))
             return
         if node.kind == 'call' and node.token.text in signatures:
-            borrowed = signatures[node.token.text].borrowed_params
+            signature = signatures[node.token.text]
+            borrowed = set(signature.borrowed_params) | set(signature.readonly_params)
+            observing = set(signature.readonly_params) | set(signature.readonly_borrowed_params)
             pending_borrows = set(active_borrows)
+            pending_readonly = set(active_readonly)
             for i, arg in enumerate(node.args):
-                if i in borrowed:
-                    if arg.kind != 'name':
+                if i in borrowed and resource(types[id(arg)]):
+                    ro = readonly_root(arg,readonly_names)
+                    name = projection_root(arg)
+                    if arg.kind != 'name' and ro is None:
                         fail(arg.token, 'borrowed resource argument must be an available binding, without move')
-                    if not state.get(arg.token.text, False):
+                    if ro is not None and i not in observing:
+                        fail(arg.token, 'operation has no readonly permission for this resource')
+                    if name in pending_readonly and i not in observing:
+                        fail(arg.token, 'cannot mutate resource while readonly borrow is active')
+                    if ro is None and not state.get(name, False):
                         fail(arg.token, 'cannot borrow resource after move or close')
-                    pending_borrows.add(arg.token.text)
+                    pending_borrows.add(name)
+                    if i in observing:
+                        pending_readonly.add(name)
                 else:
-                    expr(arg, state, pending_borrows)
+                    expr(arg, state, pending_borrows, pending_readonly)
             return
         for arg in node.args:
-            expr(arg, state, active_borrows)
+            expr(arg, state, active_borrows, active_readonly)
 
     def scoped(body, state, keep, loops, token):
         result = statements(body, state.copy(), loops)
@@ -119,6 +143,8 @@ def check_resources(fn, types, match_types, structs, signatures):
                 (breaks if stmt.token.text == 'break' else backs).append({n:state[n] for n in keep})
                 return None
             elif isinstance(stmt, Update):
+                if stmt.token.text in readonly_names:
+                    fail(stmt.token, 'cannot update readonly parameter')
                 expr(stmt.target, state)
                 expr(stmt.expr, state)
             else:
@@ -135,5 +161,5 @@ def check_resources(fn, types, match_types, structs, signatures):
                 return None
         return state
 
-    initial = {p.text:True for p,t in fn.params if resource(t)}
+    initial = {p.text:True for i,(p,t) in enumerate(fn.params) if i not in fn.readonly_params and resource(t)}
     scoped(fn.body, initial, set(), [], fn.name)

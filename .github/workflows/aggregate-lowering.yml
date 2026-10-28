@@ -1,0 +1,75 @@
+name: Aggregate lowering correctness
+on:
+  pull_request:
+    paths:
+      - 'liza/**'
+      - 'tests/test_field_forwarding.py'
+      - 'tests/fixtures/field_forwarding.liza'
+      - 'tools/check_field_forwarding.py'
+      - 'benchmarks/guards/symbolic.py'
+      - 'tests/test_direct_storage.py'
+      - 'benchmarks/aggregate/**'
+      - 'benchmarks/json/**'
+      - 'examples/text/**'
+      - 'examples/apps/liza_json.liza'
+      - '.github/workflows/aggregate-lowering.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'liza/**'
+      - 'tests/test_field_forwarding.py'
+      - 'tests/fixtures/field_forwarding.liza'
+      - 'tools/check_field_forwarding.py'
+      - 'benchmarks/guards/symbolic.py'
+      - 'tests/test_direct_storage.py'
+      - 'benchmarks/aggregate/**'
+      - 'benchmarks/json/**'
+      - 'examples/text/**'
+      - 'examples/apps/liza_json.liza'
+      - '.github/workflows/aggregate-lowering.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  agreement:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Field forwarding, deep phis, snapshots and negative replay at O0/O2
+        run: python -m unittest discover -s tests -p test_field_forwarding.py -v
+      - name: Install pinned solver for selected IR equivalence
+        if: runner.os == 'Linux'
+        run: python -m pip install -r verification/requirements.txt
+      - name: Independently compare selected SIR and production LLVM
+        if: runner.os == 'Linux'
+        run: python tools/check_field_forwarding.py --python-z3 --output build/field-forwarding
+      - name: Snapshot/trap mutation replay at O0/O2
+        run: python -m unittest discover -s tests -p test_direct_storage.py -v
+      - name: A0–A3 correctness and copy-count validation (no timing threshold)
+        if: runner.os == 'Linux'
+        run: python benchmarks/aggregate/run.py --candidate "$GITHUB_SHA" --check-only --output build/aggregate-study
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'Linux'
+        with:
+          name: aggregate-study-${{ matrix.os }}
+          path: |
+            build/field-forwarding/
+            build/aggregate-study/report.json
+            build/aggregate-study/samples.json
+            build/aggregate-study/A*/*.ll
+            build/aggregate-study/A*/*.s
+            build/aggregate-study/A*/*.su
+            build/aggregate-study/A*/*.json

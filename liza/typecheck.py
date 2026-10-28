@@ -1,6 +1,7 @@
 """Infer literal contexts without emitting or reordering executable operations."""
 from dataclasses import replace
 from .frontend import CompileError, Struct
+from .readonly import readonly_root
 from .types import INTEGER_TYPES, SCALAR_TYPES, bounds, signed, convert_integer, is_array, is_view, element_type, array_type, array_length, validate_type, generic_args
 
 
@@ -15,7 +16,7 @@ class TypeVariable:
         return self.parent
 
 
-def infer_expression(expr, names, value_types, signatures, expected=None, structs=None, access_module=""):
+def infer_expression(expr, names, value_types, signatures, expected=None, structs=None, access_module="", readonly_names=frozenset()):
     if structs is None:
         structs = {}
     variants = getattr(structs, "variants", {})
@@ -66,7 +67,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                     raise CompileError(arg.token, str(error)) from None
             else:
                 integers.append((visit(arg), arg.token))
-        elif node.kind in ('copy', 'move'):
+        elif node.kind in ('copy', 'move', 'borrow_mut'):
             unify(var, visit(node.args[0]), token)
         elif node.kind == 'bool':
             bind(var, 'bool', token)
@@ -93,7 +94,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
             source = visit(node.args[0])
             for arg in node.args[1:]:
                 bind(visit(arg), 'u32', arg.token)
-            projections.append((node.kind, var, source, token))
+            projections.append((node.kind, var, source, token, node))
             derived.append(var)
         elif node.kind == 'call' and token.text.startswith(('memory.', 'vec.')):
             memory_calls.append((node,var,[visit(arg) for arg in node.args]))
@@ -223,7 +224,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                     if is_view(element.root().type):
                         raise CompileError(token, 'views cannot be stored in arrays')
                     bind(aggregate, array_type(element.root().type, count), token)
-            for kind, result, source, token in projections:
+            for kind, result, source, token, node in projections:
                 t = source.root().type
                 if not t:
                     if kind == 'index' and result.root().type:
@@ -237,7 +238,7 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                         continue
                     if t not in structs:
                         raise CompileError(token, 'field access requires a structure value')
-                    if not t.startswith('__liza_') and not structs[t].properties['copyable']:
+                    if not t.startswith('__liza_') and not structs[t].properties['copyable'] and not readonly_root(node.args[0], readonly_names):
                         raise CompileError(token, 'resource structure requires whole-value unpack; field access is not supported')
                     fields = dict(structs[t].fields)
                     if token.text not in fields:
@@ -247,8 +248,8 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
                         raise CompileError(token, f"private field {t}.{token.text}")
                     bind(result, fields[token.text], token)
                 else:
-                    if not is_array(t) and not (kind == 'index' and is_view(t)):
-                        raise CompileError(token, 'view requires an array binding' if kind == 'view' else 'index requires array or view')
+                    if not is_array(t) and not is_view(t):
+                        raise CompileError(token, 'view requires an array or view binding' if kind == 'view' else 'index requires array or view')
                     target = element_type(t)
                     bind(result, f'View<{target}>' if kind == 'view' else target, token)
             after = tuple(v.root().type for v in list(variables.values()) + [e for _, e, _, _ in arrays])

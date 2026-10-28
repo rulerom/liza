@@ -1,5 +1,5 @@
 site_name: Liza
-site_description: 'Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций.'
+site_description: 'Liza — системный язык для производительных сетевых сервисов с определённым поведением, контролируемыми ресурсами и математически проверяемыми свойствами.'
 site_url: https://liza.rulerom.com/
 repo_url: https://github.com/rulerom/liza
 repo_name: rulerom/liza
@@ -10,6 +10,8 @@ use_directory_urls: false
 theme:
   name: material
   custom_dir: overrides
+  logo: assets/images/liza-logo.png
+  favicon: assets/images/liza-logo.png
   language: ru
   palette:
     - scheme: default
@@ -25,14 +27,17 @@ theme:
         icon: material/brightness-4
         name: Светлая тема
   features:
+    - navigation.tabs
     - navigation.sections
     - navigation.footer
     - content.code.copy
   font: false
 
 extra:
-  social_image: assets/images/liza-social-v2.png
-  social_image_alt: 'Liza — системный язык программирования для переносимых вычислений с определённой семантикой и контролируемой стоимостью операций. Контролируемая стоимость — проектная цель.'
+  social_image: assets/images/liza-logo.png
+  social_image_alt: 'Логотип Liza — девушка с лисьими ушами и надпись Liza.'
+  social_image_width: 640
+  social_image_height: 640
 
 plugins:
   - search:
@@ -53,47 +58,71 @@ markdown_extensions:
 extra_css:
   - assets/stylesheets/site.css
 
+# Published and searchable, but reached through the research index rather than
+# filling the primary navigation with individual experiment reports.
+not_in_nav: |
+  research.md
+  mutable-audit.md
+  mutable-performance.md
+  performance-parity.md
+  inlining-policy.md
+  state-alias-analysis.md
+  guard-cfg-investigation.md
+  field-forwarding.md
+  aggregate-lowering.md
+  verification-pipeline.md
+  verified.md
+  verified-v1.md
+  verified-v2.md
+  verified-v3.md
+  verified-v4.md
+  verified-relay-r1.md
+  verified-relay-r2.md
+  verified-relay-r2b.md
+  verified-relay-r2c.md
+
 nav:
-  - Liza: index.md
-  - Быстрый старт: getting-started.md
-  - Основы языка: basics.md
-  - CLI-приложение liza-text: cli.md
-  - Потоковый JSON: json.md
-  - Ресурсные структуры: resource-structures.md
-  - Владеющий UTF-8 (T1): owned-string.md
-  - Readonly-ресурсы (проект T2): readonly-resources.md
-  - Запись файлов и liza-copy: file-output.md
-  - TCP echo server: tcp.md
-  - TCP message server: message-server.md
-  - TCP reactor: reactor.md
-  - Message Router: message-router.md
-  - L4 TCP Proxy: tcp-proxy.md
-  - TCP Proxy Operations: tcp-proxy-operations.md
-  - Редактор Zed: editor.md
-  - Milestones: milestones.md
-  - Verification pipeline: verification-pipeline.md
-  - Liza Verified V0: verified.md
-  - Liza Verified V1: verified-v1.md
-  - Liza Verified V2: verified-v2.md
-  - Liza Verified V3: verified-v3.md
-  - Liza Verified V4: verified-v4.md
-  - Verified Relay R1: verified-relay-r1.md
-  - Verified Relay R2: verified-relay-r2.md
-  - Verified Relay R2-B: verified-relay-r2b.md
-  - Verified Relay R2-C: verified-relay-r2c.md
+  - Главная: index.md
+  - Начало работы:
+      - Быстрый старт: getting-started.md
+      - Редактор Zed: editor.md
   - Язык:
+      - Основы: basics.md
       - Модель вычислений и памяти: design.md
       - Исполняемое ядро: core.md
       - Числовая модель: numeric-model.md
-      - Минимальный I/O: io-model.md
-      - UTF-8 текст: utf8.md
-      - Потоковый UTF-8: utf8-stream.md
-      - Пользовательские модули: modules.md
+      - Модули: modules.md
       - Generics: generics.md
       - Регионы и память: regions.md
-  - Эталонные программы: reference-programs.md
-  - Таблица соединений: connection-table.md
-  - План разработки: roadmap.md
-  - Линейные результаты и Vec: bounded-vec.md
-  - Явный рост Vec: vec-reserve.md
-  - Разбор программы Vec: bounded-vec-walkthrough.md
+      - Ресурсные структуры: resource-structures.md
+      - Readonly-заимствование: readonly-access.md
+      - Mutable-заимствование: mutable-access.md
+      - Локальные subviews: local-subviews.md
+      - Эффекты и I/O: io-model.md
+  - Библиотеки:
+      - UTF-8: utf8.md
+      - Потоковый UTF-8: utf8-stream.md
+      - Владеющий String: owned-string.md
+      - StringBuilder: string-builder.md
+      - Потоковый JSON: json.md
+      - JSON tokenizer (контракт): json-tokenizer.md
+      - Линейные результаты и Vec: bounded-vec.md
+      - Явный рост Vec: vec-reserve.md
+      - Таблица соединений: connection-table.md
+  - Приложения и примеры:
+      - Эталонные программы: reference-programs.md
+      - Разбор программы Vec: bounded-vec-walkthrough.md
+      - CLI-приложение liza-text: cli.md
+      - Запись файлов и liza-copy: file-output.md
+      - TCP echo server: tcp.md
+      - TCP message server: message-server.md
+      - TCP reactor: reactor.md
+      - Message Router: message-router.md
+      - L4 TCP Proxy: tcp-proxy.md
+      - TCP Proxy Operations: tcp-proxy-operations.md
+  - Бенчмарки: json-performance.md
+  - Проект:
+      - Verified Network Gateway: network-gateway.md
+      - Gateway R0 reproduction: gateway-reproduction.md
+      - План разработки: roadmap.md
+      - Milestones: milestones.md

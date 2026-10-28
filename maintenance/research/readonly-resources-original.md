@@ -1,3 +1,5 @@
+> Historical design snapshot. T2-A and T2-B have since been implemented; see `docs/readonly-access.md` and `docs/local-subviews.md` for current behavior. Relative links below are historical.
+
 # T2 — readonly-доступ к ресурсным структурам
 
 **Статус: проект контракта, не реализован.** T1 и ресурсные структуры завершены

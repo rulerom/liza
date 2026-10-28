@@ -8,6 +8,8 @@ def attach(program):
     libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net', 'framing', 'json') if getattr(program, 'uses_'+name, False)]
     if 'json' in libraries and 'utf8_stream' not in libraries:
         libraries.insert(0,'utf8_stream')
+    if 'json' in libraries:
+        libraries.append('json_mut')
     if not libraries:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
@@ -97,6 +99,9 @@ def attach(program):
         ('__liza_reactor_create',['u16','u32'],'__liza_Reactor',[], 'io,alloc'),
         ('__liza_reactor_accept',['net.Reactor'],'__liza_Connection',[0], 'io'),
         ('__liza_reactor_port',['net.Reactor'],'u64',[0], 'io'),
+        ('__liza_reactor_watch_shutdown',['net.Reactor'],'u64',[0], 'io'),
+        ('__liza_reactor_shutdown_requested',['net.Reactor'],'u64',[0], 'io'),
+        ('__liza_reactor_stop_accepting',['net.Reactor'],'u64',[0], 'io'),
         ('__liza_reactor_poll',['net.Reactor','u32'],'u64',[0], 'io'),
         ('__liza_reactor_interest',['net.Reactor','net.Connection','u32'],'u64',[0], 'io'),
         ('__liza_reactor_ready',['net.Reactor','net.Connection'],'u64',[0], 'io'),

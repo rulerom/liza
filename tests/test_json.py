@@ -78,7 +78,7 @@ define i64 @stream_size() {
             subprocess.run(['clang','-Wno-override-module',opt,str(ir),str(c),'-o',str(exe)],check=True,capture_output=True)
             cls.executables.append(exe)
         cls.cli=cls.root/('liza-json.exe' if sys.platform=='win32' else 'liza-json')
-        subprocess.run([sys.executable,'-m','liza','build','examples/apps/liza_json.liza','-o',str(cls.cli)],check=True,capture_output=True)
+        subprocess.run([sys.executable,'-m','liza','build','examples/apps/liza_json.liza','--project-root','examples','-o',str(cls.cli)],check=True,capture_output=True)
 
     @classmethod
     def tearDownClass(cls): cls.tmp.cleanup()
@@ -205,7 +205,7 @@ define i64 @stream_size() {
             path.write_bytes(data)
             r=subprocess.run([str(self.cli),'check',str(path)],capture_output=True)
             self.assertEqual(r.returncode,code);self.assertEqual(r.stdout if code==0 else r.stderr,output)
-        self.assertEqual(subprocess.run([str(self.cli),'format',str(path)],capture_output=True).returncode,2)
+        self.assertEqual(subprocess.run([str(self.cli),'unknown',str(path)],capture_output=True).returncode,2)
         self.assertEqual(subprocess.run([str(self.cli),'check',str(path)+'missing'],capture_output=True).returncode,3)
 
 if __name__=='__main__':unittest.main()

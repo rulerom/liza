@@ -1,0 +1,47 @@
+name: JSON baseline correctness
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/json/**'
+      - '.github/workflows/json-baseline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'benchmarks/json/**'
+      - '.github/workflows/json-baseline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  agreement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        opt: [0, 2]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test fail-closed comparison
+        run: python -m unittest discover -s benchmarks/json -p test_harness.py -v
+      - name: Compare pinned Liza and scalar C++/Rust
+        run: python benchmarks/json/run.py --check-only -O ${{ matrix.opt }} --output build/json-agreement
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: json-agreement-O${{ matrix.opt }}
+          path: |
+            build/json-agreement/report.json
+            build/json-agreement/corpus/
+            build/json-agreement/*.bin
+            build/json-agreement/*.ll
+            build/json-agreement/*.s
+            build/json-agreement/*.su

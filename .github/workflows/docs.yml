@@ -1,6 +1,15 @@
 name: Documentation
-
 on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'overrides/**'
+      - 'mkdocs.yml'
+      - 'requirements-docs.txt'
+      - 'tools/pygments_liza/**'
+      - 'tools/check_docs.py'
+      - 'examples/**'
+      - '.github/workflows/docs.yml'
   push:
     branches: [main]
     paths:
@@ -12,25 +21,12 @@ on:
       - 'tools/check_docs.py'
       - 'examples/**'
       - '.github/workflows/docs.yml'
-  pull_request:
-    paths:
-      - 'docs/**'
-      - 'overrides/**'
-      - 'mkdocs.yml'
-      - 'requirements-docs.txt'
-      - 'tools/pygments_liza/**'
-      - 'tools/check_docs.py'
-      - 'examples/**'
-      - '.github/workflows/docs.yml'
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
-  group: documentation-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: false
-
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -100,5 +96,5 @@ jobs:
           curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
             --max-time 30 https://liza.rulerom.com/core.html -o /dev/null
           curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
-            --max-time 30 https://liza.rulerom.com/assets/images/liza-social-v2.png -o /dev/null
+            --max-time 30 https://liza.rulerom.com/assets/images/liza-logo.png -o /dev/null
           echo 'Documentation: https://liza.rulerom.com/' >> "$GITHUB_STEP_SUMMARY"

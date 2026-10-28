@@ -1,4 +1,6 @@
 """Typed value graph with explicit control flow and arithmetic policy."""
+from .readonly import readonly_root, parameter_modes
+from .mutable import plain_value, addressable_bindings
 from .types import is_vec, vec_element, is_product, product_args, consumed_components
 from dataclasses import dataclass, asdict, field
 import json
@@ -197,6 +199,12 @@ class LoopContext:
 class Lowerer:
     def __init__(self, fn, signatures, structs, record_expressions=False):
         self.fn = fn
+        self.readonly_names = {fn.params[i][0].text for i in fn.readonly_params}
+        self.mutable_names = {fn.params[i][0].text for i in fn.mutable_params}
+        self.storage_names = self.mutable_names | {fn.params[i][0].text for i in fn.readonly_params
+                                                  if structs[fn.params[i][1]].properties['copyable']}
+        self.storage_values = set()
+        self.address_candidates = addressable_bindings(fn.body)
         self.signatures = signatures
         self.structs = structs
         self.blocks = []
@@ -234,7 +242,7 @@ class Lowerer:
                 validate_type(expected, self.structs)
             except ValueError as error:
                 raise CompileError(expr.token, str(error)) from None
-        inferred = infer_expression(expr, names, self.types, self.signatures, expected, self.structs, self.fn.module)
+        inferred = infer_expression(expr, names, self.types, self.signatures, expected, self.structs, self.fn.module, self.readonly_names)
         for type_name in set(inferred.values()) - {'integer'}:
             try:
                 validate_type(type_name, self.structs)
@@ -249,6 +257,30 @@ class Lowerer:
             self.expression_values[id(expr)] = result
         return result
 
+    @staticmethod
+    def storage_root(node):
+        while node.kind in ('field', 'index'):
+            node = node.args[0]
+        return node.token.text if node.kind == 'name' else None
+
+    def storage_address(self, node, names, inferred):
+        if node.kind == 'name':
+            return names[node.token.text]
+        parent = self.storage_address(node.args[0], names, inferred)
+        source = self.types[parent]
+        root = names[self.storage_root(node)]
+        if node.kind == 'field':
+            # .len is a value, never an addressable field.
+            if source not in self.structs:
+                raise CompileError(node.token, 'only structure fields are addressable')
+            return self.emit('storage.field', [parent], type=inferred[id(node)],
+                             source_type=source, field_name=node.token.text, owner_binding=root)
+        if not is_array(source):
+            raise CompileError(node.token, 'only fixed array elements are addressable')
+        index = self.emit_expression(node.args[1], names, inferred)
+        return self.emit('storage.index', [parent, index], type=inferred[id(node)],
+                         source_type=source, bounds_policy='trap', owner_binding=root)
+
     def _emit_expression(self, expr, names, inferred):
         text, type_name = expr.token.text, inferred[id(expr)]
         if expr.kind == 'text':
@@ -260,10 +292,44 @@ class Lowerer:
         if expr.kind == 'literal':
             value = int(text, 16 if text.lstrip('-').startswith('0x') else 10)
             return self.emit('constant', [value], type=type_name)
+        addressable = names.get(self.storage_root(expr)) in self.storage_values
+        if addressable and expr.kind == 'field' and text == 'len' and is_array(inferred[id(expr.args[0])]):
+            pointer = self.storage_address(expr.args[0], names, inferred)
+            return self.emit('sequence.length', [pointer], type='u32', source_type=self.types[pointer])
+        if addressable and expr.kind in ('name', 'field', 'index'):
+            pointer = self.storage_address(expr, names, inferred)
+            return self.emit('storage.read', [pointer], type=type_name,
+                             owner_binding=names[self.storage_root(expr)], storage_relation='independent_snapshot')
+        if expr.kind == 'borrow_mut':
+            raise CompileError(expr.token, 'borrow mut is only allowed for a mutable call argument')
         if expr.kind == 'name':
             return names[text]
         if expr.kind == 'call':
-            args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
+            args, loans = [], []
+            signature = self.signatures.get(text)
+            for i, arg in enumerate(expr.args):
+                mutable_arg = signature is not None and i in signature.mutable_params
+                readonly_value = (signature is not None and i in signature.readonly_params
+                                  and signature.params[i][1] in self.structs
+                                  and self.structs[signature.params[i][1]].properties['copyable'])
+                if mutable_arg:
+                    if arg.kind != 'borrow_mut':
+                        raise CompileError(arg.token, 'mutable argument requires explicit borrow mut')
+                    root = arg.args[0].token.text
+                    if names[root] not in self.storage_values or root in self.readonly_names:
+                        raise CompileError(arg.token, 'mutable borrow requires a var or mutable parameter')
+                    value = names[root]
+                elif readonly_value and arg.kind == 'name' and names[arg.token.text] in self.storage_values:
+                    value = names[arg.token.text]
+                else:
+                    value = self.emit_expression(arg, names, inferred)
+                    if readonly_value:
+                        value = self.emit('storage.local', [value], type=inferred[id(arg)], storage_relation='readonly_temporary')
+                if mutable_arg or readonly_value:
+                    loan = self.emit('loan.begin', [value], type=self.types[value], owner_binding=value,
+                                     storage_relation='mutable' if mutable_arg else 'readonly')
+                    loans.append(loan);value=loan
+                args.append(value)
             if text in self.structs:
                 return self.emit('struct.construct', args, type=type_name)
             effect = self.signatures[text].effect_contract
@@ -287,11 +353,14 @@ class Lowerer:
                 }
                 return self.emit(fn.memory_operation, args, type=type_name, source_type=fn.memory_element,
                                  storage_relation=relations[fn.memory_operation],
+                                 **({"owner_binding":names[readonly_root(expr.args[0],self.readonly_names)]} if expr.args and readonly_root(expr.args[0],self.readonly_names) else {}),
                                  effect_contract=effect, bounds_policy='trap' if fn.memory_operation == 'buffer.update' else 'none',
-                                 parameter_modes=['borrow' if i in fn.borrowed_params else 'value' for i in range(len(args))])
-            return self.emit('call', args, type=type_name, callee=text, effect_contract=effect,
-                             parameter_modes=['borrow' if i in self.signatures[text].borrowed_params else 'value'
-                                              for i in range(len(args))])
+                                 parameter_modes=parameter_modes(fn, expr.args, self.readonly_names))
+            result = self.emit('call', args, type=type_name, callee=text, effect_contract=effect,
+                               parameter_modes=parameter_modes(self.signatures[text], expr.args, self.readonly_names))
+            for loan in reversed(loans):
+                self.emit('loan.end', [loan], owner_binding=loan)
+            return result
         if expr.kind in ('array', 'array.repeat', 'index', 'view'):
             args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
             if expr.kind in ('array', 'array.repeat'):
@@ -300,7 +369,8 @@ class Lowerer:
             op = 'view.create' if expr.kind == 'view' else 'view.read' if is_view(source) else 'array.read'
             return self.emit(op, args, type=type_name, source_type=source,
                              bounds_policy='trap',
-                             owner_binding=expr.args[0].token.text if expr.kind == 'view' else '')
+                             owner_binding=(args[0] if is_view(source) else expr.args[0].token.text) if expr.kind == 'view' else '',
+                             storage_relation='borrow_argument_0' if expr.kind == 'view' and is_view(source) else '')
         if expr.kind == 'variant':
             args = [self.emit_expression(arg, names, inferred) for arg in expr.args]
             case = text.rsplit('.',1)[-1]
@@ -310,7 +380,9 @@ class Lowerer:
             if text == 'len' and (is_array(self.types[value]) or is_view(self.types[value]) or self.types[value] == 'Text'):
                 return self.emit('sequence.length', [value], type='u32', source_type=self.types[value])
             return self.emit('struct.field', [value], type=type_name,
-                             source_type=self.types[value], field_name=text)
+                             source_type=self.types[value], field_name=text,
+                             **({'storage_relation':'readonly_projection', 'owner_binding':names[readonly_root(expr,self.readonly_names)]}
+                                if readonly_root(expr,self.readonly_names) else {}))
         if text in ('&&', '||'):
             left = self.emit_expression(expr.args[0], names, inferred)
             rhs, short = self.new_block(), self.new_block()
@@ -373,7 +445,7 @@ class Lowerer:
         # Create loop-carried SSA values before lowering the condition/body.
         # Fill backedges only after all continue and fallthrough paths are known.
         for name in names:
-            if name in mutable:
+            if name in mutable and names[name] not in self.storage_values:
                 header_names[name] = self.emit('phi', [names[name]], type=self.types[names[name]],
                                                incoming_blocks=[entry.name])
                 phis[name] = header.operations[-1]
@@ -467,13 +539,19 @@ class Lowerer:
             raise CompileError(stmt.token, 'values are immutable; assignment requires var')
         # Type the complete path once, then evaluate each projection once. Reads
         # preserve bounds traps before the RHS, including the final projection.
-        inferred = infer_expression(stmt.target, names, self.types, self.signatures, None, self.structs, self.fn.module)
+        inferred = infer_expression(stmt.target, names, self.types, self.signatures, None, self.structs, self.fn.module, self.readonly_names)
         for type_name in set(inferred.values()) - {'integer'}:
             try:
                 validate_type(type_name, self.structs)
             except ValueError as error:
                 raise CompileError(stmt.token, str(error)) from None
         self.expression_types.update(inferred)
+        if names.get(name) in self.storage_values:
+            pointer = self.storage_address(stmt.target, names, inferred)
+            replacement = self.expression(stmt.expr, names, self.types[pointer])
+            self.expect(replacement, self.types[pointer], stmt.expr.token)
+            self.emit('storage.write', [pointer, replacement], source_type=self.types[pointer], owner_binding=names[name])
+            return
         path = []
         node = stmt.target
         while node.kind != 'name':
@@ -588,7 +666,15 @@ class Lowerer:
                     expected = stmt.annotation or None
                 # Evaluate using the old environment, then rebind to a new SSA value.
                 value = self.expression(stmt.expr, names, expected)
-                names[name] = value
+                if names.get(name) in self.storage_values:
+                    self.emit('storage.write', [names[name], value], source_type=self.types[value], owner_binding=names[name])
+                elif stmt.is_var and id(stmt) in self.address_candidates:
+                    if self.types[value] not in self.structs or not plain_value(self.types[value], self.structs):
+                        raise CompileError(stmt.token, 'mutable borrow requires a resource-free copyable structure')
+                    names[name] = self.emit('storage.local', [value], type=self.types[value], storage_relation='local_owner')
+                    self.storage_values.add(names[name])
+                else:
+                    names[name] = value
                 if stmt.is_var:
                     mutable.add(name)
 
@@ -600,13 +686,14 @@ class Lowerer:
             name = f'p{i}'
             names[param.text] = name
             self.types[name] = type_name
+            if param.text in self.storage_names: self.storage_values.add(name)
             params.append({'name': name, 'type': type_name,
-                           'mode': 'borrow' if i in self.fn.borrowed_params else 'value'})
-        self.statements(self.fn.body, names, set())
+                           'mode': 'mutable' if i in self.fn.mutable_params else 'readonly' if i in self.fn.readonly_params else 'borrow' if i in self.fn.borrowed_params else 'value'})
+        self.statements(self.fn.body, names, set(self.mutable_names))
         if self.current is not None:
             raise CompileError(self.fn.name, f'function must return a {self.fn.result_type} value on every path')
         check_resources(self.fn, self.expression_types, self.match_types, self.structs, self.signatures)
-        check_borrows(self.fn, self.expression_types, self.match_types, self.structs.variants, self.structs)
+        check_borrows(self.fn, self.expression_types, self.match_types, self.structs.variants, self.structs, self.signatures)
         return FunctionIR(self.fn.name.text, params, self.blocks, self.fn.result_type, self.fn.effect_contract)
 
 
@@ -658,6 +745,16 @@ def lower(functions, dependency_audit=None):
         try:
             for token, type_name in fn.params + [(fn.name, fn.result_type)]:
                 validate_type(type_name, structs, token is not fn.name)
+            for i in fn.readonly_params:
+                token,t = fn.params[i]
+                if t not in structs or (structs[t].properties['copyable'] and not plain_value(t, structs)):
+                    raise CompileError(token, 'borrow requires a concrete resource structure or plain copyable structure')
+            for i in fn.mutable_params:
+                token,t = fn.params[i]
+                if t not in structs or not plain_value(t, structs):
+                    raise CompileError(token, 'borrow mut requires a resource-free copyable structure')
+            if (fn.readonly_params or fn.mutable_params) and not structs.ensure(fn.result_type)['copyable']:
+                raise CompileError(fn.name, 'readonly function must return an independent copyable value')
             lowerer = Lowerer(fn, signatures, structs, record_expressions=dependency_audit is not None)
             lowered.append(lowerer.lower())
             dependency_records[fn.name.text] = (fn, lowerer.expression_types, lowerer.match_types, lowered[-1])

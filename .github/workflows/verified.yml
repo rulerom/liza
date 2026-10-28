@@ -1,5 +1,30 @@
 name: Liza Verified (experimental)
-on: [push, pull_request]
+on:
+  pull_request:
+    paths:
+      - 'liza/**'
+      - 'verification/*.py'
+      - 'verification/*.liza'
+      - 'verification/requirements.txt'
+      - 'verification/v1/**'
+      - 'verification/v2/**'
+      - '.github/workflows/verified.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'liza/**'
+      - 'verification/*.py'
+      - 'verification/*.liza'
+      - 'verification/requirements.txt'
+      - 'verification/v1/**'
+      - 'verification/v2/**'
+      - '.github/workflows/verified.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   arithmetic:
     strategy:

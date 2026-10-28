@@ -28,7 +28,6 @@ class ArrayTypes(unittest.TestCase):
                'a:[u8;-1]=[]; return 0', 'a:[u8;1+1]=[1,2]; return 0',
                'a=[1]; return a[i32(0)]', 'a=[1]; return a[u64(0)]',
                'a=[1]; a[0]=2; return 0', 'a=[1]; x=move a[0]; return 0',
-               'a=[1]; v=view a[0..1]; w=view v[0..1]; return 0',
                'v=view [1][0..1]; return 0', 'a=[1]; v=view a[0..1]; b=[v]; return 0']
         for body in bad:
             with self.subTest(body=body), self.assertRaises(CompileError):

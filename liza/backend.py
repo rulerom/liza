@@ -1,7 +1,8 @@
 """Liza IR -> textual LLVM IR. The host toolchain supplies ABI and linking."""
 from .types import is_vec, is_product, product_args
 from dataclasses import replace
-from .storage import owned_variant, caller_plan
+from .storage import owned_variant, caller_plan, direct_owned_variant
+from .field_forwarding import analyze as field_forwarding
 from .types import INTEGER_TYPES, width, signed, bounds, convert_integer, is_array, is_view, element_type, array_length, is_buffer
 
 
@@ -174,17 +175,27 @@ def llvm(module, target=None):
 
     owned = {}
     owned_plans = {}
-    for function in module:
-        plan = owned_variant(function, structs, large)
-        if plan is not None:
-            index = next(i for i,p in enumerate(function.params) if p['name']==plan.owned_parameter)
-            owned[function.name] = (index, plan)
-            owned_plans['__liza_owned_'+function.name] = plan
+    # Discover composition bottom-up; recursive SCCs never bootstrap a proof.
+    changed = True
+    while changed:
+        changed = False
+        for function in module:
+            if function.name in owned:
+                continue
+            plan = owned_variant(function, structs, large)
+            if plan is None:
+                plan = direct_owned_variant(function, structs, large, owned)
+            if plan is not None:
+                index = next(i for i,p in enumerate(function.params) if p['name']==plan.owned_parameter)
+                owned[function.name] = (index, plan)
+                owned_plans['__liza_owned_'+function.name] = plan
+                changed = True
     functions = list(module) + [replace(fn,name='__liza_owned_'+fn.name) for fn in module if fn.name in owned]
     for fn in functions:
+        forwarded_fields = field_forwarding(fn, structs, large).roots
         plan = owned_plans.get(fn.name) or caller_plan(fn, structs, large, owned)
         params = ', '.join((f'ptr %{p["name"]}'
-                            if large(p["type"]) else f'{types[p["type"]]} %{p["name"]}') for p in fn.params)
+                            if large(p["type"]) or p.get('mode') in ('mutable','readonly') and p['type'] in structs and structs[p['type']].properties['copyable'] else f'{types[p["type"]]} %{p["name"]}') for p in fn.params)
         indirect_result = large(fn.result_type)
         if indirect_result:
             params = f'ptr sret({types[fn.result_type]}) %return_storage' + (', '+params if params else '')
@@ -195,7 +206,7 @@ def llvm(module, target=None):
         value_types = {p['name']: types[p['type']] for p in fn.params}
         logical = {p['name']: p['type'] for p in fn.params}
         logical.update({op.result:op.type for b in fn.blocks for op in b.operations})
-        materialized = {'vec.get', 'vec.pop', 'vec.push', 'vec.set', 'view.read', 'array.repeat', 'array.construct', 'struct.construct', 'variant.construct', 'array.update', 'struct.update', 'call', 'phi'}
+        materialized = {'vec.get', 'vec.pop', 'vec.push', 'vec.set', 'view.read', 'array.repeat', 'array.construct', 'struct.construct', 'variant.construct', 'array.update', 'struct.update', 'call', 'phi', 'storage.read'}
         # LLVM guards split semantic blocks. Phi edges reference their final labels.
         exits, aliases = {}, {}
         for block in fn.blocks:
@@ -206,6 +217,10 @@ def llvm(module, target=None):
                     refs[op.result] = f'%{op.result}_mem'
                 if op.op in ('region.create', 'region.alloc'):
                     if op.op == 'region.alloc': exits[block.name] = f'{op.result}_done'
+                if op.op == 'loan.begin':
+                    aliases[op.result] = op.args[0]
+                if op.op == 'storage.local':
+                    refs[op.result] = f'%{op.result}_local'
                 if op.op in ('buffer.view','buffer.update'):
                     aliases[op.result] = op.args[0]
                 if op.op == 'array.repeat':
@@ -245,7 +260,7 @@ def llvm(module, target=None):
                 value = aliases[value]
             return value
         slots = {canonical(op.args[0]) for b in fn.blocks for op in b.operations
-                 if op.op in ('array.read', 'view.create') and not large(logical[op.args[0]])}
+                 if op.op in ('array.read', 'view.create') and is_array(logical[op.args[0]]) and not large(logical[op.args[0]])}
         calls = [op for b in fn.blocks for op in b.operations if op.op == 'call']
         signatures = {f.name: [p['type'] for p in f.params] for f in functions}
         signatures.update({f.name.text: [t for _,t in f.params] for f in getattr(module,'externals',[])})
@@ -275,6 +290,8 @@ def llvm(module, target=None):
             lines.append(f'{block.name}:')
             if block is fn.blocks[0]:
                 for operation in (op for b in fn.blocks for op in b.operations):
+                    if operation.op == 'storage.local':
+                        lines.append(f'  %{operation.result}_local = alloca {types[operation.type]}')
                     if operation.op in ('vec.get','vec.pop','vec.push','vec.set') and not large(operation.type):
                         lines.append(f'  %{operation.result}_scratch = alloca {types[operation.type]}')
                     if operation.op in ('region.create','region.alloc','vec.create','vec.reserve'):
@@ -308,7 +325,27 @@ def llvm(module, target=None):
                 args = [refs[a] for a in op.args]
                 if large(op.type) and op.op == 'phi':
                     continue
-                if op.op in ('region.create','region.alloc','vec.create'):
+                if op.op == 'loan.begin':
+                    pass
+                elif op.op == 'loan.end':
+                    lines.append(f'  %{name} = add i32 0, 0')
+                elif op.op == 'storage.local':
+                    write(op.type, args[0], refs[name])
+                elif op.op == 'storage.read':
+                    if large(op.type): transfer(op.type, args[0], refs[name])
+                    else: lines.append(f'  %{name} = load {ty}, ptr {args[0]}')
+                elif op.op == 'storage.write':
+                    write(op.source_type, args[1], args[0])
+                    lines.append(f'  %{name} = add i32 0, 0')
+                elif op.op == 'storage.field':
+                    index = [f for f,_ in structs[op.source_type].fields].index(op.field_name)
+                    lines.append(f'  %{name} = getelementptr {types[op.source_type]}, ptr {args[0]}, i32 0, i32 {index}')
+                elif op.op == 'storage.index':
+                    lines.append(f'  %{name}_invalid = icmp uge i32 {args[1]}, {array_length(op.source_type)}')
+                    guard(name, f'%{name}_invalid')
+                    lines.append(f'  %{name}_offset = zext i32 {args[1]} to i64')
+                    lines.append(f'  %{name} = getelementptr {types[op.source_type]}, ptr {args[0]}, i32 0, i64 %{name}_offset')
+                elif op.op in ('region.create','region.alloc','vec.create'):
                     if op.op == 'region.create':
                         lines.append(f'  %{name}_ptr = call ptr @liza_rt_region_create(i64 {args[0]}, ptr %{name}_error)')
                         payload_type, payload = 'ptr', f'%{name}_ptr'
@@ -434,7 +471,11 @@ def llvm(module, target=None):
                     lines.append(f'  %{name} = extractvalue {types[op.source_type]} {args[0]}, {index}')
                 elif op.op in ('array.read', 'view.create', 'view.read'):
                     if op.op == 'view.create':
-                        length = array_length(op.source_type)
+                        if is_view(op.source_type):
+                            lines.append(f'  %{name}_parent_length = extractvalue {types[op.source_type]} {args[0]}, 1')
+                            length = f'%{name}_parent_length'
+                        else:
+                            length = array_length(op.source_type)
                         lines.extend([
                             f'  %{name}_order = icmp ugt i32 {args[1]}, {args[2]}',
                             f'  %{name}_end = icmp ugt i32 {args[2]}, {length}',
@@ -443,8 +484,12 @@ def llvm(module, target=None):
                         guard(name, f'%{name}_invalid')
                         lines.append(f'  %{name}_length = sub i32 {args[2]}, {args[1]}')
                         lines.append(f'  %{name}_offset = zext i32 {args[1]} to i64')
-                        storage = args[0] if large(op.source_type) else f'%{canonical(op.args[0])}_storage'
-                        lines.append(f'  %{name}_ptr = getelementptr {types[op.source_type]}, ptr {storage}, i64 0, i64 %{name}_offset')
+                        if is_view(op.source_type):
+                            lines.append(f'  %{name}_parent_base = extractvalue {types[op.source_type]} {args[0]}, 0')
+                            lines.append(f'  %{name}_ptr = getelementptr {types[element_type(op.source_type)]}, ptr %{name}_parent_base, i64 %{name}_offset')
+                        else:
+                            storage = args[0] if large(op.source_type) else f'%{canonical(op.args[0])}_storage'
+                            lines.append(f'  %{name}_ptr = getelementptr {types[op.source_type]}, ptr {storage}, i64 0, i64 %{name}_offset')
                         lines.append(f'  %{name}_base = insertvalue {ty} zeroinitializer, ptr %{name}_ptr, 0')
                         lines.append(f'  %{name} = insertvalue {ty} %{name}_base, i32 %{name}_length, 1')
                     else:
@@ -496,6 +541,8 @@ def llvm(module, target=None):
                         lines.append(f'  %{result} = insertvalue {ty} {aggregate}, {types[field_type]} {value}, {index}')
                         aggregate = f'%{result}'
                 elif op.op == 'struct.field':
+                    if name in forwarded_fields:
+                        args = [refs[forwarded_fields[name]]]
                     names = [field for field, _ in structs[op.source_type].fields]
                     index = names.index(op.field_name)
                     lines.append(f'  %{name} = extractvalue {types[op.source_type]} {args[0]}, {index}')
@@ -522,7 +569,7 @@ def llvm(module, target=None):
                     callee = plan.calls.get(name, op.callee)
                     actuals = []
                     for i,(a,t) in enumerate(zip(op.args,signatures[op.callee])):
-                        if large(t):
+                        if large(t) or (i < len(op.parameter_modes) and op.parameter_modes[i] in ('mutable', 'readonly') and t in structs and structs[t].properties['copyable']):
                             actuals.append(f'ptr {refs[a]}')
                         else:
                             actuals.append(f'{value_types[a]} {refs[a]}')

@@ -1,5 +1,54 @@
 name: Compiler tests
-on: [push, pull_request]
+on:
+  pull_request:
+    paths:
+      - 'liza/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'benchmarks/json/**'
+      - 'benchmarks/mutable/**'
+      - 'tools/check_view_cost.py'
+      - 'tools/check_result_cost.py'
+      - 'tools/check_console_cost.py'
+      - 'tools/check_file_cost.py'
+      - 'tools/check_table_cost.py'
+      - 'tools/check_edit_cost.py'
+      - 'tools/check_region_cost.py'
+      - 'tools/check_vec_cost.py'
+      - 'tools/check_reserve_cost.py'
+      - 'tools/check_utf8_cost.py'
+      - 'tools/check_utf8_stream_cost.py'
+      - 'tools/check_cli_cost.py'
+      - 'tools/check_file_write_cost.py'
+      - '.github/workflows/test.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'liza/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'benchmarks/json/**'
+      - 'benchmarks/mutable/**'
+      - 'tools/check_view_cost.py'
+      - 'tools/check_result_cost.py'
+      - 'tools/check_console_cost.py'
+      - 'tools/check_file_cost.py'
+      - 'tools/check_table_cost.py'
+      - 'tools/check_edit_cost.py'
+      - 'tools/check_region_cost.py'
+      - 'tools/check_vec_cost.py'
+      - 'tools/check_reserve_cost.py'
+      - 'tools/check_utf8_cost.py'
+      - 'tools/check_utf8_stream_cost.py'
+      - 'tools/check_cli_cost.py'
+      - 'tools/check_file_write_cost.py'
+      - '.github/workflows/test.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
     strategy:
@@ -126,6 +175,8 @@ jobs:
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do call "%%i\VC\Auxiliary\Build\vcvars64.bat"
           clang --version
           python -m unittest discover -s tests -p test_windows.py -v
+          if errorlevel 1 exit /b 1
+          python -m unittest tests.test_local_subviews tests.test_text_builder tests.test_json_format -v
           if errorlevel 1 exit /b 1
           python tools/check_console_cost.py --output build/console-cost
           if errorlevel 1 exit /b 1

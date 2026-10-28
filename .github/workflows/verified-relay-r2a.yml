@@ -1,5 +1,22 @@
 name: Verified Relay R2-A (buffer model)
-on: [push, pull_request]
+on:
+  pull_request:
+    paths:
+      - 'verification/relay_r2a/**'
+      - 'verification/requirements.txt'
+      - '.github/workflows/verified-relay-r2a.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'verification/relay_r2a/**'
+      - 'verification/requirements.txt'
+      - '.github/workflows/verified-relay-r2a.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   buffer:
     strategy:

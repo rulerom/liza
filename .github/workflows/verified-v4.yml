@@ -1,5 +1,22 @@
 name: Liza Verified V4 (resource graph)
-on: [push, pull_request]
+on:
+  pull_request:
+    paths:
+      - 'liza/**'
+      - 'verification/v4/**'
+      - '.github/workflows/verified-v4.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'liza/**'
+      - 'verification/v4/**'
+      - '.github/workflows/verified-v4.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   resources:
     strategy:

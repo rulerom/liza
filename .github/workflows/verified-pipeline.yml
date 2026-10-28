@@ -1,13 +1,27 @@
 name: Verification pipeline
 on:
-  push:
   pull_request:
+    paths:
+      - 'liza/**'
+      - 'verification/**'
+      - '.github/workflows/verified-pipeline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'liza/**'
+      - 'verification/**'
+      - '.github/workflows/verified-pipeline.yml'
   workflow_dispatch:
     inputs:
       full:
         description: Run full V0–V4 with the pinned macOS proof toolchain
         type: boolean
         default: false
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   harness:
     strategy:
@@ -41,6 +55,16 @@ jobs:
           brew update
           brew install llvm@23 z3 re2c cmake ninja
           brew upgrade llvm@23 z3
+      - name: Restore locked Z3 bottle
+        env:
+          # Local formula loading is opt-in; the archive SHA-256 is checked first.
+          HOMEBREW_DEVELOPER: '1'
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+          HOMEBREW_NO_INSTALL_CLEANUP: '1'
+        run: |
+          bottle="$(python -m verification.v3.fetch_bottle --package z3 --directory "$RUNNER_TEMP/proof-bottles")"
+          brew reinstall "$bottle"
       - name: Verify pinned toolchain
         run: |
           python verification/v3/toolchain.py \
