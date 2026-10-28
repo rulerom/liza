@@ -1,0 +1,61 @@
+// Bounded, worker-local receiver registry for one RTP translation.
+// A receiver is configured by SSRC before it learns a UDP endpoint.
+pub struct Endpoint { pub ipv4: u32, pub port: u16 }
+struct Slot { ssrc: u32, active: bool, known: bool, address: Endpoint }
+pub struct Receivers { slots: [Slot; 64] }
+// Status: 0 success, 1 full, 2 duplicate, 3 missing, 4 invalid port.
+
+pub fn empty() -> Receivers {
+    return Receivers([Slot(0, false, false, Endpoint(0, 0)); 64])
+}
+
+pub fn add(borrow mut table: Receivers, ssrc: u32) -> u32 {
+    var i: u32 = 0
+    var free: u32 = 64
+    while i < 64 {
+        if table.slots[i].active {
+            if table.slots[i].ssrc == ssrc { return 2 }
+        } else {
+            if free == 64 { free = i }
+        }
+        i = i + 1
+    }
+    if free == 64 { return 1 }
+    table.slots[free] = Slot(ssrc, true, false, Endpoint(0, 0))
+    return 0
+}
+
+pub fn learn(borrow mut table: Receivers, ssrc: u32, address: Endpoint) -> u32 {
+    if address.port == 0 { return 4 }
+    var i: u32 = 0
+    while i < 64 {
+        if table.slots[i].active && table.slots[i].ssrc == ssrc {
+            table.slots[i].address = address
+            table.slots[i].known = true
+            return 0
+        }
+        i = i + 1
+    }
+    return 3
+}
+
+pub fn remove(borrow mut table: Receivers, ssrc: u32) -> u32 {
+    var i: u32 = 0
+    while i < 64 {
+        if table.slots[i].active && table.slots[i].ssrc == ssrc {
+            table.slots[i] = Slot(0, false, false, Endpoint(0, 0))
+            return 0
+        }
+        i = i + 1
+    }
+    return 3
+}
+
+// Iterate [0,capacity); only configured receivers with learned addresses appear.
+pub fn destination(borrow table: Receivers, slot: u32) -> Option<Endpoint> {
+    if slot >= 64 { return None }
+    if !table.slots[slot].active || !table.slots[slot].known { return None }
+    return Some(table.slots[slot].address)
+}
+
+pub fn capacity() -> u32 { return 64 }
