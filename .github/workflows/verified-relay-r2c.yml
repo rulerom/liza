@@ -1,5 +1,32 @@
 name: Verified Relay R2-C (pair lifecycle)
-on: [push, pull_request]
+on:
+  pull_request:
+    paths:
+      - 'liza/**'
+      - 'verification/relay_r1/**'
+      - 'verification/relay_r2b/**'
+      - 'verification/relay_r2c/**'
+      - 'verification/requirements.txt'
+      - 'examples/apps/liza_proxy.liza'
+      - 'examples/apps/relay/direction.liza'
+      - '.github/workflows/verified-relay-r2c.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'liza/**'
+      - 'verification/relay_r1/**'
+      - 'verification/relay_r2b/**'
+      - 'verification/relay_r2c/**'
+      - 'verification/requirements.txt'
+      - 'examples/apps/liza_proxy.liza'
+      - 'examples/apps/relay/direction.liza'
+      - '.github/workflows/verified-relay-r2c.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   lifecycle:
     strategy:

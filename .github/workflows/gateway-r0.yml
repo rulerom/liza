@@ -2,9 +2,15 @@ name: Gateway R0 reproduction
 on:
   pull_request:
     paths: ['tools/gateway_r0/**', 'docs/gateway-reproduction.md', 'maintenance/gateway-r0/**', '.github/workflows/gateway-r0.yml']
+  push:
+    branches: [main]
+    paths: ['tools/gateway_r0/**', 'docs/gateway-reproduction.md', 'maintenance/gateway-r0/**', '.github/workflows/gateway-r0.yml']
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   linux:
     runs-on: ubuntu-24.04
