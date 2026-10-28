@@ -165,6 +165,14 @@ stops; output missing relative to successful sends can include that queue.
 Runtimes, generated code, warmup, packet counts, CPU scaling and OS traffic must
 be considered before interpreting this as a service comparison.
 
+### Historical NB1-B series: cross-process latency invalid
+
+**Do not use latency or phase timestamp differences from this historical series.**
+On this host/Python, `time.monotonic_ns()` was process-relative; generator and
+collector did not share an epoch. Packet counts, per-process CPU/RSS and host
+UDP counters do not depend on cross-process timestamp subtraction. The current
+NB1-B runner uses `clock_gettime(CLOCK_MONOTONIC)` in every process.
+
 ### Saved NB1-B local series
 
 [Raw samples](results/macos-nb1b.json.gz), Apple M4 / macOS loopback,
@@ -186,8 +194,7 @@ startup, separate runtimes and measurement windows limit comparison.
 
 This is not an isolated machine or capacity benchmark. The control shim adds a
 poll around receive, phase acknowledgement is after generator process exit, and
-all three processes and unrelated host activity share CPU and OS counters. A
-sample at 5k showed a 256 ms delivered-only p99 outlier, so do not infer stable
-latency or compare language speed from three short repeats. Different socket
+all three processes and unrelated host activity share CPU and OS counters. Cross-process latency numbers in this historical report are invalid. Do not
+infer latency or compare language speed from them. Different socket
 buffer sizes, longer runs, native CPU samples and a separate load machine remain
 necessary; the available 100-Mbit LAN cannot sustain the target fanout rate.

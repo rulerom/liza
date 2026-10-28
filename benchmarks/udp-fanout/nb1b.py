@@ -40,7 +40,7 @@ def stop(p):
 def trial(binary,n,packets,rate,drain,folder):
     collector=server=generator=None
     collectfile=folder/'collector.json';genfile=folder/'generator.json'
-    before=udp_stats();start_case=time.monotonic_ns()
+    before=udp_stats();start_case=time.clock_gettime_ns(time.CLOCK_MONOTONIC)
     try:
         collector=subprocess.Popen([sys.executable,str(WORKER),'collector',str(n),str(packets),str(collectfile)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,cwd=ROOT)
         ports=json.loads(start_line(collector))['ports']
@@ -49,11 +49,11 @@ def trial(binary,n,packets,rate,drain,folder):
         generator=subprocess.Popen([sys.executable,str(WORKER),'generator',str(port),str(packets),str(rate),str(genfile)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,cwd=ROOT)
         gout,gerr=generator.communicate(timeout=max(10,packets/rate+10))
         if generator.returncode:raise RuntimeError('generator failed '+gerr)
-        phase_command_ns=time.monotonic_ns();server.stdin.write('D');server.stdin.flush()
+        phase_command_ns=time.clock_gettime_ns(time.CLOCK_MONOTONIC);server.stdin.write('D');server.stdin.flush()
         if start_line(server).strip()!='PHASE':raise RuntimeError('missing phase acknowledgement')
-        phase_ack_ns=time.monotonic_ns()
+        phase_ack_ns=time.clock_gettime_ns(time.CLOCK_MONOTONIC)
         time.sleep(drain);server_sample=process_stats(server.pid)
-        stop_command_ns=time.monotonic_ns();server.stdin.write('S');server.stdin.flush()
+        stop_command_ns=time.clock_gettime_ns(time.CLOCK_MONOTONIC);server.stdin.write('S');server.stdin.flush()
         sout,serr=server.communicate(timeout=5)
         if server.returncode:raise RuntimeError('server failed '+serr)
         time.sleep(.2);collector.stdin.write('S');collector.stdin.flush();cout,cerr=collector.communicate(timeout=8)

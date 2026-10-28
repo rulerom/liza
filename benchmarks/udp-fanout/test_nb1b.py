@@ -1,11 +1,19 @@
 """Check separate control pipe, phase counters, and unchanged UDP bytes."""
-import queue,socket,struct,subprocess,sys,tempfile,threading,unittest
+import queue,socket,struct,subprocess,sys,tempfile,threading,time,unittest
 from pathlib import Path
 import nb1b_build
 ROOT=Path(__file__).resolve().parents[2]
 
 @unittest.skipIf(sys.platform=='win32','experimental POSIX control adapter')
 class Control(unittest.TestCase):
+    def test_cross_process_clock_uses_shared_epoch(self):
+        before=time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+        remote=int(subprocess.check_output([sys.executable,'-c',
+            'import time; print(time.clock_gettime_ns(time.CLOCK_MONOTONIC))'],text=True))
+        after=time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+        self.assertLessEqual(before,remote)
+        self.assertLessEqual(remote,after)
+
     def test_stop_without_phase_is_error(self):
         with tempfile.TemporaryDirectory(prefix='liza-nb1b-invalid-') as temp:
             root=Path(temp);variants={'liza':root/'liza','c':root/'c'}

@@ -9,19 +9,19 @@ def usage():
     return {'user_s':r.ru_utime,'system_s':r.ru_stime,'maxrss_bytes':int(r.ru_maxrss if sys.platform=='darwin' else r.ru_maxrss*1024)}
 
 def generator(port,packets,pps,destination):
-    sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);start=time.monotonic_ns();times=[];errors=[]
+    sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);start=time.clock_gettime_ns(time.CLOCK_MONOTONIC);times=[];errors=[]
     try:
         for i in range(packets):
-            delay=(start+int(i*1e9/pps)-time.monotonic_ns())/1e9
+            delay=(start+int(i*1e9/pps)-time.clock_gettime_ns(time.CLOCK_MONOTONIC))/1e9
             if delay>0:time.sleep(delay)
-            data=common.packet(i);timestamp=time.monotonic_ns()
+            data=common.packet(i);timestamp=time.clock_gettime_ns(time.CLOCK_MONOTONIC)
             try:
                 n=sock.sendto(data,('127.0.0.1',port))
                 if n!=len(data):raise OSError('short send')
                 times.append(timestamp)
             except OSError as e:times.append(0);errors.append({'seq':i,'error':str(e)})
     finally:sock.close()
-    finished_ns=time.monotonic_ns()
+    finished_ns=time.clock_gettime_ns(time.CLOCK_MONOTONIC)
     elapsed=(finished_ns-start)/1e9
     Path(destination).write_text(json.dumps({'finished_ns':finished_ns,'times_ns':times,'offered':packets,'sent':sum(bool(t) for t in times),'send_errors':errors,'elapsed_s':elapsed,'usage':usage()}))
 
@@ -40,7 +40,7 @@ def collector(n,packets,destination):
                     running=False;break
                 try:data,peer=key.fileobj.recvfrom(65535)
                 except BlockingIOError:continue
-                stamp=time.monotonic_ns()
+                stamp=time.clock_gettime_ns(time.CLOCK_MONOTONIC)
                 if len(data)!=1200:invalid+=1;continue
                 seq=struct.unpack('!I',data[12:16])[0]
                 if seq>=packets or data!=common.packet(seq):invalid+=1;continue
