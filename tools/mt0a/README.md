@@ -28,4 +28,6 @@ On macOS 26.4.1 ARM64, Python 3.9.6, 4 workers / 64 sequential clients: shared
 listener 16/16/16/16, SO_REUSEPORT 0/0/0/64. On Windows 10 x86-64 with Python
 3.13.5: shared listener 16/16/16/16, reuseport marked unsupported by policy.
 These observations apply to that probe only; neither proves OS fairness or
-behavior of a future Gateway. Linux still requires an independent run.
+behavior of a future Gateway. A local Linux x86-64 container under emulation, kernel 6.8 / Python 3.7.17,
+passed the four tests: shared 16/16/16/16 and reuseport 18/17/12/17.
+This is not an independent native Linux machine or a throughput test.
