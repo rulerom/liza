@@ -61,8 +61,8 @@ def trial(exe,receivers,packets,rate):
         for s in clients:s.close()
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);ap.add_argument('--packets',type=int,default=1000);ap.add_argument('--repeats',type=int,default=3);a=ap.parse_args()
-    if a.output.exists() or not 1<=a.packets<=60000 or not 1<=a.repeats<=10:ap.error('fresh output and valid packet and repeat counts required')
+    ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);ap.add_argument('--packets',type=int,default=1000);ap.add_argument('--repeats',type=int,default=3);ap.add_argument('--rates',type=int,nargs='+',default=[500,1000,3000]);ap.add_argument('--receivers',type=int,nargs='+',default=[16,64]);a=ap.parse_args()
+    if a.output.exists() or not 1<=a.packets<=60000 or not 1<=a.repeats<=10 or any(not 1<=n<=64 for n in a.receivers) or any(not 1<=n<=100000 for n in a.rates):ap.error('fresh output and valid bounds required')
     report={'status':'incomplete','platform':platform.platform(),'revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'dirty':subprocess.check_output(['git','status','--short'],cwd=ROOT,text=True),'samples':[],
        'limits':['Loopback only; Python sender/collector competes with server','Input reaching server is not measured; missing output cannot be assigned to sender, kernel, server or collector','Latency excludes lost datagrams and is subject to collector scheduling','A timed-out server is terminated because finite input count cannot distinguish dropped input','No process CPU, OS drop counters or syscall counts','C and Liza use different internal lookup paths']}
     try:
@@ -76,7 +76,7 @@ def main():
             report['binary_sha256']={k:hashlib.sha256(p.read_bytes()).hexdigest() for k,p in bins.items()}
             report['correctness']={name:baseline.correctness(exe) for name,exe in bins.items()}
             print('correctness passed',flush=True)
-            cases=[(name,n,rate) for name in bins for n in (16,64) for rate in (500,1000,3000)]
+            cases=[(name,n,rate) for name in bins for n in a.receivers for rate in a.rates]
             for repeat in range(a.repeats):
                 random.Random(9183+repeat).shuffle(cases)
                 for name,n,rate in cases:
