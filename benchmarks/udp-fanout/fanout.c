@@ -14,9 +14,10 @@
 enum { MAX_PACKET=2048, MAX_RECEIVERS=64 };
 
 static int parse_uint(const char *s, uint32_t max, uint32_t *result) {
-    uint32_t n=0;
+    uint32_t n=0;unsigned digits=0;
     if(!*s)return 0;
     for(;*s;s++) {
+        if(++digits>10)return 0;
         if(*s<'0' || *s>'9')return 0;
         uint32_t d=(uint32_t)(*s-'0');
         if(n>(max-d)/10)return 0;
