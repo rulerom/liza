@@ -1,0 +1,32 @@
+name: MT0-A distribution probe
+on:
+  pull_request:
+    paths: ['tools/mt0a/**', '.github/workflows/mt0a-probe.yml']
+  push:
+    branches: [main]
+    paths: ['tools/mt0a/**', '.github/workflows/mt0a-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tools/mt0a -p test_probe.py -v
+      - run: python tools/mt0a/probe.py --workers 4 --connections 64 --output mt0a-probe.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mt0a-${{ matrix.os }}
+          path: mt0a-probe.json
