@@ -20,7 +20,7 @@ python3 -m liza run examples/connection_table.liza -O 2
 
 ## Идентификатор и запись
 
-```text
+```liza
 struct ConnectionId { slot: u32, generation: u32 }
 struct Connection { user_id: u64, state: u32, packets: u64 }
 ```
@@ -80,7 +80,7 @@ struct Connection { user_id: u64, state: u32, packets: u64 }
 `TableError` содержит `Full` и `NotFound`: `add` возвращает только `Full`,
 `edit/del` — только `NotFound`. При ошибке результат содержит неизменённую таблицу.
 
-```text
+```liza
 import tables.connections
 
 added = tables.connections.add(tables.connections.empty(), tables.connections.Connection(42, 1, 0))

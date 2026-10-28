@@ -7,7 +7,7 @@
 
 Операция внутри readonly-функции:
 
-```text
+```liza
 bytes = memory.view(text.storage)
 prefix = view bytes[0..text.length]
 ```
