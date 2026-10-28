@@ -6,7 +6,7 @@ RTP implementation. The input is synthetic 1200-byte packets with source,
 sequence and monotonic timestamp; no RTP parser or route table is involved.
 
 A POSIX dispatcher receives into one fixed 2048-byte buffer, rejects truncated
-datagrams and signals 1/2/4/8 workers. Each worker sends the same immutable
+datagrams and either sends sequentially (worker count 0), or signals 1/2/4/8 workers. Each worker sends the same immutable
 buffer to its fixed subset of receivers through a shared UDP socket. The next
 receive waits for every worker: exactly one packet is in flight. A mutex and
 condition variables protect publication and completion. This is intentionally
@@ -27,8 +27,18 @@ run per case in fixed order. Its p99 is diagnostic and not a reliable service
 latency measurement. Publisher count means different synthetic sources sharing
 one input socket, not separate physical hosts or independent network interfaces.
 
-The intended benchmark still needs: a plain single-thread reference, Linux
+The intended benchmark still needs: Linux
 `sendmmsg`, packet pools with multiple in-flight buffers and explicit bounds,
 real RTP and VideoGrace control updates, meaningful load and repeats, isolated
 load generator and CPU/syscall measurements. Do not infer performance or pick a
 production architecture from this prototype.
+
+The `0` mode sends inline on the receiving thread; `1` still uses a separate
+worker and the same barrier as larger worker counts. The saved
+`results/macos-sequential-threaded-probe.json` checks 20 combinations with
+50 packets per publisher at 100 packets/s per publisher on Apple M4 loopback.
+All expected outputs were observed without corruption, duplicates, reordering,
+or reported send errors. These tiny runs establish only that the baseline
+behaves as expected; their timing does not establish scaling. The pthread
+prototype shares one socket and immutable packet buffer until all workers
+finish: this is an experiment in C, not Liza's ownership or thread API.

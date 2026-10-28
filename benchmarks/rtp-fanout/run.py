@@ -40,7 +40,7 @@ def trial(binary,workers,receivers,publishers,packets,pps):
         if p.returncode:raise RuntimeError(err)
         stats=json.loads(err.splitlines()[-1]);expected=packets*publishers*receivers
         latencies.sort()
-        return {'workers':workers,'receivers':receivers,'publishers':publishers,'input_sent':packets*publishers,'fanout_expected':expected,'fanout_observed':len(observed),'missing':expected-len(observed),'duplicates':duplicate,'invalid':invalid,'reordered':reordered,'sender':stats,'p50_ms':statistics.median(latencies) if latencies else None,'p99_ms':latencies[max(0,int(len(latencies)*.99)-1)] if latencies else None}
+        return {'workers':workers,'mode':'sequential' if workers==0 else 'threaded','receivers':receivers,'publishers':publishers,'input_sent':packets*publishers,'fanout_expected':expected,'fanout_observed':len(observed),'missing':expected-len(observed),'duplicates':duplicate,'invalid':invalid,'reordered':reordered,'sender':stats,'p50_ms':statistics.median(latencies) if latencies else None,'p99_ms':latencies[max(0,int(len(latencies)*.99)-1)] if latencies else None}
     finally:
         done.set()
         if p.poll() is None:p.kill();p.communicate()
@@ -55,7 +55,7 @@ def main():
         rows=[]
         for publishers in (1,2):
             for receivers in (16,64):
-                for workers in (1,2,4,8):
+                for workers in (0,1,2,4,8):
                     row=trial(exe,workers,receivers,publishers,args.packets,args.pps);rows.append(row);print(json.dumps(row),flush=True)
         report={'status':'measured','platform':platform.platform(),'clang':subprocess.check_output(['clang','--version'],text=True).splitlines()[0], 'command':cmd,'results':rows,'limits':['Loopback and shared Python collector; no NIC or isolated CPU measurement','Stop-and-wait one-packet-in-flight design; not Liza or VideoGrace','Packet is a synthetic framed payload, not parsed RTP','Loss can arise in generator, sender, OS, or collector; no attribution','Latency uses same-host monotonic clock; no CPU or syscall metrics','Fixed sequential case order, one run; not a comparative performance baseline']}
         args.output.write_text(json.dumps(report,indent=2)+'\n')
