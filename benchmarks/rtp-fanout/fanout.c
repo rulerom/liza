@@ -37,7 +37,7 @@ static void *worker_main(void *arg) {
 }
 int main(int argc,char **argv) {
     if(argc<4){fprintf(stderr,"usage: fanout workers input_port receiver_port...\n");return 2;}
-    char *end;long nw=strtol(argv[1],&end,10);if(*end||nw<1||nw>MAX_WORKERS)return 2;
+    char *end;long nw=strtol(argv[1],&end,10);if(*end||nw<0||nw>MAX_WORKERS)return 2;
     long port=strtol(argv[2],&end,10);if(*end||port<0||port>65535||argc-3>MAX_RECEIVERS)return 2;
     struct shared s={0};s.workers=(unsigned)nw;s.receivers=(unsigned)(argc-3);
     if(pthread_mutex_init(&s.mu,NULL)||pthread_cond_init(&s.work,NULL)||pthread_cond_init(&s.done,NULL))return 3;
@@ -54,6 +54,14 @@ int main(int argc,char **argv) {
     while(!stopping){struct pollfd pfd={s.fd,POLLIN,0};int r=poll(&pfd,1,100);if(r<0){if(errno==EINTR)continue;break;}if(!r)continue;
         struct iovec iov={s.packet,MAX_PACKET};struct msghdr msg={0};msg.msg_iov=&iov;msg.msg_iovlen=1;
         ssize_t n=recvmsg(s.fd,&msg,0);if(n<0){if(errno==EINTR)continue;break;}if(msg.msg_flags&MSG_TRUNC)continue;
+        if(s.workers==0){
+            s.packets++;
+            for(unsigned i=0;i<s.receivers;i++){
+                ssize_t sent=sendto(s.fd,s.packet,(size_t)n,0,(struct sockaddr*)&s.addresses[i],sizeof(s.addresses[i]));
+                if(sent==n)s.sent++;else s.errors++;
+            }
+            continue;
+        }
         pthread_mutex_lock(&s.mu);s.length=(size_t)n;s.completed=0;s.epoch++;s.packets++;pthread_cond_broadcast(&s.work);
         while(s.completed<s.workers)pthread_cond_wait(&s.done,&s.mu);
         pthread_mutex_unlock(&s.mu);
