@@ -34,11 +34,12 @@ static int transfer(int from,int to,struct direction *d,short rev,short wev) {
     return 0;
 }
 int main(int argc,char **argv) {
-    if(argc!=2) return 2;
+    if(argc!=2 && argc!=3) return 2;
     char *end; long port=strtol(argv[1],&end,10); if(*end || port<1 || port>65535) return 2;
     signal(SIGPIPE,SIG_IGN); signal(SIGTERM,on_signal); signal(SIGINT,on_signal);
     int listener=socket(AF_INET,SOCK_STREAM,0); if(listener<0 || nonblock(listener)) return 3;
     struct sockaddr_in address={0}; address.sin_family=AF_INET; address.sin_addr.s_addr=htonl(0x7f000001u);
+    if(argc==3 && inet_pton(AF_INET,argv[2],&address.sin_addr)!=1) return 2;
     if(bind(listener,(void*)&address,sizeof address)||listen(listener,16)) return 3;
     socklen_t length=sizeof address; if(getsockname(listener,(void*)&address,&length)) return 3;
     printf("%u\n",(unsigned)ntohs(address.sin_port)); fflush(stdout);
@@ -57,7 +58,7 @@ int main(int argc,char **argv) {
         if(fds[0].revents&POLLIN) {
             int i; for(i=0;i<PAIRS && pairs[i].client>=0;i++) {} if(i<PAIRS) {
                 int c=accept(listener,NULL,NULL); if(c>=0) { int u=socket(AF_INET,SOCK_STREAM,0); if(u<0 || nonblock(c)||nonblock(u)) { close(c); if(u>=0)close(u); } else {
-                    address.sin_port=htons((uint16_t)port); int rc=connect(u,(void*)&address,sizeof address);
+                    address.sin_addr.s_addr=htonl(0x7f000001u); address.sin_port=htons((uint16_t)port); int rc=connect(u,(void*)&address,sizeof address);
                     if(rc<0 && errno!=EINPROGRESS) { close(c);close(u); } else { pairs[i].client=c;pairs[i].upstream=u;pairs[i].connecting=rc<0; }
                 }}
             }
