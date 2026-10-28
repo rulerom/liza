@@ -123,6 +123,7 @@ nav:
   - Бенчмарки: json-performance.md
   - Проект:
       - Verified Network Gateway: network-gateway.md
+      - "MT0-A: изолированные workers": mt0a-workers.md
       - Gateway R0 reproduction: gateway-reproduction.md
       - План разработки: roadmap.md
       - Milestones: milestones.md
