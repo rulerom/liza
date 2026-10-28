@@ -57,3 +57,37 @@ was 0.271–0.284 ms for Liza and 0.263–0.303 ms for C; p99 was 0.476–0.543 
 and 0.497–0.517 ms respectively. These figures include Python collection and OS
 scheduling. They are a low-rate pilot, not a throughput measurement or evidence
 of a general performance advantage.
+
+## Offered-load pilot
+
+`load.py` records losses instead of rejecting lossy runs. Unlike the correctness
+runner, it terminates a server after a bounded wait if lost inputs prevent the
+fixed input count from completing; this is recorded as abnormal termination.
+Each output is checked against its sequence and payload. Input delivery to the
+server is **not** instrumented; a missing output may result from input socket,
+server, output socket or the Python collector. Duplicate/invalid output and
+latencies for received packets are separately recorded.
+
+```sh
+python3 benchmarks/udp-fanout/load.py --output /tmp/load.json --packets 500 --repeats 3
+python3 benchmarks/udp-fanout/load.py --output /tmp/high.json --packets 1000 --repeats 3 --rates 5000 10000 20000 --receivers 64
+```
+
+[Basic series](results/macos-load-baseline.json.gz) and [higher-rate series](results/macos-load-high.json.gz)
+are gzip-compressed raw JSON from Apple M4 loopback with Python sender and
+collector on the same machine. Three shuffled repeats per combination. Basic:
+16/64 receivers, 500/1000/3000 offered packets/s, 500 packets per repeat.
+Higher rate: 64 receivers, 5000/10000/20000 offered packets/s, 1000 packets
+per repeat. Rate is offered input, not measured output throughput; each RTP
+packet is 1200 bytes. Actual generator timing and per-output latencies are in
+raw results. These very short runs are not steady state.
+
+At 10k input packets/s all 64,000 expected outputs per repeat were observed in
+both implementations, while delivered-only p99 rose to roughly 107–115 ms.
+At 20k, Liza missed 3,776–4,096 and C missed 3,712–7,552 of 64,000 expected
+outputs per repeat; all six processes required termination after the timeout.
+This does not locate the bottleneck or establish comparative capacity. The Python
+collector validates and allocates per-packet data on the same host and can itself
+fall behind; latency excludes lost datagrams. There is no warm-up, confidence
+interval, CPU attribution, NIC test, RTP control workload or VideoGrace-equivalent
+lifecycle. Verify on an independent generator and collector before conclusions.
