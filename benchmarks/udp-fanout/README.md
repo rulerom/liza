@@ -10,8 +10,8 @@ packet limit is 1..2147483647. No generated payload is copied to a second user
 buffer by fanout. Kernel copying, compiler-generated copies and allocations
 are **not instrumented**.
 
-Both consume exactly the requested number of incoming datagrams in normal
-operation. A malformed, nonmatching SSRC or truncated datagram counts toward the
+Both consume up to the requested number of incoming datagrams in normal
+operation; a benchmark-only UDP stop marker can end the run earlier. A malformed, nonmatching SSRC or truncated datagram counts toward the
 input limit but is not forwarded. On receive error both exit status 3 immediately;
 on send error they attempt remaining destinations for that packet and then exit
 3. Bad command-line arguments exit 2. These runtime failure paths have **not yet
@@ -60,9 +60,10 @@ of a general performance advantage.
 
 ## Offered-load pilot
 
-`load.py` records losses instead of rejecting lossy runs. Unlike the correctness
-runner, it terminates a server after a bounded wait if lost inputs prevent the
-fixed input count from completing; this is recorded as abnormal termination.
+The original pilot used a fixed input count and forced termination on lost input.
+The current `load.py` records losses and, after a fixed external drain interval,
+retries a benchmark-only loopback UDP stop marker with a bounded deadline. A
+missing marker may still require forced termination, which is recorded.
 Each output is checked against its sequence and payload. Input delivery to the
 server is **not** instrumented; a missing output may result from input socket,
 server, output socket or the Python collector. Duplicate/invalid output and
@@ -91,3 +92,31 @@ collector validates and allocates per-packet data on the same host and can itsel
 fall behind; latency excludes lost datagrams. There is no warm-up, confidence
 interval, CPU attribution, NIC test, RTP control workload or VideoGrace-equivalent
 lifecycle. Verify on an independent generator and collector before conclusions.
+
+## NB1-A: boundary counters and bounded external drain
+
+The [instrumented report](results/macos-nb1a.json.gz) records 64 recipients,
+1000 offered packets per sample, three shuffled repeats per variant at 5k, 10k
+and 20k input packets/s, and 0.5 seconds external drain before the stop marker.
+It records received, accepted, invalid, wrong SSRC and truncated counts, send
+attempt/success/failure, stop reason and collector unique output. Generator
+intervals are not yet retained; per-output latencies are conditional on receipt.
+
+All 18 processes stopped normally via the control marker. At 5k and 10k, each
+received 1000 inputs, reported 64000 successful local sends, and the collector
+observed all 64000 outputs. At 10k, delivered-only p99 ranged 102.6–141.1 ms;
+one C sample offered only about 9150 input packets/s. At 20k, each generator
+reported 1000 successful sends, Liza received 933–934 and C 920–941 before stop.
+For every received packet the programs reported 64 successful local sends; the
+collector observed all outputs corresponding to those sends. This localizes the
+observed count difference before the application's receive boundary, but packets
+may have been dropped or arrived after the stop marker; it does not identify the
+kernel queue or distinguish loss from reordering across the control boundary.
+The 20k samples are brief and the receiver/Python collector share one host.
+
+The marker is unauthenticated and loopback-only; it is not a production shutdown
+API. UDP does not guarantee delivery or ordering of the marker. The controller
+can still force termination after the deadline and records that fact; this is
+not a hard real-time guarantee. The old fixed-count pilot above is retained as a
+historical comparison, not an instrumented result. NB1-B still requires an
+independent generator/collector, CPU/RSS and socket-level loss metrics.
