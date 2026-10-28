@@ -198,3 +198,9 @@ all three processes and unrelated host activity share CPU and OS counters. Cross
 infer latency or compare language speed from them. Different socket
 buffer sizes, longer runs, native CPU samples and a separate load machine remain
 necessary; the available 100-Mbit LAN cannot sustain the target fanout rate.
+
+### NB1-C: native collector diagnostic
+
+`python3 benchmarks/udp-fanout/nb1c.py --output /tmp/nb1c.json` runs the Liza and C variants with a separate Python generator and a native C collector. It validates each delivered packet and records 100 µs latency histograms using a shared `CLOCK_MONONOTONIC` clock. The report contains requested and actual generation timing, per-phase fanout counters, socket buffer sizes, process CPU/RSS samples, and host-wide UDP counters. Actual fanout socket buffer sizes must match between runs. The collector has bounded tracking storage and a configurable, bounded post-server drain (`--collector-drain`); unobserved outputs may still be queued when it stops.
+
+This is a same-host experiment without CPU affinity: all processes compete for CPU, and host UDP counters cannot attribute drops to a particular socket. The short warmup runs use separate processes, not the measured processes. The D control acknowledgement marks when the fanout observes the phase transition, which can be later than the end of generator traffic. Percentiles exclude missing packets and are histogram upper bounds. Fanout CPU/RSS are live samples, not peak values. The benchmark-only POSIX `poll` adapter changes the receive boundary and is identified by the source and binary hashes in the report; these numbers are not measurements of the unchanged production runtime.

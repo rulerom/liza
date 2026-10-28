@@ -96,6 +96,11 @@ int main(int argc,char **argv) {
     if(bind(fd,(struct sockaddr *)&addr,sizeof(addr))<0){perror("bind");close(fd);return 1;}
     socklen_t addrlen=sizeof(addr);
     if(getsockname(fd,(struct sockaddr *)&addr,&addrlen)<0){perror("getsockname");close(fd);return 1;}
+#ifdef NB1B_CONTROL
+    int rxbuf=0,txbuf=0;socklen_t optlen=sizeof(int);
+    if(getsockopt(fd,SOL_SOCKET,SO_RCVBUF,&rxbuf,&optlen)||getsockopt(fd,SOL_SOCKET,SO_SNDBUF,&txbuf,&optlen)){close(fd);return 3;}
+    fprintf(stderr,"socket_rcvbuf=%d\nsocket_sndbuf=%d\n",rxbuf,txbuf);
+#endif
     if(printf("%u\n",(unsigned)ntohs(addr.sin_port))<0 || fflush(stdout)!=0){close(fd);return 1;}
     unsigned errors=0;
     uint64_t rx=0, valid=0, invalid=0, wrong=0, truncated=0, attempted=0, succeeded=0, failed=0, reason=0;
