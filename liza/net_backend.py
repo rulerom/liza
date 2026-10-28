@@ -1,4 +1,4 @@
-"""Scalar/pointer TCP ABI; buffer storage stays in its original region."""
+"""Scalar/pointer TCP and UDP ABI; buffer storage stays in its original region."""
 from .types import product_args
 
 
