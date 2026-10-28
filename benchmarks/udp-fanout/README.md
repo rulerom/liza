@@ -164,3 +164,30 @@ scheduling/processing. A receiver may still have queued data when the collector
 stops; output missing relative to successful sends can include that queue.
 Runtimes, generated code, warmup, packet counts, CPU scaling and OS traffic must
 be considered before interpreting this as a service comparison.
+
+### Saved NB1-B local series
+
+[Raw samples](results/macos-nb1b.json.gz), Apple M4 / macOS loopback,
+commit `391a26a`, 64 receivers, 1000 offered packets per run, 3 shuffled repeats
+of Liza/C at 5k/10k/20k input packets/s, 0.5s drain. At 5k both processed all
+1000 by the observed phase boundary. At 10k all were eventually processed;
+337–361 per run were processed during drain. At 20k Liza processed 968–974 and
+C 966–968; 614–618 per run were processed during drain. Each process stopped
+normally and the collector observed all reported successful sends.
+
+The system-wide macOS full-socket-buffer drop counter increased 26–34 per 20k
+sample, with no increase in these 5k/10k samples. The increase matched the
+missing input count in this particular run, but the counter is host-wide, so
+this is correlation, not independent per-socket attribution. At 10k, measured
+fanout CPU was about 0.16 s per run; collector CPU was about 0.20 s and generator
+CPU about 0.035–0.045 s, including their own startup. Fanout RSS is a live sample
+around 1.4 MB; collector maximum RSS was about 33.6 MB. `ps` precision, process
+startup, separate runtimes and measurement windows limit comparison.
+
+This is not an isolated machine or capacity benchmark. The control shim adds a
+poll around receive, phase acknowledgement is after generator process exit, and
+all three processes and unrelated host activity share CPU and OS counters. A
+sample at 5k showed a 256 ms delivered-only p99 outlier, so do not infer stable
+latency or compare language speed from three short repeats. Different socket
+buffer sizes, longer runs, native CPU samples and a separate load machine remain
+necessary; the available 100-Mbit LAN cannot sustain the target fanout rate.

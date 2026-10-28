@@ -100,7 +100,12 @@ def main():
                 cases=[(k,rate) for k in bins for rate in a.rates];random.Random(9183+repeat).shuffle(cases)
                 for name,rate in cases:
                     folder=tmp/(name+'-'+str(rate)+'-'+str(repeat));folder.mkdir()
-                    row=trial(bins[name],a.receivers,a.packets,rate,a.drain,folder);row.update(variant=name,repeat=repeat);report['samples'].append(row)
+                    try:
+                        row=trial(bins[name],a.receivers,a.packets,rate,a.drain,folder)
+                    except Exception as error:
+                        report['samples'].append({'variant':name,'repeat':repeat,'requested_input_pps':rate,'termination':'forced_or_failed','error':repr(error)})
+                        raise
+                    row.update(variant=name,repeat=repeat);report['samples'].append(row)
                     print(name,rate,'received',row['fanout']['received'],'drain',row['drain_received'],'collector',row['collector_unique'],flush=True)
                     a.output.write_text(json.dumps(report,indent=2)+'\n')
             report['status']='measured'

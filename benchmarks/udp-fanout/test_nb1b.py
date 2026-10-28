@@ -6,6 +6,23 @@ ROOT=Path(__file__).resolve().parents[2]
 
 @unittest.skipIf(sys.platform=='win32','experimental POSIX control adapter')
 class Control(unittest.TestCase):
+    def test_stop_without_phase_is_error(self):
+        with tempfile.TemporaryDirectory(prefix='liza-nb1b-invalid-') as temp:
+            root=Path(temp);variants={'liza':root/'liza','c':root/'c'}
+            nb1b_build.build(ROOT,variants['liza'])
+            subprocess.run(['clang','-std=c11','-O2','-Wall','-Wextra','-Werror','-DNB1B_CONTROL',str(ROOT/'benchmarks/udp-fanout/fanout.c'),'-o',str(variants['c'])],check=True)
+            for kind,exe in variants.items():
+                with self.subTest(kind=kind),socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as dest:
+                    dest.bind(('127.0.0.1',0))
+                    p=subprocess.Popen([str(exe),'1000','42',str(dest.getsockname()[1])],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                    try:
+                        int(p.stdout.readline());p.stdin.write('S');p.stdin.flush();out,err=p.communicate(timeout=5)
+                        self.assertEqual(p.returncode,3,out+err)
+                        metrics={k:int(v) for k,v in (line.split('=') for line in err.splitlines())}
+                        self.assertEqual(metrics['stop_reason'],2);self.assertEqual(metrics['phase_seen'],0)
+                    finally:
+                        if p.poll() is None:p.kill();p.communicate()
+
     def test_independent_pipe_and_drain(self):
         with tempfile.TemporaryDirectory(prefix='liza-nb1b-test-') as temp:
             root=Path(temp);variants={'liza':root/'liza','c':root/'c'}
