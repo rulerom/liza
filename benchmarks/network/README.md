@@ -32,3 +32,13 @@ network is isolated. Do not publish p99 as a service-level latency guarantee.
 Next: validate equivalent lifecycle semantics and negative cases, longer steady
 state, slow clients/backpressure, per-process CPU/RSS, and a separate load
 machine before treating results as a comparative L4 baseline.
+
+## Saved pilot
+
+The [raw Apple M4 loopback series](results/apple-m4-loopback-pilot.json) records
+five shuffled repeats at commit `a9b8e8e`. Median one-direction throughput is
+404.1 MiB/s Liza / 412.2 MiB/s C for one connection and 550.7 / 541.3 MiB/s for
+eight. Pooled p50/p99 round-trip latencies for 64-byte messages were 0.039/0.078
+ms Liza vs 0.038/0.081 ms C at one connection, 0.334/0.741 ms vs 0.329/0.707
+ms at eight. These short loopback samples are a pilot, not evidence of a speed
+advantage or comparable operational behavior. Limits above apply.
