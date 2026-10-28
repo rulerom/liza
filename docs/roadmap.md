@@ -22,7 +22,7 @@ description: "Приоритеты Liza: эксплуатационный L4 gat
 | P0 | Надёжность TCP Proxy | Idle timeout, bounded graceful shutdown, метрики и освобождение ресурсов |
 | P0 | Verified Networking | Контрактная модель I/O, проверка адаптеров, fault injection и привязка к реальному коду |
 | P1 | Производительность | Baseline восьми пар, затем измеренный эксперимент до 1024 пар |
-| P1 | MT | После однопоточных измерений: изолированные workers, ownership transfer, bounded channels |
+| P1 | MT | [MT0-A: контракт изолированных workers](mt0a-workers.md), платформенный probe и измерения после однопоточного baseline |
 | P2 | JSON и stdlib | Только компоненты для конфигурации, JSON API и управляющих протоколов сервисов |
 | Отложено | Self-hosting | Без планового срока; Python остаётся основным языком компилятора |
 
