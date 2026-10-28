@@ -1,0 +1,134 @@
+import rtp.receivers
+import rtp.packet
+
+// Unsigned decimal parsing without overflow; upper limit is explicit.
+fn number(arg:Arg,limit:u32)->Result<u32,u32> {
+    var i:u32=0
+    var value:u32=0
+    var digits:u32=0
+    while i<11 {
+        match cli.ascii_at(arg,i) {
+            None=>{return Err(1)}
+            Some(ch)=>{
+                if ch==0 {if digits==0 {return Err(1)} return Ok(value)}
+                if ch<48 || ch>57 {return Err(1)}
+                digit=u32(ch)-48
+                if value>limit/10 || (value==limit/10 && digit>limit%10) {return Err(1)}
+                value=value*10+digit
+                digits=digits+1
+            }
+        }
+        i=i+1
+    }
+    return Err(1)
+}
+fn setup(borrow mut table:rtp.receivers.Receivers)->Result<u32,u32>:io {
+    if cli.count()<4 || cli.count()>67 {return Err(1)}
+    var i:u32=3
+    while i<cli.count() {
+        match cli.arg(i) {
+            None=>{return Err(1)}
+            Some(arg)=>{
+                match number(arg,65535) {
+                    Err(e)=>{return Err(1)}
+                    Ok(port)=>{
+                        if port==0 {return Err(1)}
+                        added=rtp.receivers.add(borrow mut table,i)
+                        if added!=0 {return Err(1)}
+                        learned=rtp.receivers.learn(borrow mut table,i,rtp.receivers.Endpoint(2130706433,u16(port)))
+                        if learned!=0 {return Err(1)}
+                    }
+                }
+            }
+        }
+        i=i+1
+    }
+    return Ok(0)
+}
+fn parse_arg(index:u32,limit:u32)->Result<u32,u32>:io {
+    match cli.arg(index) {None=>{return Err(1)} Some(arg)=>{return number(arg,limit)}}
+}
+fn main()->u32:io,alloc {
+    var recipients=rtp.receivers.empty()
+    var status:u32=0
+    var count:u32=0
+    var expected:u32=0
+    match setup(borrow mut recipients) {Err(e)=>{return 2} Ok(done)=>{}}
+    recipient_count=cli.count()-3
+    match parse_arg(1,2147483647) {Err(e)=>{return 2} Ok(v)=>{count=v}}
+    match parse_arg(2,4294967295) {Err(e)=>{return 2} Ok(v)=>{expected=v}}
+    if count==0 {return 2}
+    match net.udp_bind(net.ipv4(127,0,0,1,0)) {
+        Err(error)=>{return 3}
+        Ok(socket)=>{
+            match memory.create(4096) {
+                Err(error)=>{status=3}
+                Ok(region)=>{
+                    allocation=memory.alloc<u8>(region,2048,0)
+                    match move allocation {
+                        Err(error)=>{status=3}
+                        Ok(input)=>{
+                            var buffer=move input
+                            match net.udp_port(socket) {
+                                Err(error)=>{status=3}
+                                Ok(port)=>{
+                                    printed=console.print_u64(u64(port))
+                                    newline=console.write("\n")
+                                    var received:u32=0
+                                    while received<count && status==0 {
+                                        (next,result)=net.udp_receive(socket,move buffer)
+                                        buffer=move next
+                                        received=received+1
+                                        match result {
+                                            Err(error)=>{
+                                                match error {
+                                                    UdpError.Truncated=>{}
+                                                    UdpError.AddressInUse=>{status=3}
+                                                    UdpError.PermissionDenied=>{status=3}
+                                                    UdpError.Interrupted=>{status=3}
+                                                    UdpError.WouldBlock=>{status=3}
+                                                    UdpError.Disconnected=>{status=3}
+                                                    UdpError.InvalidRange=>{status=3}
+                                                    UdpError.Other=>{status=3}
+                                                }
+                                            }
+                                            Ok(meta)=>{
+                                                {
+                                                    bytes=memory.view(buffer)
+                                                    packet=view bytes[0..net.udp_length(meta)]
+                                                    match rtp.packet.parse(packet) {
+                                                        Err(error)=>{}
+                                                        Ok(header)=>{
+                                                            if header.ssrc==expected {
+                                                                var slot:u32=0
+                                                                while slot<recipient_count {
+                                                                    match rtp.receivers.destination(recipients,slot) {
+                                                                        None=>{}
+                                                                        Some(endpoint)=>{
+                                                                            dest=net.ipv4(127,0,0,1,endpoint.port)
+                                                                            sent=net.udp_send(socket,packet,0,net.udp_length(meta),dest)
+                                                                            match sent {Err(e)=>{status=3} Ok(n)=>{}}
+                                                                        }
+                                                                    }
+                                                                    slot=slot+1
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            released=memory.release(move buffer)
+                        }
+                    }
+                    closed=memory.close(move region)
+                }
+            }
+            closed=net.udp_close(move socket)
+            return status
+        }
+    }
+}
