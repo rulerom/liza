@@ -47,3 +47,13 @@ the setup, not to claim maximum capacity or tail-latency guarantees. Separate
 load generator, independent network, offered/accepted/delivered packet rates,
 CPU by process, syscall counts, loss accounting and broader repeated workloads
 are required for a benchmark; the 100-Mbit LAN would cap results.
+
+## Saved correctness and latency pilot
+
+The [raw report](results/macos-loopback-pilot.json) records commit `b0ea6a8`,
+three repeats per implementation at 100 input packets/s with 16 recipients.
+Each variant received all 1,600 expected outputs in each repeat. Per-run p50
+was 0.271–0.284 ms for Liza and 0.263–0.303 ms for C; p99 was 0.476–0.543 ms
+and 0.497–0.517 ms respectively. These figures include Python collection and OS
+scheduling. They are a low-rate pilot, not a throughput measurement or evidence
+of a general performance advantage.
