@@ -1,0 +1,50 @@
+import rtp.receivers
+
+// Executable demonstration: bounded capacity, address update and reuse.
+fn main() -> u32 {
+    var table = rtp.receivers.empty()
+    var i: u32 = 0
+    while i < rtp.receivers.capacity() {
+        status = rtp.receivers.add(borrow mut table, i + 100)
+        if status != 0 { return 1 }
+        i = i + 1
+    }
+    duplicate = rtp.receivers.add(borrow mut table, 100)
+    if duplicate != 2 { return 2 }
+    full = rtp.receivers.add(borrow mut table, 999)
+    if full != 1 { return 3 }
+    match rtp.receivers.destination(table, 0) {
+        Some(address) => { return 4 }
+        None => {}
+    }
+    learned = rtp.receivers.learn(borrow mut table, 100, rtp.receivers.Endpoint(2130706433, 9000))
+    if learned != 0 { return 5 }
+    snapshot = copy table
+    changed = rtp.receivers.learn(borrow mut table, 100, rtp.receivers.Endpoint(2130706433, 9001))
+    if changed != 0 { return 6 }
+    match rtp.receivers.destination(snapshot, 0) {
+        Some(address) => { if address.port != 9000 { return 7 } }
+        None => { return 8 }
+    }
+    invalid = rtp.receivers.learn(borrow mut table, 100, rtp.receivers.Endpoint(0, 0))
+    if invalid != 4 { return 9 }
+    match rtp.receivers.destination(table, 0) {
+        Some(address) => { if address.port != 9001 { return 10 } }
+        None => { return 11 }
+    }
+    removed = rtp.receivers.remove(borrow mut table, 100)
+    if removed != 0 { return 12 }
+    missing = rtp.receivers.learn(borrow mut table, 100, rtp.receivers.Endpoint(1, 10))
+    if missing != 3 { return 13 }
+    reused = rtp.receivers.add(borrow mut table, 999)
+    if reused != 0 { return 14 }
+    match rtp.receivers.destination(table, 0) {
+        Some(address) => { return 15 }
+        None => {}
+    }
+    match rtp.receivers.destination(table, 64) {
+        Some(address) => { return 16 }
+        None => {}
+    }
+    return 0
+}
