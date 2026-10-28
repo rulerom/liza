@@ -1,0 +1,35 @@
+{
+  "objects": {
+    "default": {
+      "text_bytes": 7188,
+      "sha256": "9ee9647b8b7cc8d7025b04bdd95a8fd0d06244bf549fda59511c216273c66947"
+    },
+    "scalar": {
+      "text_bytes": 6628,
+      "sha256": "7c01ca30e8f27cd9e554090a9f4fa117a43c6335ca02c427bb1882ea8db06c9a"
+    },
+    "alias": {
+      "text_bytes": 7188,
+      "sha256": "9ee9647b8b7cc8d7025b04bdd95a8fd0d06244bf549fda59511c216273c66947"
+    },
+    "staged": {
+      "text_bytes": 7284,
+      "sha256": "58f0cab7d58d43ff72889b336d1129ede3ad029868f2a05d7367bb43b945f279"
+    },
+    "cost400": {
+      "text_bytes": 8244,
+      "sha256": "61ae18915ce53aa76727795ee188dacdca9b1f3f861631f43498c2eca8d4ee82"
+    },
+    "alias-cost400": {
+      "text_bytes": 8244,
+      "sha256": "61ae18915ce53aa76727795ee188dacdca9b1f3f861631f43498c2eca8d4ee82"
+    },
+    "scalar-cost400": {
+      "text_bytes": 7876,
+      "sha256": "a7236c757731db3b86325575ca979eb9fdc53709544f6beb0bad1a7cf1d3184c"
+    }
+  },
+  "inspection_source_sha256": "3d26df786ca3cb5578f48ae192e9108b15cfaee5ddca43b226d4fc596d5e71bc",
+  "alias_matches_default": true,
+  "alias_cost400_matches_cost400": true
+}

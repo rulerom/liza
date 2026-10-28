@@ -1,0 +1,55 @@
+pub struct Stats {pub active:u64;pub accepted:u64;pub closed:u64;pub forward_read:u64;pub forward_written:u64;pub reverse_read:u64;pub reverse_written:u64;pub errors:u64;pub connect_timeouts:u64;pub idle_timeouts:u64;pub drain_forced:u64;pub discarded:u64;pub overflow:bool}
+pub fn create()->Stats {return Stats(0,0,0,0,0,0,0,0,0,0,0,0,false)}
+pub fn add(value:u64,amount:u64)->u64 {
+    if amount>18446744073709551615-value {return 18446744073709551615}
+    return value+amount
+}
+pub fn accepted(borrow mut stats:Stats)->u32 {
+    if stats.accepted==18446744073709551615 {stats.overflow=true}
+    stats.accepted=add(stats.accepted,1)
+    stats.active=stats.active+1
+    return 0
+}
+pub fn transfer(borrow mut stats:Stats,kind:u32,count:u32)->u32 {
+    amount=u64(count)
+    if kind==0 {if amount>18446744073709551615-stats.forward_read {stats.overflow=true} stats.forward_read=add(stats.forward_read,amount)}
+    if kind==1 {if amount>18446744073709551615-stats.forward_written {stats.overflow=true} stats.forward_written=add(stats.forward_written,amount)}
+    if kind==2 {if amount>18446744073709551615-stats.reverse_read {stats.overflow=true} stats.reverse_read=add(stats.reverse_read,amount)}
+    if kind==3 {if amount>18446744073709551615-stats.reverse_written {stats.overflow=true} stats.reverse_written=add(stats.reverse_written,amount)}
+    return 0
+}
+// reason: 0 normal, 1 fatal error, 2 connect deadline, 3 idle, 4 drain deadline.
+pub fn closed(borrow mut stats:Stats,reason:u32,discarded:u32)->u32 {
+    stats.active=stats.active-1
+    if stats.closed==18446744073709551615 || u64(discarded)>18446744073709551615-stats.discarded {stats.overflow=true}
+    stats.closed=add(stats.closed,1)
+    stats.discarded=add(stats.discarded,u64(discarded))
+    if reason==1 {if stats.errors==18446744073709551615 {stats.overflow=true} stats.errors=add(stats.errors,1)}
+    if reason==2 {if stats.connect_timeouts==18446744073709551615 {stats.overflow=true} stats.connect_timeouts=add(stats.connect_timeouts,1)}
+    if reason==3 {if stats.idle_timeouts==18446744073709551615 {stats.overflow=true} stats.idle_timeouts=add(stats.idle_timeouts,1)}
+    if reason==4 {if stats.drain_forced==18446744073709551615 {stats.overflow=true} stats.drain_forced=add(stats.drain_forced,1)}
+    return 0
+}
+fn field(name:Text,value:u64)->bool:io {
+    match console.err(name) {Err(e)=>{return false} Ok(n)=>{}}
+    match console.err_u64(value) {Err(e)=>{return false} Ok(n)=>{}}
+    match console.err("\n") {Err(e)=>{return false} Ok(n)=>{}}
+    return true
+}
+pub fn report(stats:Stats)->bool:io {
+    if !field("active=",stats.active) {return false}
+    if !field("accepted=",stats.accepted) {return false}
+    if !field("closed=",stats.closed) {return false}
+    if !field("forward_read=",stats.forward_read) {return false}
+    if !field("forward_written=",stats.forward_written) {return false}
+    if !field("reverse_read=",stats.reverse_read) {return false}
+    if !field("reverse_written=",stats.reverse_written) {return false}
+    if !field("errors=",stats.errors) {return false}
+    if !field("connect_timeouts=",stats.connect_timeouts) {return false}
+    if !field("idle_timeouts=",stats.idle_timeouts) {return false}
+    if !field("drain_forced=",stats.drain_forced) {return false}
+    if !field("discarded=",stats.discarded) {return false}
+    var overflow:u64=0
+    if stats.overflow {overflow=1}
+    return field("overflow=",overflow)
+}

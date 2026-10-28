@@ -1,5 +1,22 @@
 name: Relay mathematical model (experimental)
-on: [push, pull_request]
+on:
+  pull_request:
+    paths:
+      - 'verification/relay_model/**'
+      - 'verification/requirements.txt'
+      - '.github/workflows/relay-model.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'verification/relay_model/**'
+      - 'verification/requirements.txt'
+      - '.github/workflows/relay-model.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   model:
     strategy:

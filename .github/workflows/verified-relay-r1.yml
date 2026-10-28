@@ -1,5 +1,26 @@
 name: Verified Relay R1 (experimental)
-on: [push, pull_request]
+on:
+  pull_request:
+    paths:
+      - 'liza/**'
+      - 'verification/relay_r1/**'
+      - 'verification/requirements.txt'
+      - 'examples/apps/relay/direction.liza'
+      - '.github/workflows/verified-relay-r1.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'liza/**'
+      - 'verification/relay_r1/**'
+      - 'verification/requirements.txt'
+      - 'examples/apps/relay/direction.liza'
+      - '.github/workflows/verified-relay-r1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   direction:
     strategy:

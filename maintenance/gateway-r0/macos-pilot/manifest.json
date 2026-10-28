@@ -1,0 +1,16 @@
+{
+  "archive_sha256": "ce7584fd7d1e150501f3a7174a12057431649c2a809e69e1f46dc8b1b6011752",
+  "files": {
+    "build/program.ll": "6775627b09059761c523f07de94a3f5cba08168efbdf5324c333e4bb0eb2a431",
+    "build/program.semantic.json": "4c6f50374132a19469ce86d4e3e8922b5464c6f4acfdabd0b6c21a5cef39c96c",
+    "build/proxy-O0": "d6a5666e50d55784fad9ab1cfdb8be01faa29fbb7d9ca4e61f399abf68745a54",
+    "build/proxy-O2": "c6d6d397350dab85ece9f36a5b6c6447f1a5e622e21520be8f9e299a5b24cee9",
+    "report.json": "2bc11e12f3d04ca77f4e488b0cf8582e9908e3c5bce1121728eac5ff4ba4c632",
+    "source/examples/apps/liza_proxy_ops.liza": "e6bd206d02112d50a549900395b378010772031c702aff90d5d65ed71b84ee41",
+    "source/examples/apps/proxy/config.liza": "2e22703f8ddfbfd41808afe4e29255cf71d33308df637f0532b7737e733ab5c4",
+    "source/examples/apps/proxy/metrics.liza": "d519e2d61aa34457c75e30d36a4b434c1014a3e8c7ad7f3cdd84c63a1f787d6f",
+    "source/examples/apps/relay/direction.liza": "17e3d113c1b672337c527dbcb11905d47d09c92ee767b972ccfd765322b3a5b5",
+    "test_proxy_lifecycle.py.log": "b1e4adda6b0e89fcab5520edae1e38cb2cef9940486b41eef745770d109aa228",
+    "test_proxy_ops.py.log": "2a1956b2cf0e516443d84496c4210dd2bd8d28e16ef929c41ad5a592fffa1902"
+  }
+}

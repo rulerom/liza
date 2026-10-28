@@ -1,10 +1,11 @@
 import relay.direction
 import proxy.config
+import proxy.metrics
 struct Pair {
-    client:Option<net.Connection>;upstream:Option<net.Connection>;connected:bool;started:u64;
+    client:Option<net.Connection>;upstream:Option<net.Connection>;connected:bool;started:u64;activity:u64;
     forward:relay.direction.Direction;reverse:relay.direction.Direction
 }
-fn empty_pair()->Pair {return Pair(None,None,false,0,relay.direction.empty(),relay.direction.empty())}
+fn empty_pair()->Pair {return Pair(None,None,false,0,0,relay.direction.empty(),relay.direction.empty())}
 fn retry(error:ReactorError)->bool {
     match error {
         ReactorError.Interrupted=>{return true}
@@ -21,33 +22,58 @@ fn retry(error:ReactorError)->bool {
         ReactorError.OutOfMemory=>{return false}
     }
 }
-fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.Address,timeout:u32,once:bool)->u32:io,alloc {
+fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,config:proxy.config.Config)->u32:io,alloc {
     var buffers=move storage
     var pairs=[empty_pair();8]
     var running=true
     var accepted=false
     var status:u32=0
-    match net.reactor_port(reactor) {
-        Err(error)=>{status=3;running=false}
-        Ok(port)=>{
-            match console.print_u64(u64(port)) {Ok(done)=>{} Err(error)=>{status=3;running=false}}
-            match console.write("\n") {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+    match net.reactor_watch_shutdown(reactor) {Ok(done)=>{} Err(e)=>{status=3;running=false}}
+    if running {
+        match net.reactor_port(reactor) {
+            Err(error)=>{status=3;running=false}
+            Ok(port)=>{
+                match console.print_u64(u64(port)) {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+                match console.write("\n") {Ok(done)=>{} Err(error)=>{status=3;running=false}}
+            }
         }
     }
+    var stats=proxy.metrics.create()
+    var draining=false
+    var drain_started:u64=0
     var now:u64=0
     while running {
         match net.monotonic_ms() {
             Err(error)=>{status=3;break}
             Ok(value)=>{if value<now {status=3;break} now=value}
         }
-        var wait:u32=1000
+        if !draining {
+            match net.reactor_shutdown_requested(reactor) {
+                Err(e)=>{status=3;running=false}
+                Ok(requested)=>{if requested!=0 {
+                    draining=true;drain_started=now
+                    match net.reactor_stop_accepting(reactor) {Ok(done)=>{} Err(e)=>{status=3;running=false}}
+                }}
+            }
+        }
+        if !running || (draining && stats.active==0) {break}
+        var wait:u32=100
+        if draining {
+            match proxy.config.remaining(drain_started,now,config.drain) {
+                Err(e)=>{status=3;break}
+                Ok(left)=>{if left<wait {wait=left}}
+            }
+        }
         var timer:u32=0
         while timer<8 {
             match pairs[timer].client {
                 None=>{}
                 Some(id)=>{
-                    if !pairs[timer].connected {
-                        match proxy.config.remaining(pairs[timer].started,now,timeout) {
+                    var started=pairs[timer].started
+                    var limit=config.timeout
+                    if pairs[timer].connected {started=pairs[timer].activity;limit=config.idle}
+                    {
+                        match proxy.config.remaining(started,now,limit) {
                             Err(error)=>{status=3;running=false}
                             Ok(left)=>{if left<wait {wait=left}}
                         }
@@ -65,31 +91,45 @@ fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.A
             Err(error)=>{status=3;break}
             Ok(value)=>{if value<now {status=3;break} now=value}
         }
+        if !draining {
+            match net.reactor_shutdown_requested(reactor) {
+                Err(e)=>{status=3;running=false}
+                Ok(requested)=>{if requested!=0 {
+                    draining=true;drain_started=now
+                    match net.reactor_stop_accepting(reactor) {Ok(done)=>{} Err(e)=>{status=3;running=false}}
+                }}
+            }
+        }
         var free:u32=8
         var i:u32=0
         while i<8 {
             match pairs[i].client {None=>{if free==8 {free=i}} Some(id)=>{}}
             i=i+1
         }
-        if running && free<8 && (!once || !accepted) {
+        if running && !draining && free<8 && (!config.once || !accepted) {
             match net.reactor_accept(reactor) {
                 Err(error)=>{if !retry(error) {status=3;running=false}}
                 Ok(client)=>{
                     accepted=true
+                    accepted_recorded=proxy.metrics.accepted(borrow mut stats)
+                    if config.once {
+                        match net.reactor_stop_accepting(reactor) {Ok(done)=>{} Err(e)=>{status=3;running=false}}
+                    }
                     match net.monotonic_ms() {
-                        Err(error)=>{closed=net.reactor_disconnect(reactor,client);status=3;break}
+                        Err(error)=>{closed=net.reactor_disconnect(reactor,client);clock_failure_recorded=proxy.metrics.closed(borrow mut stats,1,0);status=3;break}
                         Ok(value)=>{
-                            if value<now {closed=net.reactor_disconnect(reactor,client);status=3;break}
+                            if value<now {closed=net.reactor_disconnect(reactor,client);clock_regression_recorded=proxy.metrics.closed(borrow mut stats,1,0);status=3;break}
                             now=value
                         }
                     }
-                    match net.reactor_connect_at(reactor,upstream_address) {
+                    match net.reactor_connect_at(reactor,config.upstream) {
                         Err(error)=>{
                             closed=net.reactor_disconnect(reactor,client)
-                            if once {status=3;running=false}
+                            connect_failure_recorded=proxy.metrics.closed(borrow mut stats,1,0)
+                            if config.once {status=3;running=false}
                         }
                         Ok(upstream)=>{
-                            pairs[free]=Pair(Some(client),Some(upstream),false,now,relay.direction.empty(),relay.direction.empty())
+                            pairs[free]=Pair(Some(client),Some(upstream),false,now,now,relay.direction.empty(),relay.direction.empty())
                         }
                     }
                 }
@@ -106,36 +146,48 @@ fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.A
                         Some(upstream)=>{
                             var alive=true
                             var failure:u32=0
+                            var reason:u32=1
+                            var progress=false
                             var client_ready:u32=0
                             var upstream_ready:u32=0
                             match net.reactor_ready(reactor,client) {Err(e)=>{alive=false;failure=3} Ok(flags)=>{client_ready=flags}}
                             match net.reactor_ready(reactor,upstream) {Err(e)=>{alive=false;failure=3} Ok(flags)=>{upstream_ready=flags}}
-                            if alive && !pair.connected {
-                                match net.monotonic_ms() {
-                                    Err(error)=>{alive=false;failure=3;status=3;running=false}
-                                    Ok(value)=>{
-                                        if value<now {alive=false;failure=3;status=3;running=false} else {now=value}
-                                    }
+                            match net.monotonic_ms() {
+                                Err(e)=>{alive=false;failure=3;status=3;running=false}
+                                Ok(value)=>{if value<now {alive=false;failure=3;status=3;running=false} else {now=value}}
+                            }
+                            if alive && draining {
+                                match proxy.config.remaining(drain_started,now,config.drain) {
+                                    Err(e)=>{alive=false;failure=3;status=3;running=false}
+                                    Ok(left)=>{if left==0 {alive=false;reason=4}}
                                 }
-                                if alive {
-                                    match proxy.config.remaining(pair.started,now,timeout) {
-                                        Err(error)=>{alive=false;failure=3;status=3;running=false}
-                                        Ok(left)=>{if left==0 {alive=false;failure=3}}
-                                    }
+                            }
+                            if alive {
+                                var started=pair.started
+                                var limit=config.timeout
+                                if pair.connected {started=pair.activity;limit=config.idle}
+                                match proxy.config.remaining(started,now,limit) {
+                                    Err(e)=>{alive=false;failure=3;status=3;running=false}
+                                    Ok(left)=>{if left==0 {
+                                        alive=false;failure=3;reason=2
+                                        if pair.connected {reason=3}
+                                    }}
                                 }
                             }
                             if alive && !pair.connected {
                                 match net.reactor_finish_connect(reactor,upstream) {
                                     Err(error)=>{if !retry(error) {alive=false;failure=3}}
-                                    Ok(done)=>{pair.connected=done}
+                                    Ok(done)=>{pair.connected=done;if done {pair.activity=now}}
                                 }
                             }
-                            if alive && true && relay.direction.readable(pair.forward)!=0 && (client_ready&5)!=0 {
+                            if alive && relay.direction.readable(pair.forward)!=0 && (client_ready&5)!=0 {
                                 (next,result)=net.reactor_read(reactor,client,move buffers,i*4096+pair.forward.tail,relay.direction.readable(pair.forward))
                                 buffers=move next
                                 match result {
                                     Err(error)=>{if !retry(error) {alive=false;failure=3}}
                                     Ok(count)=>{
+                                        forward_read_recorded=proxy.metrics.transfer(borrow mut stats,0,count)
+                                        if count!=0 {progress=true}
                                         match relay.direction.read(pair.forward,count) {
                                             Err(error)=>{alive=false;failure=3}
                                             Ok(next_state)=>{pair.forward=next_state}
@@ -148,6 +200,8 @@ fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.A
                                 match net.reactor_write(reactor,upstream,data,i*4096+pair.forward.head,relay.direction.queued(pair.forward)) {
                                     Err(error)=>{if !retry(error) {alive=false;failure=3}}
                                     Ok(count)=>{
+                                        forward_write_recorded=proxy.metrics.transfer(borrow mut stats,1,count)
+                                        if count!=0 {progress=true}
                                         match relay.direction.write(pair.forward,count) {
                                             Err(error)=>{alive=false;failure=3}
                                             Ok(next_state)=>{pair.forward=next_state}
@@ -172,6 +226,8 @@ fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.A
                                 match result {
                                     Err(error)=>{if !retry(error) {alive=false;failure=3}}
                                     Ok(count)=>{
+                                        reverse_read_recorded=proxy.metrics.transfer(borrow mut stats,2,count)
+                                        if count!=0 {progress=true}
                                         match relay.direction.read(pair.reverse,count) {
                                             Err(error)=>{alive=false;failure=3}
                                             Ok(next_state)=>{pair.reverse=next_state}
@@ -184,6 +240,8 @@ fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.A
                                 match net.reactor_write(reactor,client,data,i*4096+2048+pair.reverse.head,relay.direction.queued(pair.reverse)) {
                                     Err(error)=>{if !retry(error) {alive=false;failure=3}}
                                     Ok(count)=>{
+                                        reverse_write_recorded=proxy.metrics.transfer(borrow mut stats,3,count)
+                                        if count!=0 {progress=true}
                                         match relay.direction.write(pair.reverse,count) {
                                             Err(error)=>{alive=false;failure=3}
                                             Ok(next_state)=>{pair.reverse=next_state}
@@ -202,7 +260,13 @@ fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.A
                                     }
                                 }
                             }
-                            if alive && pair.forward.fin && pair.reverse.fin {alive=false}
+                            if progress && pair.connected {
+                                match net.monotonic_ms() {
+                                    Err(e)=>{alive=false;failure=3;status=3;running=false;reason=1}
+                                    Ok(value)=>{if value<now {alive=false;failure=3;status=3;running=false;reason=1} else {now=value;pair.activity=now}}
+                                }
+                            }
+                            if alive && pair.forward.fin && pair.reverse.fin {alive=false;reason=0}
                             if alive {
                                 var client_interest:u32=0
                                 if relay.direction.readable(pair.forward)!=0 {client_interest=1}
@@ -217,10 +281,11 @@ fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.A
                                 match net.reactor_interest(reactor,upstream,upstream_interest) {Ok(done)=>{} Err(e)=>{alive=false;failure=3}}
                             }
                             if !alive {
-                                match net.reactor_disconnect(reactor,client) {Ok(done)=>{} Err(e)=>{failure=3}}
-                                match net.reactor_disconnect(reactor,upstream) {Ok(done)=>{} Err(e)=>{failure=3}}
+                                match net.reactor_disconnect(reactor,client) {Ok(done)=>{} Err(e)=>{failure=3;if reason==0 {reason=1}}}
+                                match net.reactor_disconnect(reactor,upstream) {Ok(done)=>{} Err(e)=>{failure=3;if reason==0 {reason=1}}}
+                                close_recorded=proxy.metrics.closed(borrow mut stats,reason,relay.direction.queued(pair.forward)+relay.direction.queued(pair.reverse))
                                 pair=empty_pair()
-                                if once {status=failure;running=false}
+                                if config.once {status=failure;running=false}
                             }
                         }
                     }
@@ -230,18 +295,36 @@ fn exchange(reactor:net.Reactor,storage:memory.Buffer<u8>,upstream_address:net.A
             i=i+1
         }
     }
+    // All exits invalidate each pair before destroying the composite owner.
+    var cleanup:u32=0
+    while cleanup<8 {
+        match pairs[cleanup].client {
+            None=>{}
+            Some(client)=>{
+                match net.reactor_disconnect(reactor,client) {Ok(n)=>{} Err(e)=>{status=3}}
+                match pairs[cleanup].upstream {
+                    None=>{}
+                    Some(upstream)=>{match net.reactor_disconnect(reactor,upstream) {Ok(n)=>{} Err(e)=>{status=3}}}
+                }
+                cleanup_recorded=proxy.metrics.closed(borrow mut stats,1,relay.direction.queued(pairs[cleanup].forward)+relay.direction.queued(pairs[cleanup].reverse))
+                pairs[cleanup]=empty_pair()
+            }
+        }
+        cleanup=cleanup+1
+    }
     released=memory.release(move buffers)
     match net.reactor_close(move reactor) {Ok(done)=>{} Err(e)=>{status=3}}
+    if config.metrics {if !proxy.metrics.report(stats) {status=3}}
     return status
 }
-fn serve(reactor:net.Reactor,upstream_address:net.Address,timeout:u32,once:bool)->u32:io,alloc {
+fn serve(reactor:net.Reactor,config:proxy.config.Config)->u32:io,alloc {
     match memory.create(32768) {
         Err(e)=>{closed=net.reactor_close(move reactor);return 3}
         Ok(region)=>{
             match memory.alloc<u8>(region,32768,0) {
                 Err(e)=>{freed=memory.close(move region);closed=net.reactor_close(move reactor);return 3}
                 Ok(buffers)=>{
-                    result=exchange(move reactor,move buffers,upstream_address,timeout,once)
+                    result=exchange(move reactor,move buffers,config)
                     freed=memory.close(move region)
                     return result
                 }
@@ -252,13 +335,13 @@ fn serve(reactor:net.Reactor,upstream_address:net.Address,timeout:u32,once:bool)
 fn main()->u32:io,alloc {
     match proxy.config.load() {
         Err(error)=>{
-            message=console.err("Usage: liza-proxy-ops [--listen IPv4:port] [--upstream IPv4:port] [--connect-timeout-ms 1..2147483647] [--once | --ephemeral]\n")
+            message=console.err("Usage: liza-proxy-ops [--listen IPv4:port] [--upstream IPv4:port] [--connect-timeout-ms 1..2147483647] [--idle-timeout-ms N] [--drain-timeout-ms N] [--metrics] [--once | --ephemeral]\n")
             return 2
         }
         Ok(config)=>{
             match net.reactor_create_at(config.listener,16) {
                 Err(error)=>{message=console.err("Cannot create reactor\n");return 3}
-                Ok(reactor)=>{return serve(move reactor,config.upstream,config.timeout,config.once)}
+                Ok(reactor)=>{return serve(move reactor,config)}
             }
         }
     }

@@ -1,0 +1,416 @@
+{
+  "platform": "macOS Apple M4",
+  "clang": "Homebrew clang version 23.1.4\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /opt/homebrew/Cellar/llvm/23.1.4/bin\n",
+  "compiler_tests": {
+    "run": 411,
+    "skipped": 11,
+    "status": "passed"
+  },
+  "final_targeted_tests": {
+    "run": 6,
+    "native_invocations": 66,
+    "status": "passed"
+  },
+  "proof_cli": {
+    "solver": "Z3 version 5.3.1 - 64 bit",
+    "checks": [
+      {
+        "name": "utf8-all-input-bits",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "nested",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "remote_change",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "increment",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "other_field_trap",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "graph-None",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "graph-0",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "graph-6",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "graph-11",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "wrong-field",
+        "result": "sat",
+        "expected": "sat",
+        "input": {
+          "p0_sequence": 0,
+          "p0_tag": 18446744073709551615,
+          "p1": true,
+          "p2": true,
+          "p3": true
+        }
+      },
+      {
+        "name": "deleted-trap",
+        "result": "sat",
+        "expected": "sat",
+        "input": {
+          "p0": 18446744073709551615
+        }
+      }
+    ]
+  },
+  "proof_pinned": {
+    "solver": "4.15.4",
+    "checks": [
+      {
+        "name": "utf8-all-input-bits",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "nested",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "remote_change",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "increment",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "other_field_trap",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "graph-None",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "graph-0",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "graph-6",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "graph-11",
+        "result": "unsat",
+        "expected": "unsat",
+        "input": null
+      },
+      {
+        "name": "wrong-field",
+        "result": "sat",
+        "expected": "sat",
+        "input": {
+          "p0_sequence": 0,
+          "p0_tag": 18446744073709551615,
+          "p1": true,
+          "p2": true,
+          "p3": true
+        }
+      },
+      {
+        "name": "deleted-trap",
+        "result": "sat",
+        "expected": "sat",
+        "input": {
+          "p0": 18446744073709551615
+        }
+      }
+    ]
+  },
+  "json": {
+    "p3_raw_llvm_identical": true,
+    "p3_machine_text_identical": true,
+    "text_sha256": "df140b4587f7d67201381590a67f425785a446a298479fa220987f420e061aed",
+    "source_sha256": {
+      "liza/__init__.py": "959b8059441675d14649ecd564bf9906ed25b72dbe188f25e6e3de6b8470b797",
+      "liza/__main__.py": "ea9ac7c390319ff2f7f85e49a228d76ff266347bd88a6ae6745249c9c9e6584c",
+      "liza/backend.py": "31f014d0554a22877e3bb995864508f874bb934ad8b3781d830169d979126d74",
+      "liza/borrowing.py": "da71feb23abbfb16c5d491e7320cd4b89e7f5605b2b46155a43c022e36930cc3",
+      "liza/cli_backend.py": "edfd4399f88eb66153d3b81cfb2521c59c9b6aa6a55e35571b5fc658beeff7bb",
+      "liza/dependencies.py": "3c37106c364a46f058f7a33b8654d3e4c23566dea1428184748844ed1a6fd579",
+      "liza/field_forwarding.py": "150622c84af65ae528b57b9d6aadaad8547941ae2f9a07a935ee709035d353d5",
+      "liza/frontend.py": "5fd2b2da0b73125c82275de4820d6e10f60ba1a0e9763176fa6c375cc561c8f6",
+      "liza/generics.py": "30be1e738742551e5a16d327acaaedcf541bb197f73efb3616d4d97b9c38a67e",
+      "liza/ir.py": "e73eb999795307cfba6e52e27f3507adf8eaa73ce16f343df016da93067cc478",
+      "liza/memory.py": "5576dfa405408949605eb0933a3ffacc4192ad77e14b8dff3f4220154aa03201",
+      "liza/modules.py": "30b45fe0befc28dc3ce171e45b38f89bf0efca5797d7159d67ddf8df8952249e",
+      "liza/mutable.py": "e9bba4fd09854c60a228d7c25f503cd486dcc8983065e2e90f21c98881cd51b8",
+      "liza/net_backend.py": "ba2f553de5227b037f80b50eb7364a44bda2da5707c9680bd1d562ddd0b115b0",
+      "liza/ownership.py": "5bd7039b9eb18dcf63f2886acf4dce58a7f277da688b7de2e371a861606eca00",
+      "liza/reactor_backend.py": "09d300b667e2562f7fdd2b45a063668cd498fefbc820e19ac04ff79f2f30cb3c",
+      "liza/readonly.py": "305dff0097c105edcb3f12c44a2da69ac0bc52ca5d26a0c4c0b8b7a3c55ac0f7",
+      "liza/resources.py": "57fbb885d1fb391c7b972e28d214d47aaa622c97e6601d48f6e9d27253835e8f",
+      "liza/stdlib.py": "df114d5baf87186f2bc945d65c6309dfa1cb9b6f102d17f6d655beee761f9b3f",
+      "liza/storage.py": "abc0b4074608829304415a9c62de4a6c1cc0e122ce341e065f64231a62590ab0",
+      "liza/target.py": "d2825db370119edb617094079a06f663406c5f3d8d12a4886be0f8cee47841b8",
+      "liza/typecheck.py": "bf27a7ab78bc3246112299c835e8d66c77a2e4ac888c8e53ea872801c058d461",
+      "liza/types.py": "a93c4e399e54e6163e8c83cad9c3547f621bc2dc0e15a36ff8ef09e820c5d9b1",
+      "liza/vector_backend.py": "1f65412da6e20b7e393fe72c9522eb1644993331a86257c74abbc38a8fa53fcc",
+      "liza/vectors.py": "e1d4f41a53142688b7add0ad6beeded4aa04a8bd4ae7310e5d36bfdc1acb1f4d"
+    }
+  },
+  "json_cases_per_executable": 6785,
+  "json_cli_cases": 492,
+  "emission_cost": {
+    "scope": "warm Python llvm() emission only; excludes parsing, Clang and linking",
+    "samples": [
+      {
+        "enabled": false,
+        "seconds": 0.011919082999999997,
+        "repeat": 0
+      },
+      {
+        "enabled": true,
+        "seconds": 0.012071584000000024,
+        "repeat": 0
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011833666999999992,
+        "repeat": 1
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011420999999999987,
+        "repeat": 1
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011985791999999995,
+        "repeat": 2
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011397750000000012,
+        "repeat": 2
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011704791999999992,
+        "repeat": 3
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011378833000000005,
+        "repeat": 3
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011789750000000015,
+        "repeat": 4
+      },
+      {
+        "enabled": false,
+        "seconds": 0.01119704199999999,
+        "repeat": 4
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011686083000000014,
+        "repeat": 5
+      },
+      {
+        "enabled": false,
+        "seconds": 0.010874207999999996,
+        "repeat": 5
+      },
+      {
+        "enabled": false,
+        "seconds": 0.012272707999999966,
+        "repeat": 6
+      },
+      {
+        "enabled": true,
+        "seconds": 0.012740500000000043,
+        "repeat": 6
+      },
+      {
+        "enabled": false,
+        "seconds": 0.01209112499999998,
+        "repeat": 7
+      },
+      {
+        "enabled": true,
+        "seconds": 0.012589167000000012,
+        "repeat": 7
+      },
+      {
+        "enabled": false,
+        "seconds": 0.012291792000000024,
+        "repeat": 8
+      },
+      {
+        "enabled": true,
+        "seconds": 0.012578332999999997,
+        "repeat": 8
+      },
+      {
+        "enabled": true,
+        "seconds": 0.012576833999999981,
+        "repeat": 9
+      },
+      {
+        "enabled": false,
+        "seconds": 0.012851957999999997,
+        "repeat": 9
+      },
+      {
+        "enabled": false,
+        "seconds": 0.012219832999999958,
+        "repeat": 10
+      },
+      {
+        "enabled": true,
+        "seconds": 0.012865208000000017,
+        "repeat": 10
+      },
+      {
+        "enabled": true,
+        "seconds": 0.01193862499999998,
+        "repeat": 11
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011463541999999993,
+        "repeat": 11
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011962500000000043,
+        "repeat": 12
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011259041999999997,
+        "repeat": 12
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011353583999999972,
+        "repeat": 13
+      },
+      {
+        "enabled": true,
+        "seconds": 0.012578374999999975,
+        "repeat": 13
+      },
+      {
+        "enabled": true,
+        "seconds": 0.012072499999999986,
+        "repeat": 14
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011842917000000008,
+        "repeat": 14
+      },
+      {
+        "enabled": true,
+        "seconds": 0.015044667000000012,
+        "repeat": 15
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011087249999999993,
+        "repeat": 15
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011846750000000017,
+        "repeat": 16
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011337749999999924,
+        "repeat": 16
+      },
+      {
+        "enabled": false,
+        "seconds": 0.010976458999999994,
+        "repeat": 17
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011753000000000013,
+        "repeat": 17
+      },
+      {
+        "enabled": false,
+        "seconds": 0.011109707999999996,
+        "repeat": 18
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011419957999999952,
+        "repeat": 18
+      },
+      {
+        "enabled": false,
+        "seconds": 0.0110325,
+        "repeat": 19
+      },
+      {
+        "enabled": true,
+        "seconds": 0.011482417000000078,
+        "repeat": 19
+      }
+    ],
+    "median_ms": {
+      "False": 11.388291500000008,
+      "True": 11.974146000000019
+    }
+  },
+  "remote_platform_status": "Not asserted by this local evidence; see PR HEAD CI."
+}

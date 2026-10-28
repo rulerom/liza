@@ -5,6 +5,7 @@
 typedef WSAPOLLFD reactor_pollfd;
 #else
 #include <poll.h>
+#include <signal.h>
 typedef struct pollfd reactor_pollfd;
 #endif
 #define REACTOR_MAX 32
@@ -16,9 +17,72 @@ uint64_t liza_rt_net_read(uint64_t, uint8_t*, uint32_t);
 uint64_t liza_rt_net_write(uint64_t, const uint8_t*, uint32_t, uint32_t, uint32_t);
 uint32_t liza_rt_net_close(uint64_t);
 typedef struct { uint64_t socket,generation; uint32_t live,interest,ready,phase,error,write_closed; } reactor_slot;
-typedef struct { uint64_t owner,listener; uint32_t capacity; reactor_slot slots[REACTOR_MAX]; } reactor;
+typedef struct { uint64_t owner,listener; uint32_t capacity,listener_open; reactor_slot slots[REACTOR_MAX]; } reactor;
 /* No tasks/threads in this runtime contract. Never wrap identities. */
 static uint64_t reactor_next_owner;
+/* Process notifications: one explicitly registered reactor, no handler access to it. */
+static uint64_t reactor_watcher;
+#ifdef _WIN32
+static volatile LONG reactor_stop_requested;
+static BOOL WINAPI reactor_stop_handler(DWORD event) {
+    if (event!=CTRL_C_EVENT && event!=CTRL_BREAK_EVENT) return FALSE;
+    InterlockedExchange(&reactor_stop_requested,1);return TRUE;
+}
+#else
+static volatile sig_atomic_t reactor_stop_requested;
+static struct sigaction reactor_old_int,reactor_old_term;
+static void reactor_stop_handler(int signal_number) {
+    (void)signal_number;reactor_stop_requested=1;
+}
+#endif
+uint64_t liza_rt_reactor_watch_shutdown(reactor *r) {
+    if (reactor_watcher==r->owner) return 0;
+    if (reactor_watcher) return net_failure(7);
+#ifdef _WIN32
+    InterlockedExchange(&reactor_stop_requested,0);
+    if (!SetConsoleCtrlHandler(reactor_stop_handler,TRUE)) return net_failure(7);
+#else
+    sigset_t signals,old_mask;sigemptyset(&signals);
+    sigaddset(&signals,SIGINT);sigaddset(&signals,SIGTERM);
+    if (sigprocmask(SIG_BLOCK,&signals,&old_mask)!=0) return net_failure(7);
+    struct sigaction action;memset(&action,0,sizeof(action));
+    action.sa_handler=reactor_stop_handler;sigemptyset(&action.sa_mask);
+    int error=sigaction(SIGINT,&action,&reactor_old_int);
+    if (!error && sigaction(SIGTERM,&action,&reactor_old_term)!=0) {
+        sigaction(SIGINT,&reactor_old_int,NULL);error=1;
+    }
+    reactor_stop_requested=0;
+    if (!error) reactor_watcher=r->owner;
+    if (sigprocmask(SIG_SETMASK,&old_mask,NULL)!=0) error=1;
+    if (error) return net_failure(7);
+#endif
+    reactor_watcher=r->owner;return 0;
+}
+uint64_t liza_rt_reactor_shutdown_requested(reactor *r) {
+    if (reactor_watcher!=r->owner) return net_failure(7);
+#ifdef _WIN32
+    return InterlockedCompareExchange(&reactor_stop_requested,0,0)!=0;
+#else
+    return reactor_stop_requested!=0;
+#endif
+}
+static uint32_t reactor_unwatch(reactor *r) {
+    if (reactor_watcher!=r->owner) return 0;
+    uint32_t error=0;
+#ifdef _WIN32
+    if (!SetConsoleCtrlHandler(reactor_stop_handler,FALSE)) error=7;
+#else
+    /* Restore both even if one restoration fails. No pointers survive close. */
+    if (sigaction(SIGINT,&reactor_old_int,NULL)!=0) error=7;
+    if (sigaction(SIGTERM,&reactor_old_term,NULL)!=0) error=7;
+#endif
+    reactor_watcher=0;return error;
+}
+uint64_t liza_rt_reactor_stop_accepting(reactor *r) {
+    if (!r->listener_open) return 0;
+    r->listener_open=0;
+    return net_failure(liza_rt_net_close(r->listener));
+}
 static uint32_t reactor_nonblocking(uint64_t handle) {
 #ifdef _WIN32
     u_long enabled=1;
@@ -45,14 +109,15 @@ uint32_t liza_rt_reactor_create_at(uint32_t ip,uint16_t port,uint32_t capacity,r
     e=reactor_nonblocking(r->listener);
     if (!e && listen((net_socket)r->listener,(int)capacity)!=0) e=net_error();
     if (e) {liza_rt_net_close(r->listener);free(r);return e;}
-    r->owner=++reactor_next_owner;r->capacity=capacity;*out=r;return 0;
+    r->owner=++reactor_next_owner;r->capacity=capacity;r->listener_open=1;*out=r;return 0;
 }
 uint32_t liza_rt_reactor_create(uint16_t port,uint32_t capacity,reactor **out) {
     return liza_rt_reactor_create_at(INADDR_LOOPBACK,port,capacity,out);
 }
-uint64_t liza_rt_reactor_port(reactor *r) {return liza_rt_net_port(r->listener);}
+uint64_t liza_rt_reactor_port(reactor *r) {return r->listener_open ? liza_rt_net_port(r->listener) : net_failure(5);}
 uint32_t liza_rt_reactor_accept(reactor *r,uint64_t *id) {
     id[0]=id[1]=id[2]=0;
+    if (!r->listener_open) return 5;
     uint32_t index=r->capacity;
     for (uint32_t i=0;i<r->capacity;i++)
         if (!r->slots[i].live && r->slots[i].generation!=UINT64_MAX) {index=i;break;}
@@ -178,7 +243,7 @@ uint64_t liza_rt_reactor_poll(reactor *r,uint32_t timeout) {
         if (s->interest&2) fds[n].events|=POLLWRNORM;
         indices[n++]=i;
     }
-    if (available) {
+    if (available && r->listener_open) {
         fds[n].fd=(net_socket)r->listener;fds[n].events=POLLRDNORM;fds[n].revents=0;
         indices[n++]=REACTOR_MAX;
     }
@@ -229,7 +294,8 @@ uint32_t liza_rt_reactor_close(reactor *r) {
     for (uint32_t i=0;i<r->capacity;i++) if (r->slots[i].live) {
         uint32_t e=liza_rt_net_close(r->slots[i].socket);if (!first) first=e;
     }
-    uint32_t e=liza_rt_net_close(r->listener);if (!first) first=e;
+    if (r->listener_open) {uint32_t e=liza_rt_net_close(r->listener);if (!first) first=e;}
+    uint32_t unwatch=reactor_unwatch(r);if (!first) first=unwatch;
     free(r);return first;
 }
 

@@ -1,13 +1,30 @@
 name: Mutable borrow and JSON agreement
 on:
   pull_request:
-    paths: ['liza/**', 'tests/test_mutable*.py', 'benchmarks/mutable/**', '.github/workflows/mutable-borrow.yml']
+    paths:
+      - 'liza/**'
+      - 'tests/test_mutable*.py'
+      - 'benchmarks/mutable/**'
+      - 'benchmarks/aggregate/**'
+      - 'benchmarks/json/**'
+      - 'examples/text/**'
+      - '.github/workflows/mutable-borrow.yml'
   push:
     branches: [main]
-    paths: ['liza/**', 'tests/test_mutable*.py', 'benchmarks/mutable/**', '.github/workflows/mutable-borrow.yml']
+    paths:
+      - 'liza/**'
+      - 'tests/test_mutable*.py'
+      - 'benchmarks/mutable/**'
+      - 'benchmarks/aggregate/**'
+      - 'benchmarks/json/**'
+      - 'examples/text/**'
+      - '.github/workflows/mutable-borrow.yml'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   agreement:
     runs-on: ubuntu-latest
