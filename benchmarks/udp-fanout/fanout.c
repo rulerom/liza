@@ -4,6 +4,9 @@
 #define _POSIX_C_SOURCE 200809L
 #include <arpa/inet.h>
 #include <errno.h>
+#ifdef NB1B_CONTROL
+#include <poll.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,6 +54,29 @@ static int parse_rtp(const uint8_t *data, size_t size, struct rtp_header *out) {
     return 1;
 }
 
+#ifdef NB1B_CONTROL
+/* Benchmark-only stdin control, priority over a ready UDP socket. */
+static ssize_t controlled_recv(int fd,struct msghdr *msg) {
+    for(;;) {
+        struct pollfd fds[2]={{STDIN_FILENO,POLLIN,0},{fd,POLLIN,0}};
+        int r=poll(fds,2,-1);
+        if(r<0){if(errno==EINTR)continue;return -1;}
+        if(fds[0].revents&(POLLIN|POLLHUP|POLLERR)) {
+            char c;ssize_t n=read(STDIN_FILENO,&c,1);
+            if(n!=1)return -1;
+            if(c=='D')return -2;
+            if(c=='S')return -3;
+            return -1;
+        }
+        if(fds[1].revents&POLLIN) {
+            ssize_t n=recvmsg(fd,msg,0);
+            if(n<0 && (errno==EINTR || errno==EAGAIN || errno==EWOULDBLOCK))continue;
+            return n;
+        }
+        if(fds[1].revents&(POLLERR|POLLHUP|POLLNVAL))return -1;
+    }
+}
+#endif
 int main(int argc,char **argv) {
     uint32_t packets,ssrc;
     if(argc<4 || argc>3+MAX_RECEIVERS || !parse_uint(argv[1],2147483647u,&packets) || !packets ||
@@ -73,13 +99,24 @@ int main(int argc,char **argv) {
     if(printf("%u\n",(unsigned)ntohs(addr.sin_port))<0 || fflush(stdout)!=0){close(fd);return 1;}
     unsigned errors=0;
     uint64_t rx=0, valid=0, invalid=0, wrong=0, truncated=0, attempted=0, succeeded=0, failed=0, reason=0;
+#ifdef NB1B_CONTROL
+    uint64_t phase_rx=0,phase_valid=0;int phase_seen=0;
+#endif
     for(uint32_t i=0;i<packets && !errors;i++) {
         uint8_t data[MAX_PACKET];struct iovec vec={data,sizeof(data)};struct msghdr msg;
         memset(&msg,0,sizeof(msg));msg.msg_iov=&vec;msg.msg_iovlen=1;
+#ifdef NB1B_CONTROL
+        ssize_t n=controlled_recv(fd,&msg);
+        if(n==-2){if(phase_seen){errors++;break;}phase_seen=1;phase_rx=rx;phase_valid=valid;if(puts("PHASE")<0 || fflush(stdout)!=0){errors++;break;}continue;}
+        if(n==-3){if(!phase_seen){errors++;break;}reason=1;break;}
+#else
         ssize_t n=recvmsg(fd,&msg,0);
+#endif
         if(n<0){perror("recvmsg");errors++;continue;}
         if(msg.msg_flags&MSG_TRUNC){rx++;truncated++;continue;}
+#ifndef NB1B_CONTROL
         if(n==8 && memcmp(data,"LZSTOP01",8)==0){reason=1;break;}
+#endif
         rx++;
         struct rtp_header header;
         if(!parse_rtp(data,(size_t)n,&header)){invalid++;continue;}
@@ -98,5 +135,8 @@ int main(int argc,char **argv) {
     if(close(fd)<0)errors++;
     if(errors)reason=2;
     if(fprintf(stderr,"received=%llu\naccepted_valid=%llu\ninvalid=%llu\nwrong_ssrc=%llu\ntruncated=%llu\nsend_attempted=%llu\nsend_succeeded=%llu\nsend_failed=%llu\nstop_reason=%llu\n",(unsigned long long)rx,(unsigned long long)valid,(unsigned long long)invalid,(unsigned long long)wrong,(unsigned long long)truncated,(unsigned long long)attempted,(unsigned long long)succeeded,(unsigned long long)failed,(unsigned long long)reason)<0)errors++;
+#ifdef NB1B_CONTROL
+    if(fprintf(stderr,"phase_received=%llu\nphase_valid=%llu\nphase_seen=%d\n",(unsigned long long)phase_rx,(unsigned long long)phase_valid,phase_seen)<0)errors++;
+#endif
     return errors?3:0;
 }

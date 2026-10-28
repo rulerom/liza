@@ -129,3 +129,38 @@ Liza received 857–931 and C 930–937 of 1000 inputs; all corresponding report
 successful sends were observed. Delivered-only p99 at 10k was 109.6–120.3 ms
 for Liza and 112.9–115.9 ms for C. Results remain short loopback samples, not
 isolated throughput limits or evidence that one implementation is faster.
+
+## NB1-B: separate processes and control pipe
+
+```sh
+python3 -m unittest discover -s benchmarks/udp-fanout -p test_nb1b.py -v
+python3 benchmarks/udp-fanout/nb1b.py --output /tmp/nb1b.json --packets 1000 --repeats 3 --receivers 64 --rates 5000 10000 20000 --drain .5
+```
+
+POSIX only. The generator, fanout and collector are separate native processes
+on the **same host**, with no CPU affinity. The controller sends `D` over the
+fanout's stdin pipe when the generator exits; the server snapshots counters and
+acknowledges `PHASE`. After the configured drain it receives `S` over the same
+pipe and reports final counters. The phase boundary is **when the fanout consumes
+D**, not the exact instant the last input was offered. Generator completion,
+control send, acknowledgement and stop timestamps are recorded. `drain_received`
+is the difference between final and phase-observed counts.
+
+The Liza executable is generated from the application with a **benchmark-only
+POSIX runtime shim**: it polls stdin and the UDP socket and reserves the otherwise
+handled Interrupted/WouldBlock results for D/S. It retries those real socket
+errors. The C build uses a matching poll/control mechanism. The shim changes the
+runtime and adds polling overhead; results are not timings of the unmodified
+production UDP runtime. `LZSTOP01` is ordinary invalid media data in this mode.
+Control pipe closure and abnormal exits are errors, not successful drain.
+
+Generator and collector report process user/system CPU and maximum RSS using
+`getrusage`; fanout CPU and resident memory are sampled with `ps` before input
+and just before stop (live RSS, not peak). Host UDP counters are captured where
+available (`netstat` on macOS, `/proc/net/snmp` on Linux); their deltas are
+system-wide and may include unrelated applications. No claim assigns them to a
+socket. Delivered-only latency excludes losses and includes the collector's
+scheduling/processing. A receiver may still have queued data when the collector
+stops; output missing relative to successful sends can include that queue.
+Runtimes, generated code, warmup, packet counts, CPU scaling and OS traffic must
+be considered before interpreting this as a service comparison.
