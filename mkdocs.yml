@@ -1,5 +1,5 @@
 site_name: Liza
-site_description: 'Liza — системный язык для производительных сетевых сервисов с определённым поведением, контролируемыми ресурсами и математически проверяемыми свойствами.'
+site_description: 'Liza — экспериментальный системный язык для сетевой инфраструктуры с определённой семантикой и явным управлением ресурсами.'
 site_url: https://liza.rulerom.com/
 repo_url: https://github.com/rulerom/liza
 repo_name: rulerom/liza
