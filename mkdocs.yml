@@ -62,6 +62,7 @@ extra_css:
 # filling the primary navigation with individual experiment reports.
 not_in_nav: |
   research.md
+  json-performance.md
   mutable-audit.md
   mutable-performance.md
   performance-parity.md
@@ -122,7 +123,7 @@ nav:
       - Message Router: message-router.md
       - L4 TCP Proxy: tcp-proxy.md
       - TCP Proxy Operations: tcp-proxy-operations.md
-  - Бенчмарки: json-performance.md
+  - Бенчмарки: network-performance.md
   - Проект:
       - Verified Network Gateway: network-gateway.md
       - "MT0-A: изолированные workers": mt0a-workers.md
