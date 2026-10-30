@@ -1,0 +1,44 @@
+// Every worker creates and closes its own region, buffer and reactor.
+fn worker(id:u32)->u32:io,alloc {
+    match memory.create(4096) {
+        Err(e)=>{return 0}
+        Ok(region)=>{
+            allocation=memory.alloc<u8>(region,32,7)
+            match move allocation {
+                Err(e)=>{
+                    closed=memory.close(move region)
+                    return 0
+                }
+                Ok(buffer)=>{
+                    var status:u32=0
+                    match net.reactor_create(0,1) {
+                        Err(e)=>{status=1}
+                        Ok(reactor)=>{
+                            match net.reactor_port(reactor) {
+                                Err(e)=>{status=1}
+                                Ok(port)=>{if port==0 {status=1}}
+                            }
+                            match net.reactor_close(move reactor) {
+                                Err(e)=>{status=1}
+                                Ok(done)=>{}
+                            }
+                        }
+                    }
+                    {
+                        bytes=memory.view(buffer)
+                        if bytes[0]!=7 {status=1}
+                    }
+                    released=memory.release(move buffer)
+                    closed=memory.close(move region)
+                    if status!=0 {return 0}
+                    return 1<<id
+                }
+            }
+        }
+    }
+}
+fn main()->u32:io {
+    result=workers.run(8)
+    if result != 255 {return 1}
+    return 0
+}

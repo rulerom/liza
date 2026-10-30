@@ -1,6 +1,7 @@
 /* Bounded single-threaded socket owner. Protocol state and payloads live in Liza. */
 #include "net_platform.h"
 #include <stdlib.h>
+#include <stdatomic.h>
 #ifdef _WIN32
 typedef WSAPOLLFD reactor_pollfd;
 #else
@@ -18,8 +19,8 @@ uint64_t liza_rt_net_write(uint64_t, const uint8_t*, uint32_t, uint32_t, uint32_
 uint32_t liza_rt_net_close(uint64_t);
 typedef struct { uint64_t socket,generation; uint32_t live,interest,ready,phase,error,write_closed; } reactor_slot;
 typedef struct { uint64_t owner,listener; uint32_t capacity,listener_open; reactor_slot slots[REACTOR_MAX]; } reactor;
-/* No tasks/threads in this runtime contract. Never wrap identities. */
-static uint64_t reactor_next_owner;
+/* Owner identities are process-wide, unique and never wrap. */
+static _Atomic uint64_t reactor_next_owner;
 /* Process notifications: one explicitly registered reactor, no handler access to it. */
 static uint64_t reactor_watcher;
 #ifdef _WIN32
@@ -101,7 +102,7 @@ static reactor_slot *reactor_find(reactor *r,uint64_t owner,uint64_t generation,
 uint32_t liza_rt_reactor_create_at(uint32_t ip,uint16_t port,uint32_t capacity,reactor **out) {
     *out=NULL;
     if (!capacity || capacity>REACTOR_MAX) return 8;
-    if (reactor_next_owner==UINT64_MAX) return 11;
+    if (atomic_load_explicit(&reactor_next_owner,memory_order_relaxed)==UINT64_MAX) return 11;
     reactor *r=(reactor*)calloc(1,sizeof(*r));
     if (!r) return 12;
     uint32_t e=liza_rt_net_listen_at(ip,port,&r->listener);
@@ -109,7 +110,12 @@ uint32_t liza_rt_reactor_create_at(uint32_t ip,uint16_t port,uint32_t capacity,r
     e=reactor_nonblocking(r->listener);
     if (!e && listen((net_socket)r->listener,(int)capacity)!=0) e=net_error();
     if (e) {liza_rt_net_close(r->listener);free(r);return e;}
-    r->owner=++reactor_next_owner;r->capacity=capacity;r->listener_open=1;*out=r;return 0;
+    uint64_t previous=atomic_load_explicit(&reactor_next_owner,memory_order_relaxed);
+    do {
+        if (previous==UINT64_MAX) {liza_rt_net_close(r->listener);free(r);return 11;}
+    } while (!atomic_compare_exchange_weak_explicit(&reactor_next_owner,&previous,previous+1,
+                                                      memory_order_relaxed,memory_order_relaxed));
+    r->owner=previous+1;r->capacity=capacity;r->listener_open=1;*out=r;return 0;
 }
 uint32_t liza_rt_reactor_create(uint16_t port,uint32_t capacity,reactor **out) {
     return liza_rt_reactor_create_at(INADDR_LOOPBACK,port,capacity,out);

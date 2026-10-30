@@ -35,7 +35,6 @@ class Workers(unittest.TestCase):
     def test_rejects_invalid_entry(self):
         entries=['', 'fn worker(id:u64)->u32 {return 0}',
                  'fn worker(id:u32)->u64 {return 0}',
-                 'fn worker(id:u32)->u32:io {return 0}',
                  'fn worker<T>(id:u32)->u32 {return 0}']
         with tempfile.TemporaryDirectory(prefix='liza-workers-') as tmp:
             src=Path(tmp)/'check.liza'

@@ -740,8 +740,8 @@ def lower(functions, dependency_audit=None):
         main_module = signatures['main'].module
         worker_symbol = (main_module + '.' if main_module else '') + 'worker'
         worker = signatures.get(worker_symbol)
-        if worker is None or worker.generic_params or [t for _, t in worker.params] != ['u32'] or worker.result_type != 'u32' or worker.effect_contract != 'pure' or worker.readonly_params or worker.mutable_params or worker.borrowed_params:
-            raise CompileError(signatures['main'].name, 'workers.run requires fn worker(id:u32)->u32: pure in the entry module')
+        if worker is None or worker.generic_params or [t for _, t in worker.params] != ['u32'] or worker.result_type != 'u32' or worker.readonly_params or worker.mutable_params or worker.borrowed_params:
+            raise CompileError(signatures['main'].name, 'workers.run requires fn worker(id:u32)->u32 with value parameter in the entry module')
     lowered = []
     dependency_records = {}
     expression_maps = {}
@@ -772,6 +772,31 @@ def lower(functions, dependency_audit=None):
         except CompileError as error:
             raise mono.trace(error) from None
         index += 1
+    # The scalar boundary alone does not prove thread-safety. Inspect the
+    # complete reachable call graph and allow only audited runtime adapters.
+    if worker_symbol:
+        by_name = {fn.name: fn for fn in lowered}
+        allowed = {
+            '__liza_reactor_clock', '__liza_reactor_connect_at', '__liza_reactor_create_at',
+            '__liza_reactor_connect', '__liza_reactor_finish_connect', '__liza_reactor_shutdown_write',
+            '__liza_reactor_create', '__liza_reactor_accept', '__liza_reactor_port',
+            '__liza_reactor_stop_accepting', '__liza_reactor_poll', '__liza_reactor_interest',
+            '__liza_reactor_ready', '__liza_reactor_disconnect', '__liza_reactor_close',
+            '__liza_reactor_write', 'net.reactor_read', 'net.connection_slot',
+        }
+        pending, seen = [worker_symbol], set()
+        while pending:
+            name = pending.pop()
+            if name in seen: continue
+            seen.add(name)
+            fn = by_name.get(name)
+            if fn is None:
+                if name not in allowed:
+                    raise CompileError(signatures[worker_symbol].name, 'worker cannot call unaudited external '+name)
+                continue
+            for block in fn.blocks:
+                for op in block.operations:
+                    if op.op == 'call': pending.append(op.callee)
     from .dependencies import check_dependencies
     check_dependencies(dependency_records, structs, signatures, audit=dependency_audit, expression_maps=expression_maps)
     module = ModuleIR(lowered, structs)
