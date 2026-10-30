@@ -28,6 +28,8 @@ description: "Каталог исследований, измерений и п�
 
 ## Производительность и оптимизации
 
+- [Сетевые бенчмарки Liza и C](network-performance.md)
+
 - [M0: JSON performance](mutable-performance.md)
 - [Performance Parity — JSON ARM64](performance-parity.md)
 - [Performance Parity — bounded inlining](inlining-policy.md)
