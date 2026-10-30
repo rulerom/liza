@@ -112,7 +112,7 @@ uint32_t liza_rt_reactor_create_at(uint32_t ip,uint16_t port,uint32_t capacity,r
     if (e) {liza_rt_net_close(r->listener);free(r);return e;}
     uint64_t previous=atomic_load_explicit(&reactor_next_owner,memory_order_relaxed);
     do {
-        if (previous==UINT64_MAX) {liza_rt_net_close(r->listener);free(r);return 11;}
+        if (previous==UINT64_MAX) {uint32_t close_error=liza_rt_net_close(r->listener);free(r);return close_error ? close_error : 11;}
     } while (!atomic_compare_exchange_weak_explicit(&reactor_next_owner,&previous,previous+1,
                                                       memory_order_relaxed,memory_order_relaxed));
     r->owner=previous+1;r->capacity=capacity;r->listener_open=1;*out=r;return 0;

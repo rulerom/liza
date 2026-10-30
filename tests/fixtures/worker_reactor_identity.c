@@ -1,3 +1,6 @@
+#if defined(__linux__)
+#define _DEFAULT_SOURCE 1
+#endif
 /* Runtime identity test: each worker owns its reactor until join. */
 #include "reactor_common.h"
 extern uint64_t liza_rt_workers_run(uint32_t, uint32_t (*)(uint32_t));

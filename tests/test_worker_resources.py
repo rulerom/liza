@@ -34,6 +34,30 @@ class WorkerResources(unittest.TestCase):
             r=subprocess.run([str(exe)],text=True,capture_output=True,timeout=30)
             self.assertEqual(r.returncode,0,r.stdout+r.stderr)
 
+    def test_exhaustion_after_bind_closes_once_and_reports_close_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe=Path(tmp)/('exhaustion.exe' if sys.platform=='win32' else 'exhaustion')
+            suffix='windows' if sys.platform=='win32' else 'posix'
+            cmd=['clang','-std=c11','-O2','-Wall','-Wextra','-Werror','-I',str(ROOT/'liza/runtime'),
+                 str(ROOT/'tests/fixtures/worker_reactor_exhaustion.c'),str(ROOT/f'liza/runtime/net_{suffix}.c'),'-o',str(exe)]
+            cmd += ['-lws2_32'] if sys.platform=='win32' else ['-pthread']
+            built=subprocess.run(cmd,text=True,capture_output=True,timeout=30)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            r=subprocess.run([str(exe)],text=True,capture_output=True,timeout=30)
+            self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+
+    def test_imported_generic_does_not_bypass_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/'helper.liza').write_text('pub fn call<T>(x:T)->u32:io {\n match console.println("x") {Ok(n)=>{return 0} Err(e)=>{return 1}}\n}\n')
+            (root/'main.liza').write_text('import helper\nfn worker(id:u32)->u32:io {return helper.call<u32>(id)}\nfn main()->u32:io {\n x=workers.run(2)\n return 0\n}\n')
+            r=liza('check',root/'main.liza')
+            self.assertNotEqual(r.returncode,0,r.stdout+r.stderr)
+            self.assertIn('worker cannot call unaudited external',r.stderr)
+            (root/'helper.liza').write_text('pub fn call<T>(x:T)->u32 {return 7}\n')
+            r=liza('check',root/'main.liza')
+            self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+
     def test_rejects_unaudited_calls_transitively(self):
         examples=[
             'fn helper()->u32:io {match console.println("x") {Ok(n)=>{return 0} Err(e)=>{return 1}}}',

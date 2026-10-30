@@ -776,6 +776,7 @@ def lower(functions, dependency_audit=None):
     # complete reachable call graph and allow only audited runtime adapters.
     if worker_symbol:
         by_name = {fn.name: fn for fn in lowered}
+        external_names = {fn.name.text for fn in externals}
         allowed = {
             '__liza_reactor_clock', '__liza_reactor_connect_at', '__liza_reactor_create_at',
             '__liza_reactor_connect', '__liza_reactor_finish_connect', '__liza_reactor_shutdown_write',
@@ -791,7 +792,7 @@ def lower(functions, dependency_audit=None):
             seen.add(name)
             fn = by_name.get(name)
             if fn is None:
-                if name not in allowed:
+                if name not in allowed or name not in external_names:
                     raise CompileError(signatures[worker_symbol].name, 'worker cannot call unaudited external '+name)
                 continue
             for block in fn.blocks:
