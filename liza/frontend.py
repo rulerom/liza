@@ -424,6 +424,7 @@ class Parser:
 
     def parse(self):
         functions = Program()
+        functions.uses_workers = any(t.text == 'workers' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
         functions.uses_json = any(t.text in ('JsonState','JsonError','JsonErrorKind') or (t.text == 'json' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_framing = any(t.text in ('FrameState','FrameStep','FrameError') or (t.text == 'framing' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_net = any(t.text in ('NetError','ReactorError') or (t.text == 'net' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))

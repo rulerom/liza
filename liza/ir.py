@@ -735,6 +735,13 @@ def lower(functions, dependency_audit=None):
         raise CompileError(signatures['main'].name, 'main must have no parameters')
     if signatures['main'].result_type != 'u32':
         raise CompileError(signatures['main'].name, 'main must return u32')
+    worker_symbol = None
+    if any(f.name.text == 'workers.run' for f in externals):
+        main_module = signatures['main'].module
+        worker_symbol = (main_module + '.' if main_module else '') + 'worker'
+        worker = signatures.get(worker_symbol)
+        if worker is None or worker.generic_params or [t for _, t in worker.params] != ['u32'] or worker.result_type != 'u32' or worker.effect_contract != 'pure' or worker.readonly_params or worker.mutable_params or worker.borrowed_params:
+            raise CompileError(signatures['main'].name, 'workers.run requires fn worker(id:u32)->u32: pure in the entry module')
     lowered = []
     dependency_records = {}
     expression_maps = {}
@@ -770,6 +777,7 @@ def lower(functions, dependency_audit=None):
     module = ModuleIR(lowered, structs)
     module.specializations = mono.instances
     module.externals = externals
+    module.worker_symbol = worker_symbol
     module.modules = getattr(functions,"module_names",[])
     module.declarations = getattr(functions,"declarations",[])
     annotate_traps(module)
@@ -842,7 +850,7 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 20, 'type_properties': properties,
+    return json.dumps({'version': 20, **({'worker_entry': module.worker_symbol} if getattr(module, 'worker_symbol', None) else {}), 'type_properties': properties,
                        'modules': getattr(module,'modules',[]),
                        'specializations': getattr(module,'specializations',[]),
                        'declarations': getattr(module,'declarations',[]),

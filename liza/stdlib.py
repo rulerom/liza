@@ -10,7 +10,8 @@ def attach(program):
         libraries.insert(0,'utf8_stream')
     if 'json' in libraries:
         libraries.append('json_mut')
-    if not libraries:
+    uses_workers = getattr(program, 'uses_workers', False)
+    if not libraries and not uses_workers:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
                                for name in libraries), internal=True).parse()
@@ -32,6 +33,7 @@ def attach(program):
             fn.borrowed_params = [0]
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
+    combined.uses_workers = uses_workers
     combined.declarations = getattr(program,"declarations",[])
     combined.extend(program)
     def calls(node):
@@ -63,6 +65,7 @@ def attach(program):
                      for name,t in [('__liza_err_text','Text'),('__liza_err_bytes','View<u8>'),
                                     ('__liza_err_print_u64','u64'),('__liza_err_print_i64','i64')])
     externals.append(Function(Token('__liza_read_file',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileRead', 'io'))
+    externals.append(Function(Token('workers.run',1,1), [(Token('count',1,1),'u32')], [], 'u64', 'io'))
     externals.extend([
         Function(Token('__liza_file_open',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileOpen', 'io'),
         Function(Token('__liza_file_close',1,1), [(Token('handle',1,1),'File')], [], 'u32', 'io'),
@@ -135,8 +138,10 @@ def link_flags(module):
     file_names = {'__liza_read_file','__liza_file_open','__liza_file_close','__liza_read_chunk','__liza_file_open_path','__liza_file_create_path','__liza_file_write','__liza_file_flush'}
     reactor_names = {n for n in names if n.startswith('__liza_reactor_') or n in ('net.reactor_read','net.connection_slot')}
     net_names = reactor_names | {n for n in names if n.startswith('__liza_net_') or n in ('net.read','net.udp_receive')}
+    worker_names = {'workers.run'} & names
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
-    libraries = (['console'] if names-file_names-cli_names-net_names else []) + (['file'] if names & file_names else [])
+    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names else []) + (['file'] if names & file_names else [])
+    if worker_names: libraries.append('workers')
     if net_names: libraries.append('net')
     if reactor_names: libraries.append('reactor')
     if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
