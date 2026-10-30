@@ -1,0 +1,17 @@
+// Each worker receives a different ID and owns all of its local state.
+fn worker(id:u32)->u32 {
+    var sum:u32 = 0
+    var i:u32 = 0
+    while i < 10000 {
+        sum = sum + id + 1
+        i = i + 1
+    }
+    return sum
+}
+fn main()->u32:io {
+    // High 32 bits contain the status, low 32 bits the XOR of results.
+    result = workers.run(4)
+    if result >> 32 != 0 {return 1}
+    if u32.wrap(result) != (10000 ^ 20000 ^ 30000 ^ 40000) {return 2}
+    return 0
+}

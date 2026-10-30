@@ -88,6 +88,12 @@ def llvm(module, target=None):
                       'declare i64 @liza_rt_err_print_u64(i64)',
                       'declare i64 @liza_rt_err_print_i64(i64)'])
         for fn in module.externals:
+            if fn.name.text == 'workers.run':
+                lines.extend(['declare i64 @liza_rt_workers_run(i32, ptr)',
+                              'define internal i64 @liza_workers.run(i32 %count) {',
+                              f'  %result = call i64 @liza_rt_workers_run(i32 %count, ptr @liza_{module.worker_symbol})',
+                              '  ret i64 %result', '}'])
+                continue
             from .net_backend import external as net_external
             from .reactor_backend import external as reactor_external
             if reactor_external(fn, lines, types): continue

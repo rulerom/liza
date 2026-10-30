@@ -13,7 +13,7 @@ BUILTINS = set(SCALAR_TYPES) | {'FrameState','FrameStep','FrameError','net.Addre
     'FileFailure','FileBuffer','FileChunk','FileCreateError','FileWriteError','FileWriteFailure','memory.Region','MemoryError','vec.Done','vec.Error',
     'Utf8ErrorKind','Utf8Error','Utf8Step','Utf8Range','Utf8Done',
     'Utf8StreamState','Utf8StreamError','Utf8StreamErrorKind','JsonState','JsonError','JsonErrorKind'}
-RESERVED = {'console','file','memory','vec','utf8','utf8_stream','cli','net','framing','json'}
+RESERVED = {'console','file','memory','vec','utf8','utf8_stream','cli','net','framing','json','workers'}
 
 
 def load_program(source, project_root=None):
