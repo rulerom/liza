@@ -28,6 +28,20 @@ the OS wait while the mutex is known to be held; it does not establish recovery
 from arbitrary real synchronization errors. Fault and spurious injection fields
 are test instrumentation, not an API design.
 
+## Relationship to the deadline contract
+
+| Requirement | Status in this probe |
+| --- | --- |
+| One monotonic deadline for decisions | Used in tested decisions; relative wait entry can be delayed |
+| Terminal `Closed` before `Timeout` | Tested for selected cases |
+| Spurious wakeup and original deadline | Tested, including injected wakeups and deadline mutation |
+| Lost wakeup | Registered-waiter tests and omitted-notification negative control |
+| Bounded initial mutex acquisition | Not implemented |
+| Mutex reacquisition after wait | Can delay the decision beyond deadline |
+| Synchronization errors | Partial: injected pre-wait error is handled; unexpected OS errors abort |
+| Liza-facing API | Not implemented |
+| Reactor integration | Not implemented |
+
 ```sh
 python3 -m unittest discover -s experiments/channel_wait -v
 python3 experiments/channel_wait/measure.py --output /tmp/channel-wait.json --repeats 10
