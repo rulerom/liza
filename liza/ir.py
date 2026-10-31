@@ -742,6 +742,17 @@ def lower(functions, dependency_audit=None):
         worker = signatures.get(worker_symbol)
         if worker is None or worker.generic_params or [t for _, t in worker.params] != ['u32'] or worker.result_type != 'u32' or worker.readonly_params or worker.mutable_params or worker.borrowed_params:
             raise CompileError(signatures['main'].name, 'workers.run requires fn worker(id:u32)->u32 with value parameter in the entry module')
+    channel_entries = None
+    channel_externals = {f.name.text for f in externals if f.name.text.startswith('channels.')}
+    if channel_externals:
+        if 'channels.run' not in channel_externals:
+            raise CompileError(signatures['main'].name, 'channel operations require channels.run in the program')
+        main_module = signatures['main'].module
+        channel_entries = tuple((main_module + '.' if main_module else '') + n for n in ('producer','consumer'))
+        for name in channel_entries:
+            fn = signatures.get(name)
+            if fn is None or fn.generic_params or fn.params or fn.result_type != 'u32':
+                raise CompileError(signatures['main'].name, 'channels.run requires fn producer()->u32 and fn consumer()->u32 in the entry module')
     lowered = []
     dependency_records = {}
     expression_maps = {}
@@ -798,12 +809,55 @@ def lower(functions, dependency_audit=None):
             for block in fn.blocks:
                 for op in block.operations:
                     if op.op == 'call': pending.append(op.callee)
+    if channel_entries:
+        by_name = {fn.name: fn for fn in lowered}
+        external_names = {fn.name.text for fn in externals}
+        reactor_allowed = {
+            '__liza_reactor_clock', '__liza_reactor_connect_at', '__liza_reactor_create_at',
+            '__liza_reactor_connect', '__liza_reactor_finish_connect', '__liza_reactor_shutdown_write',
+            '__liza_reactor_create', '__liza_reactor_accept', '__liza_reactor_port',
+            '__liza_reactor_stop_accepting', '__liza_reactor_poll', '__liza_reactor_interest',
+            '__liza_reactor_ready', '__liza_reactor_disconnect', '__liza_reactor_close',
+            '__liza_reactor_write', 'net.reactor_read', 'net.connection_slot',
+        }
+        for entry, permitted in zip(channel_entries, ('channels.send','channels.receive')):
+            pending, seen = [entry], set()
+            while pending:
+                name = pending.pop()
+                if name in seen: continue
+                seen.add(name)
+                fn = by_name.get(name)
+                if fn is None:
+                    if name not in external_names or name not in reactor_allowed | {permitted}:
+                        raise CompileError(signatures[entry].name, 'channel role cannot call unaudited external '+name)
+                    continue
+                for block in fn.blocks:
+                    for op in block.operations:
+                        if op.op == 'call':
+                            pending.append(op.callee)
+                        elif op.effect_contract != 'pure' and not (op.effect_contract == 'alloc' and op.op in {'region.create','region.alloc','region.close','vec.create','vec.reserve'}):
+                            raise CompileError(signatures[entry].name, 'channel role cannot use unaudited operation '+op.op)
+        # Calls reachable from the caller cannot use either role capability,
+        # even through a helper or generic specialization.
+        pending, seen = ['main'], set()
+        while pending:
+            name = pending.pop()
+            if name in seen: continue
+            seen.add(name)
+            if name in ('channels.send','channels.receive'):
+                raise CompileError(signatures['main'].name, 'channel operation outside its assigned role: '+name)
+            fn = by_name.get(name)
+            if fn is None: continue
+            for block in fn.blocks:
+                for op in block.operations:
+                    if op.op == 'call': pending.append(op.callee)
     from .dependencies import check_dependencies
     check_dependencies(dependency_records, structs, signatures, audit=dependency_audit, expression_maps=expression_maps)
     module = ModuleIR(lowered, structs)
     module.specializations = mono.instances
     module.externals = externals
     module.worker_symbol = worker_symbol
+    module.channel_entries = channel_entries
     module.modules = getattr(functions,"module_names",[])
     module.declarations = getattr(functions,"declarations",[])
     annotate_traps(module)
@@ -876,7 +930,7 @@ def dump(module):
         for block in fn.blocks:
             for op in block.operations:
                 describe(op.type)
-    return json.dumps({'version': 20, **({'worker_entry': module.worker_symbol} if getattr(module, 'worker_symbol', None) else {}), 'type_properties': properties,
+    return json.dumps({'version': 20, **({'worker_entry': module.worker_symbol} if getattr(module, 'worker_symbol', None) else {}), **({'channel_entries': module.channel_entries} if getattr(module, 'channel_entries', None) else {}), 'type_properties': properties,
                        'modules': getattr(module,'modules',[]),
                        'specializations': getattr(module,'specializations',[]),
                        'declarations': getattr(module,'declarations',[]),

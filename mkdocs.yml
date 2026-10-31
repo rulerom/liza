@@ -100,6 +100,7 @@ nav:
       - Mutable-заимствование: mutable-access.md
       - Локальные subviews: local-subviews.md
       - Экспериментальные workers: scoped-workers.md
+      - Экспериментальный scoped-канал: scoped-channels.md
       - Эффекты и I/O: io-model.md
   - Библиотеки:
       - UTF-8: utf8.md
