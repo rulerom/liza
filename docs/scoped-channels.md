@@ -80,3 +80,5 @@ consumer может дочитать очередь. Возврат consumer з�
 Предположения, бюджет и критерии общего проекта описаны в
 [контракте scoped channels](scoped-channels-contract.md).
 [Ожидание с deadline](scoped-channel-wait-contract.md) пока описано как отдельный проект.
+[Пример команд для worker с reactor](channel-reactor-example.md) использует
+тот же канал с настоящими loopback TCP-сокетами.
