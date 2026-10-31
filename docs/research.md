@@ -15,6 +15,8 @@ description: "Каталог исследований, измерений и п�
 
 ## Проверки и границы гарантий
 
+- [Scoped channel: модель и истории](scoped-channel-model.md)
+
 - [Verification pipeline](verification-pipeline.md)
 - [Liza Verified V0](verified.md)
 - [Liza Verified V1](verified-v1.md)
