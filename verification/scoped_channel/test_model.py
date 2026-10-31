@@ -68,6 +68,7 @@ class RuntimeHistoryTests(unittest.TestCase):
             self.assertEqual(r.returncode,0,r.stdout+r.stderr)
             groups=r.stdout.strip().split('trace ')[1:]
             self.assertEqual(len(groups),200)
+            overlapping=0
             for trace in groups:
                 rows=trace.splitlines()[1:];self.assertEqual(len(rows),14)
                 operations={}
@@ -80,5 +81,9 @@ class RuntimeHistoryTests(unittest.TestCase):
                         h['result']=('ok','full','empty','closed')[result] if kind in (0,1) else ('ok' if kind==2 else 'discard:'+str(arg))
                         if kind==1 and result==0:h['result']='ok:'+str(arg)
                 history=[operations[i] for i in sorted(operations)]
+                if any(a['start']<b['end'] and b['start']<a['end'] for i,a in enumerate(history) for b in history[i+1:]):
+                    overlapping+=1
                 self.assertIsNotNone(linearize(history,2),history)
+            self.assertEqual(overlapping,200)
+            print('runtime histories',len(groups),'with overlapping recorded intervals',overlapping,flush=True)
 if __name__=='__main__':unittest.main()
