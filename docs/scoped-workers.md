@@ -46,7 +46,8 @@ shutdown, консольный и файловый I/O, обычный UDP и в
 завершает процесс, чтобы не оставить потоки со ссылками на истёкший стек.
 
 [Исполняемый пример](https://github.com/rulerom/liza/blob/main/examples/workers/scoped.liza) ·
-[Контракт будущих изолированных workers](mt0a-workers.md).
+[Контракт изолированных workers](mt0a-workers.md) ·
+[Проект ограниченных каналов](scoped-channels-contract.md).
 
 ## Границы runtime
 
