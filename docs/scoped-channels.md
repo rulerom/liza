@@ -79,3 +79,5 @@ consumer может дочитать очередь. Возврат consumer з�
 Пример намеренно использует повторные попытки и не является сетевым reactor.
 Предположения, бюджет и критерии общего проекта описаны в
 [контракте scoped channels](scoped-channels-contract.md).
+[Пример команд для worker с reactor](channel-reactor-example.md) использует
+тот же канал с настоящими loopback TCP-сокетами.
