@@ -1,0 +1,27 @@
+name: Channel deadline wait probe
+on:
+  pull_request:
+    paths: ['experiments/channel_wait/**', '.github/workflows/channel-wait-probe.yml']
+  push:
+    branches: [main]
+    paths: ['experiments/channel_wait/**', '.github/workflows/channel-wait-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s experiments/channel_wait -v

@@ -44,6 +44,7 @@ CASES = [
     (['docs/basics.md'], {'docs'}),
     (['experiments/scoped_channel/channel.c'], {'scoped-channel-probe'}),
     (['experiments/reactor_wakeup/probe.c'], {'reactor-wakeup-probe'}),
+    (['experiments/channel_wait/wait.c'], {'channel-wait-probe'}),
     (['verification/scoped_channel/model.py'], {'scoped-channel-model', 'verified-pipeline'}),
     (['liza/runtime/scoped_channel_core.c'], COMPILER | {'scoped-channel-model', 'reactor-wakeup-probe'}),
     (['README.md'], set()),
