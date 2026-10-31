@@ -104,6 +104,34 @@ fn main()->u32:io,alloc {
                     r=liza('check',src)
                     self.assertNotEqual(r.returncode,0,r.stdout+r.stderr)
                     self.assertIn(expected,r.stderr)
+    def test_rejects_unaudited_io_and_unscoped_channel(self):
+        cases=[
+            ('fn helper()->u32:io {match console.println("x") {Ok(n)=>{return 0} Err(e)=>{return 1}}}',
+             'fn producer()->u32:io {return helper()}', 'channel role cannot'),
+            ("""fn helper()->u32:io,alloc {
+ match net.reactor_create(0,1) {
+  Err(e)=>{return 0}
+  Ok(r)=>{
+   a=net.reactor_watch_shutdown(r)
+   b=net.reactor_close(move r)
+   return 0
+  }
+ }
+}""", 'fn producer()->u32:io,alloc {return helper()}', 'channel role cannot'),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            src=Path(tmp)/'scope.liza'
+            for helper,producer,expected in cases:
+                with self.subTest(helper=helper):
+                    src.write_text(helper+'\n'+producer+'\nfn consumer()->u32 {return 0}\nfn main()->u32:io,alloc {\n x=channels.run(1,1024)\n return 0\n}\n')
+                    r=liza('check',src)
+                    self.assertNotEqual(r.returncode,0,r.stdout+r.stderr)
+                    self.assertIn(expected,r.stderr)
+            src.write_text('fn main()->u32:io {\n x=channels.send(1)\n return 0\n}\n')
+            r=liza('check',src)
+            self.assertNotEqual(r.returncode,0,r.stdout+r.stderr)
+            self.assertIn('channel operations require channels.run',r.stderr)
+
     def test_imported_generic_role_cannot_be_shared(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
