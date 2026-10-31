@@ -1,0 +1,28 @@
+// One producer and one consumer. Channel rights do not become Liza values.
+fn producer()->u32:io {
+    var value:u32=0
+    while value<1000 {
+        status=channels.send(value)
+        if status==0 {value=value+1}
+        if status==2 {return 1}
+    }
+    return 0
+}
+fn consumer()->u32:io {
+    var next:u32=0
+    while next<1000 {
+        result=channels.receive()
+        status=result>>32
+        if status==2 {return 2}
+        if status==0 {
+            if u32.wrap(result)!=next {return 2}
+            next=next+1
+        }
+    }
+    return 0
+}
+fn main()->u32:io,alloc {
+    result=channels.run(8,1024)
+    if result!=0 {return 1}
+    return 0
+}

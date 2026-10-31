@@ -11,7 +11,8 @@ def attach(program):
     if 'json' in libraries:
         libraries.append('json_mut')
     uses_workers = getattr(program, 'uses_workers', False)
-    if not libraries and not uses_workers:
+    uses_channels = getattr(program, 'uses_channels', False)
+    if not libraries and not uses_workers and not uses_channels:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
                                for name in libraries), internal=True).parse()
@@ -34,6 +35,7 @@ def attach(program):
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
     combined.uses_workers = uses_workers
+    combined.uses_channels = uses_channels
     combined.declarations = getattr(program,"declarations",[])
     combined.extend(program)
     def calls(node):
@@ -65,6 +67,9 @@ def attach(program):
                      for name,t in [('__liza_err_text','Text'),('__liza_err_bytes','View<u8>'),
                                     ('__liza_err_print_u64','u64'),('__liza_err_print_i64','i64')])
     externals.append(Function(Token('__liza_read_file',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileRead', 'io'))
+    externals.extend([Function(Token('channels.run',1,1), [(Token('capacity',1,1),'u32'),(Token('budget',1,1),'u64')], [], 'u64', 'io,alloc'),
+                      Function(Token('channels.send',1,1), [(Token('value',1,1),'u32')], [], 'u32', 'io'),
+                      Function(Token('channels.receive',1,1), [], [], 'u64', 'io')])
     externals.append(Function(Token('workers.run',1,1), [(Token('count',1,1),'u32')], [], 'u64', 'io'))
     externals.extend([
         Function(Token('__liza_file_open',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileOpen', 'io'),
@@ -139,13 +144,16 @@ def link_flags(module):
     reactor_names = {n for n in names if n.startswith('__liza_reactor_') or n in ('net.reactor_read','net.connection_slot')}
     net_names = reactor_names | {n for n in names if n.startswith('__liza_net_') or n in ('net.read','net.udp_receive')}
     worker_names = {'workers.run'} & names
+    channel_names = {n for n in names if n.startswith('channels.')}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
-    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names else []) + (['file'] if names & file_names else [])
+    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names else []) + (['file'] if names & file_names else [])
     if worker_names: libraries.append('workers')
+    if channel_names: libraries.append('channels')
     if net_names: libraries.append('net')
     if reactor_names: libraries.append('reactor')
     if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
+    if channel_names: files.append(str(Path(__file__).parent/'runtime'/'scoped_channel_core.c'))
     if sys.platform == 'win32':
         return files + (['-lws2_32'] if net_names else [])
     if sys.platform not in ('darwin','linux'):

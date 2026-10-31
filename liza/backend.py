@@ -88,6 +88,23 @@ def llvm(module, target=None):
                       'declare i64 @liza_rt_err_print_u64(i64)',
                       'declare i64 @liza_rt_err_print_i64(i64)'])
         for fn in module.externals:
+            if fn.name.text == 'channels.run':
+                producer, consumer = module.channel_entries
+                lines.extend(['declare i64 @liza_rt_channels_run(i32, i64, ptr, ptr)',
+                              'define internal i64 @liza_channels.run(i32 %capacity, i64 %budget) {',
+                              f'  %result = call i64 @liza_rt_channels_run(i32 %capacity, i64 %budget, ptr @liza_{producer}, ptr @liza_{consumer})',
+                              '  ret i64 %result', '}'])
+                continue
+            if fn.name.text == 'channels.send':
+                lines.extend(['declare i32 @liza_rt_channels_send(i32)',
+                              'define internal i32 @liza_channels.send(i32 %value) {',
+                              '  %result = call i32 @liza_rt_channels_send(i32 %value)', '  ret i32 %result', '}'])
+                continue
+            if fn.name.text == 'channels.receive':
+                lines.extend(['declare i64 @liza_rt_channels_receive()',
+                              'define internal i64 @liza_channels.receive() {',
+                              '  %result = call i64 @liza_rt_channels_receive()', '  ret i64 %result', '}'])
+                continue
             if fn.name.text == 'workers.run':
                 lines.extend(['declare i64 @liza_rt_workers_run(i32, ptr)',
                               'define internal i64 @liza_workers.run(i32 %count) {',
