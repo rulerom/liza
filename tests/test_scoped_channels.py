@@ -67,6 +67,39 @@ fn main()->u32:io,alloc {
             expected=probe.replace('"channel.h"','"scoped_channel_core.h"').replace('ch_', 'liza_scoped_')
             self.assertEqual((ROOT/'liza/runtime'/('scoped_channel_core.'+ext)).read_text(),expected)
 
+    def test_role_can_use_local_region(self):
+        program="""fn producer()->u32:io,alloc {
+ match memory.create(64) {
+  Err(e)=>{return 1}
+  Ok(r)=>{
+   x=channels.send(7)
+   closed=memory.close(move r)
+   return x
+  }
+ }
+}
+fn consumer()->u32:io {
+ var pending:u32=1
+ var status:u32=0
+ while pending==1 {
+  value=channels.receive()
+  if value>>32==0 {if u32.wrap(value)!=7 {status=2}\n pending=0}
+  if value>>32==2 {status=2\n pending=0}
+ }
+ return status
+}
+fn main()->u32:io,alloc {
+ result=channels.run(1,1024)
+ if result!=0 {return 1}
+ return 0
+}
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            src=Path(tmp)/'local_region.liza';src.write_text(program)
+            for opt in ('0','2'):
+                r=liza('run',src,'-O',opt)
+                self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+
     def test_startup_failure_before_user_code(self):
         with tempfile.TemporaryDirectory() as tmp:
             exe=Path(tmp)/('fail.exe' if sys.platform=='win32' else 'fail')
