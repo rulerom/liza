@@ -43,6 +43,8 @@ COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline
 CASES = [
     (['docs/basics.md'], {'docs'}),
     (['experiments/scoped_channel/channel.c'], {'scoped-channel-probe'}),
+    (['verification/scoped_channel/model.py'], {'scoped-channel-model', 'verified-pipeline'}),
+    (['liza/runtime/scoped_channel_core.c'], COMPILER | {'scoped-channel-model'}),
     (['README.md'], set()),
     (['docs/assets/images/liza-logo.png', 'mkdocs.yml'], {'docs'}),
     (['tools/check_docs.py', 'requirements-docs.txt'], {'docs'}),
