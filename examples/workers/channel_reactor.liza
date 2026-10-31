@@ -1,0 +1,103 @@
+// Commands are scalars; all sockets and the reactor belong to consumer.
+// 1: connect to the reactor's loopback listener; 2: stop accepting.
+fn producer()->u32:io {
+    var command:u32=1
+    while command<=2 {
+        status=channels.send(command)
+        if status==0 {command=command+1}
+        if status==2 {return 1}
+    }
+    return 0
+}
+
+fn consumer()->u32:io,alloc {
+    match net.reactor_create(0,2) {
+        Err(error)=>{return 1}
+        Ok(reactor)=>{
+            var status:u32=0
+            var next:u32=1
+            var finished:bool=false
+            while !finished && status==0 {
+                message=channels.receive()
+                kind=message>>32
+                if kind==2 {finished=true}
+                if kind==0 {
+                    command=u32.wrap(message)
+                    if command!=next {status=2}
+                    if command==1 && status==0 {
+                        match net.reactor_port(reactor) {
+                            Err(error)=>{status=3}
+                            Ok(port)=>{
+                                match net.reactor_connect(reactor,u16.wrap(port)) {
+                                    Err(error)=>{status=4}
+                                    Ok(client)=>{
+                                        var connected:bool=false
+                                        var tries:u32=0
+                                        while !connected && tries<100 && status==0 {
+                                            match net.reactor_finish_connect(reactor,client) {
+                                                Err(error)=>{status=5}
+                                                Ok(ready)=>{connected=ready}
+                                            }
+                                            if !connected && status==0 {
+                                                match net.reactor_poll(reactor,10) {Err(error)=>{status=6} Ok(events)=>{}}
+                                            }
+                                            tries=tries+1
+                                        }
+                                        if !connected {status=7}
+                                        var accepted:bool=false
+                                        tries=0
+                                        while !accepted && tries<100 && status==0 {
+                                            match net.reactor_accept(reactor) {
+                                                Ok(peer)=>{
+                                                    accepted=true
+                                                    match net.reactor_disconnect(reactor,peer) {Err(error)=>{status=8} Ok(done)=>{}}
+                                                }
+                                                Err(error)=>{
+                                                    match error {
+                                                        ReactorError.WouldBlock=>{match net.reactor_poll(reactor,10) {Err(e)=>{status=9} Ok(events)=>{}}}
+                                                        ReactorError.AddressInUse=>{status=10}
+                                                        ReactorError.PermissionDenied=>{status=10}
+                                                        ReactorError.Interrupted=>{status=10}
+                                                        ReactorError.Disconnected=>{status=10}
+                                                        ReactorError.InvalidRange=>{status=10}
+                                                        ReactorError.Other=>{status=10}
+                                                        ReactorError.InvalidCapacity=>{status=10}
+                                                        ReactorError.Full=>{status=10}
+                                                        ReactorError.InvalidConnection=>{status=10}
+                                                        ReactorError.Exhausted=>{status=10}
+                                                        ReactorError.OutOfMemory=>{status=10}
+                                                    }
+                                                }
+                                            }
+                                            tries=tries+1
+                                        }
+                                        if !accepted && status==0 {status=11}
+                                        match net.reactor_disconnect(reactor,client) {Err(error)=>{status=12} Ok(done)=>{}}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if command==2 && status==0 {
+                        match net.reactor_stop_accepting(reactor) {Err(error)=>{status=13} Ok(done)=>{}}
+                        match net.reactor_port(reactor) {Err(error)=>{} Ok(port)=>{status=14}}
+                    }
+                    next=next+1
+                }
+            }
+            if next!=3 && status==0 {status=15}
+            match net.reactor_close(move reactor) {Err(error)=>{return 16} Ok(done)=>{}}
+            return status
+        }
+    }
+}
+
+fn main()->u32:io,alloc {
+    match channels.run(1,1024) {
+        Err(error)=>{return 1}
+        Ok(result)=>{
+            if result.producer!=0 || result.consumer!=0 || result.discarded!=0 {return 2}
+            return 0
+        }
+    }
+}

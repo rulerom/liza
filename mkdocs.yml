@@ -115,6 +115,7 @@ nav:
       - Таблица соединений: connection-table.md
   - Приложения и примеры:
       - Эталонные программы: reference-programs.md
+      - Управление reactor через канал: channel-reactor-example.md
       - Разбор программы Vec: bounded-vec-walkthrough.md
       - CLI-приложение liza-text: cli.md
       - Запись файлов и liza-copy: file-output.md
