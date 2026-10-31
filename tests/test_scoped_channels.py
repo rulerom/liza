@@ -43,20 +43,43 @@ fn consumer()->u32:io {
  if got!=1 {return 2}
  return 0
 }
+fn invalid(cap:u32,budget:u64)->u32:io,alloc {
+ match channels.run(cap,budget) {
+  Ok(r)=>{return 1}
+  Err(e)=>{match e {ChannelError.InvalidCapacity=>{return 0} ChannelError.Unavailable=>{return 2}}}
+ }
+}
 fn main()->u32:io,alloc {
- a=channels.run(0,1024)
- if a>>56!=1 {return 1}
- b=channels.run(65537,1048576)
- if b>>56!=1 {return 2}
- c=channels.run(1,1)
- if c>>56!=1 {return 3}
- d=channels.run(1,1024)
- if d!=0 {return 4}
- return 0
+ if invalid(0,1024)!=0 {return 1}
+ if invalid(65537,1048576)!=0 {return 2}
+ if invalid(1,1)!=0 {return 3}
+ match channels.run(1,1024) {
+  Err(e)=>{return 4}
+  Ok(r)=>{if r.producer!=0 || r.consumer!=0 || r.discarded!=0 {return 5}\n return 0}
+ }
 }
 """
         with tempfile.TemporaryDirectory() as tmp:
             src=Path(tmp)/'budget.liza';src.write_text(program)
+            for opt in ('0','2'):
+                r=liza('run',src,'-O',opt)
+                self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+
+    def test_equal_nonzero_results_are_not_lost(self):
+        source="""fn producer()->u32 {return 7}
+fn consumer()->u32 {return 7}
+fn main()->u32:io,alloc {
+ match channels.run(1,1024) {
+  Err(e)=>{return 1}
+  Ok(r)=>{
+   if r.producer!=7 || r.consumer!=7 || r.discarded!=0 {return 2}
+   return 0
+  }
+ }
+}
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            src=Path(tmp)/'results.liza';src.write_text(source)
             for opt in ('0','2'):
                 r=liza('run',src,'-O',opt)
                 self.assertEqual(r.returncode,0,r.stdout+r.stderr)
@@ -89,9 +112,10 @@ fn consumer()->u32:io {
  return status
 }
 fn main()->u32:io,alloc {
- result=channels.run(1,1024)
- if result!=0 {return 1}
- return 0
+ match channels.run(1,1024) {
+  Err(e)=>{return 1}
+  Ok(result)=>{if result.producer!=0 || result.consumer!=0 || result.discarded!=0 {return 2}\n return 0}
+ }
 }
 """
         with tempfile.TemporaryDirectory() as tmp:
@@ -111,6 +135,32 @@ fn main()->u32:io,alloc {
                 self.assertEqual(b.returncode,0,b.stdout+b.stderr)
                 r=subprocess.run([str(exe)],text=True,capture_output=True,timeout=15)
                 self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+    def test_liza_observes_start_failure_as_err_without_worker_values(self):
+        source="""fn producer()->u32 {return 1/0}
+fn consumer()->u32 {return 1/0}
+fn main()->u32:io,alloc {
+ match channels.run(8,1024) {
+  Ok(result)=>{return 1}
+  Err(e)=>{match e {ChannelError.InvalidCapacity=>{return 2} ChannelError.Unavailable=>{return 0}}}
+ }
+}
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp=Path(tmp);src=tmp/'fault.liza';src.write_text(source);ir=tmp/'fault.ll'
+            result=liza('emit-llvm',src,'-o',ir)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            suffix='windows' if sys.platform=='win32' else 'posix'
+            exe=tmp/('fault.exe' if sys.platform=='win32' else 'fault')
+            for opt in ('0','2'):
+                for flag in ('CHANNEL_TEST_FAIL_AT=0','CHANNEL_TEST_FAIL_AT=1','CH_TEST_FAIL_ALLOC'):
+                    with self.subTest(opt=opt,flag=flag):
+                        cmd=['clang','-O'+opt,'-D'+flag,str(ir),str(ROOT/f'liza/runtime/channels_{suffix}.c'),str(ROOT/'liza/runtime/scoped_channel_core.c'),'-o',str(exe)]
+                        if sys.platform!='win32':cmd.append('-pthread')
+                        b=subprocess.run(cmd,text=True,capture_output=True,timeout=30)
+                        self.assertEqual(b.returncode,0,b.stdout+b.stderr)
+                        r=subprocess.run([str(exe)],text=True,capture_output=True,timeout=15)
+                        self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+
     def test_discard_accounting(self):
         with tempfile.TemporaryDirectory() as tmp:
             exe=Path(tmp)/('discard.exe' if sys.platform=='win32' else 'discard')

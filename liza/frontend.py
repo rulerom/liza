@@ -170,7 +170,7 @@ class Parser:
         self.tokens = lex(source, filename)
         self.index = 0
         self.generic_scope = {}
-        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"ReactorError", "FrameError", "NetError", "IoError", "FileError", "MemoryError", "FileCreateError", "FileWriteError", "Utf8ErrorKind", "Utf8StreamErrorKind", "JsonErrorKind"}
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"ReactorError", "FrameError", "NetError", "IoError", "FileError", "MemoryError", "FileCreateError", "FileWriteError", "Utf8ErrorKind", "Utf8StreamErrorKind", "JsonErrorKind", "ChannelError"}
 
     @property
     def current(self):

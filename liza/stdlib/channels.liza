@@ -1,0 +1,10 @@
+// Scoped group startup is distinct from results of successfully joined workers.
+enum ChannelError { InvalidCapacity; Unavailable }
+struct ChannelRun { producer:u32; consumer:u32; discarded:u32 }
+struct __liza_ChannelRaw { producer:u32; consumer:u32; discarded:u32; error:u32 }
+fn channels.run(capacity:u32,budget:u64)->Result<ChannelRun,ChannelError>:io,alloc {
+    raw=__liza_channels_run(capacity,budget)
+    if raw.error==0 {return Ok(ChannelRun(raw.producer,raw.consumer,raw.discarded))}
+    if raw.error==1 {return Err(ChannelError.InvalidCapacity)}
+    return Err(ChannelError.Unavailable)
+}

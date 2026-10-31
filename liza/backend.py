@@ -88,12 +88,18 @@ def llvm(module, target=None):
                       'declare i64 @liza_rt_err_print_u64(i64)',
                       'declare i64 @liza_rt_err_print_i64(i64)'])
         for fn in module.externals:
-            if fn.name.text == 'channels.run':
+            if fn.name.text == '__liza_channels_run':
                 producer, consumer = module.channel_entries
-                lines.extend(['declare i64 @liza_rt_channels_run(i32, i64, ptr, ptr)',
-                              'define internal i64 @liza_channels.run(i32 %capacity, i64 %budget) {',
-                              f'  %result = call i64 @liza_rt_channels_run(i32 %capacity, i64 %budget, ptr @liza_{producer}, ptr @liza_{consumer})',
-                              '  ret i64 %result', '}'])
+                raw = types['__liza_ChannelRaw']
+                lines.extend(['declare i32 @liza_rt_channels_run(i32, i64, ptr, ptr, ptr, ptr, ptr)',
+                              f'define internal {raw} @liza___liza_channels_run(i32 %capacity, i64 %budget) {{',
+                              '  %producer = alloca i32', '  %consumer = alloca i32', '  %discarded = alloca i32',
+                              f'  %error = call i32 @liza_rt_channels_run(i32 %capacity, i64 %budget, ptr @liza_{producer}, ptr @liza_{consumer}, ptr %producer, ptr %consumer, ptr %discarded)',
+                              '  %p = load i32, ptr %producer', '  %c = load i32, ptr %consumer', '  %d = load i32, ptr %discarded',
+                              f'  %r0 = insertvalue {raw} zeroinitializer, i32 %p, 0',
+                              f'  %r1 = insertvalue {raw} %r0, i32 %c, 1',
+                              f'  %r2 = insertvalue {raw} %r1, i32 %d, 2',
+                              f'  %r3 = insertvalue {raw} %r2, i32 %error, 3', f'  ret {raw} %r3', '}'])
                 continue
             if fn.name.text == 'channels.send':
                 lines.extend(['declare i32 @liza_rt_channels_send(i32)',

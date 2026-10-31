@@ -12,6 +12,7 @@ def attach(program):
         libraries.append('json_mut')
     uses_workers = getattr(program, 'uses_workers', False)
     uses_channels = getattr(program, 'uses_channels', False)
+    if uses_channels: libraries.append('channels')
     if not libraries and not uses_workers and not uses_channels:
         return program, []
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
@@ -67,7 +68,7 @@ def attach(program):
                      for name,t in [('__liza_err_text','Text'),('__liza_err_bytes','View<u8>'),
                                     ('__liza_err_print_u64','u64'),('__liza_err_print_i64','i64')])
     externals.append(Function(Token('__liza_read_file',1,1), [(Token('path',1,1),'Text')], [], '__liza_FileRead', 'io'))
-    externals.extend([Function(Token('channels.run',1,1), [(Token('capacity',1,1),'u32'),(Token('budget',1,1),'u64')], [], 'u64', 'io,alloc'),
+    externals.extend([Function(Token('__liza_channels_run',1,1), [(Token('capacity',1,1),'u32'),(Token('budget',1,1),'u64')], [], '__liza_ChannelRaw', 'io,alloc'),
                       Function(Token('channels.send',1,1), [(Token('value',1,1),'u32')], [], 'u32', 'io'),
                       Function(Token('channels.receive',1,1), [], [], 'u64', 'io')])
     externals.append(Function(Token('workers.run',1,1), [(Token('count',1,1),'u32')], [], 'u64', 'io'))
@@ -144,7 +145,7 @@ def link_flags(module):
     reactor_names = {n for n in names if n.startswith('__liza_reactor_') or n in ('net.reactor_read','net.connection_slot')}
     net_names = reactor_names | {n for n in names if n.startswith('__liza_net_') or n in ('net.read','net.udp_receive')}
     worker_names = {'workers.run'} & names
-    channel_names = {n for n in names if n.startswith('channels.')}
+    channel_names = {n for n in names if n.startswith('channels.') or n == '__liza_channels_run'}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
     libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names else []) + (['file'] if names & file_names else [])
     if worker_names: libraries.append('workers')
