@@ -127,6 +127,7 @@ nav:
   - Проект:
       - Verified Network Gateway: network-gateway.md
       - "MT0-A: изолированные workers": mt0a-workers.md
+      - "Scoped channels: контракт": scoped-channels-contract.md
       - Gateway R0 reproduction: gateway-reproduction.md
       - План разработки: roadmap.md
       - Milestones: milestones.md
