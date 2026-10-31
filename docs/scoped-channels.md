@@ -79,3 +79,4 @@ consumer может дочитать очередь. Возврат consumer з�
 Пример намеренно использует повторные попытки и не является сетевым reactor.
 Предположения, бюджет и критерии общего проекта описаны в
 [контракте scoped channels](scoped-channels-contract.md).
+[Ожидание с deadline](scoped-channel-wait-contract.md) пока описано как отдельный проект.
