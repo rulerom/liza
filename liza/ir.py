@@ -743,9 +743,9 @@ def lower(functions, dependency_audit=None):
         if worker is None or worker.generic_params or [t for _, t in worker.params] != ['u32'] or worker.result_type != 'u32' or worker.readonly_params or worker.mutable_params or worker.borrowed_params:
             raise CompileError(signatures['main'].name, 'workers.run requires fn worker(id:u32)->u32 with value parameter in the entry module')
     channel_entries = None
-    channel_externals = {f.name.text for f in externals if f.name.text.startswith('channels.')}
+    channel_externals = {f.name.text for f in externals if f.name.text.startswith('channels.') or f.name.text == '__liza_channels_run'}
     if channel_externals:
-        if 'channels.run' not in channel_externals:
+        if '__liza_channels_run' not in channel_externals:
             raise CompileError(signatures['main'].name, 'channel operations require channels.run in the program')
         main_module = signatures['main'].module
         channel_entries = tuple((main_module + '.' if main_module else '') + n for n in ('producer','consumer'))

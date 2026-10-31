@@ -22,7 +22,11 @@ fn consumer()->u32:io {
     return 0
 }
 fn main()->u32:io,alloc {
-    result=channels.run(8,1024)
-    if result!=0 {return 1}
-    return 0
+    match channels.run(8,1024) {
+        Err(error)=>{return 1}
+        Ok(result)=>{
+            if result.producer!=0 || result.consumer!=0 || result.discarded!=0 {return 2}
+            return 0
+        }
+    }
 }

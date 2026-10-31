@@ -12,7 +12,7 @@ from .types import SCALAR_TYPES, is_array, is_view, element_type, array_length, 
 BUILTINS = set(SCALAR_TYPES) | {'FrameState','FrameStep','FrameError','net.Address','net.Listener','net.Stream','net.DatagramSocket','net.Reactor','net.Connection','ReactorError','NetError','UdpError','Text','File','Arg','Path','IoError','IoFailure','FileError',
     'FileFailure','FileBuffer','FileChunk','FileCreateError','FileWriteError','FileWriteFailure','memory.Region','MemoryError','vec.Done','vec.Error',
     'Utf8ErrorKind','Utf8Error','Utf8Step','Utf8Range','Utf8Done',
-    'Utf8StreamState','Utf8StreamError','Utf8StreamErrorKind','JsonState','JsonError','JsonErrorKind'}
+    'Utf8StreamState','Utf8StreamError','Utf8StreamErrorKind','JsonState','JsonError','JsonErrorKind','ChannelRun','ChannelError'}
 RESERVED = {'console','file','memory','vec','utf8','utf8_stream','cli','net','framing','json','workers','channels'}
 
 

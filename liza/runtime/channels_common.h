@@ -58,19 +58,21 @@ static void *group_entry(void *value) {
     return NULL;
 #endif
 }
-/* Bits 63..56: status (0 success, 1 invalid budget, 2 start failure).
-   Bits 55..32: discarded count. Low 32: XOR of role results. */
-uint64_t liza_rt_channels_run(uint32_t n,uint64_t budget,group_fn producer,group_fn consumer) {
+/* Returns 0 on success, 1 for invalid configuration, 2 for startup failure.
+   Outputs are valid only on success, but initialized on every path. */
+uint32_t liza_rt_channels_run(uint32_t n,uint64_t budget,group_fn producer,group_fn consumer,
+                              uint32_t *producer_result,uint32_t *consumer_result,uint32_t *discarded) {
+    *producer_result=0;*consumer_result=0;*discarded=0;
     group g={0};size_t bytes=0;
-    if(budget>SIZE_MAX)return (uint64_t)1<<56;
+    if(budget>SIZE_MAX)return 1;
     liza_scoped_status created=liza_scoped_create(n,(size_t)budget,&g.c,&bytes);
-    if(created!=CH_OK)return (uint64_t)(created==CH_INVALID?1:2)<<56;
+    if(created!=CH_OK)return created==CH_INVALID?1:2;
 #ifdef _WIN32
-    if(!InitializeCriticalSectionEx(&g.lock,0,0)){liza_scoped_destroy(g.c);return (uint64_t)2<<56;}
+    if(!InitializeCriticalSectionEx(&g.lock,0,0)){liza_scoped_destroy(g.c);return 2;}
     InitializeConditionVariable(&g.ready);
 #else
-    if(pthread_mutex_init(&g.lock,NULL)){liza_scoped_destroy(g.c);return (uint64_t)2<<56;}
-    if(pthread_cond_init(&g.ready,NULL)){pthread_mutex_destroy(&g.lock);liza_scoped_destroy(g.c);return (uint64_t)2<<56;}
+    if(pthread_mutex_init(&g.lock,NULL)){liza_scoped_destroy(g.c);return 2;}
+    if(pthread_cond_init(&g.ready,NULL)){pthread_mutex_destroy(&g.lock);liza_scoped_destroy(g.c);return 2;}
 #endif
     group_task tasks[2]={{&g,producer,0,0,0},{&g,consumer,1,0,0}};group_thread threads[2];unsigned started=0;
     for(unsigned i=0;i<2;i++) {
@@ -95,6 +97,7 @@ uint64_t liza_rt_channels_run(uint32_t n,uint64_t budget,group_fn producer,group
     pthread_cond_destroy(&g.ready);pthread_mutex_destroy(&g.lock);
 #endif
     liza_scoped_destroy(g.c);
-    if(started!=2)return (uint64_t)2<<56;
-    return ((uint64_t)tasks[1].discarded<<32) | (tasks[0].result ^ tasks[1].result);
+    if(started!=2)return 2;
+    *producer_result=tasks[0].result;*consumer_result=tasks[1].result;*discarded=tasks[1].discarded;
+    return 0;
 }
