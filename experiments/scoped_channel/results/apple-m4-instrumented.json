@@ -1,0 +1,181 @@
+{
+  "status": "measured",
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+  "revision": "f6732d62631dcc78da4a21c39e93265a4da31621",
+  "dirty": " M experiments/scoped_channel/README.md\n M experiments/scoped_channel/channel.c\n M experiments/scoped_channel/channel.h\n M experiments/scoped_channel/test_channel.c\n M experiments/scoped_channel/test_probe.py\n?? experiments/scoped_channel/measure.py\n",
+  "source_sha256": {
+    "experiments/scoped_channel/channel.c": "33846c678336de6b33b535ab0fdb8c2aa9b9f0232b53b78e2b925d7b5077ea6a",
+    "experiments/scoped_channel/channel.h": "bb453752fa595ef15cf7b097ddc6c3c627b25fef7c0fa8f6dd33aa77dbf76331",
+    "experiments/scoped_channel/test_channel.c": "ff92c7efaeaa59355c7883918e27cda956bd870f12108863b3340908c59d8303",
+    "experiments/scoped_channel/measure.py": "b89d23c72cdccc2f94543528557a1e1e60fce7667b86887ca56cef42287fed3f"
+  },
+  "binary_sha256": "5be9bcdab232baecbac5a81789337494d40707c842b6755bb9fd566805b04191",
+  "compile_command": [
+    "clang",
+    "-std=c11",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-DCH_MEASURE",
+    "/private/tmp/liza-channel-probe/experiments/scoped_channel/channel.c",
+    "/private/tmp/liza-channel-probe/experiments/scoped_channel/test_channel.c",
+    "-o",
+    "/var/folders/gv/9t97l9_1193bb2mghgz6j90c0000gn/T/liza-channel-measure-jbt7jaks/probe",
+    "-pthread"
+  ],
+  "samples": [
+    {
+      "capacity": 1,
+      "messages": 100000,
+      "bytes": 164,
+      "acquisitions": 1171600,
+      "contended": 157588,
+      "wait_ns": 414760000,
+      "hold_ns": 26809000,
+      "max_wait_ns": 24000,
+      "max_hold_ns": 9000,
+      "repeat": 0
+    },
+    {
+      "capacity": 4,
+      "messages": 100000,
+      "bytes": 176,
+      "acquisitions": 500091,
+      "contended": 52812,
+      "wait_ns": 128288000,
+      "hold_ns": 10444000,
+      "max_wait_ns": 17000,
+      "max_hold_ns": 5000,
+      "repeat": 0
+    },
+    {
+      "capacity": 16,
+      "messages": 100000,
+      "bytes": 224,
+      "acquisitions": 270431,
+      "contended": 16789,
+      "wait_ns": 43547000,
+      "hold_ns": 5411000,
+      "max_wait_ns": 16000,
+      "max_hold_ns": 8000,
+      "repeat": 0
+    },
+    {
+      "capacity": 64,
+      "messages": 100000,
+      "bytes": 416,
+      "acquisitions": 209526,
+      "contended": 6052,
+      "wait_ns": 24470000,
+      "hold_ns": 3852000,
+      "max_wait_ns": 15000,
+      "max_hold_ns": 6000,
+      "repeat": 0
+    },
+    {
+      "capacity": 1,
+      "messages": 100000,
+      "bytes": 164,
+      "acquisitions": 1083796,
+      "contended": 150698,
+      "wait_ns": 344752000,
+      "hold_ns": 23706000,
+      "max_wait_ns": 78000,
+      "max_hold_ns": 12000,
+      "repeat": 1
+    },
+    {
+      "capacity": 4,
+      "messages": 100000,
+      "bytes": 176,
+      "acquisitions": 508156,
+      "contended": 50507,
+      "wait_ns": 125946000,
+      "hold_ns": 10373000,
+      "max_wait_ns": 17000,
+      "max_hold_ns": 4000,
+      "repeat": 1
+    },
+    {
+      "capacity": 16,
+      "messages": 100000,
+      "bytes": 224,
+      "acquisitions": 274951,
+      "contended": 15623,
+      "wait_ns": 44457000,
+      "hold_ns": 5236000,
+      "max_wait_ns": 33000,
+      "max_hold_ns": 4000,
+      "repeat": 1
+    },
+    {
+      "capacity": 64,
+      "messages": 100000,
+      "bytes": 416,
+      "acquisitions": 211070,
+      "contended": 6017,
+      "wait_ns": 24596000,
+      "hold_ns": 3872000,
+      "max_wait_ns": 15000,
+      "max_hold_ns": 1000,
+      "repeat": 1
+    },
+    {
+      "capacity": 1,
+      "messages": 100000,
+      "bytes": 164,
+      "acquisitions": 1166552,
+      "contended": 159127,
+      "wait_ns": 397970000,
+      "hold_ns": 25562000,
+      "max_wait_ns": 63000,
+      "max_hold_ns": 7000,
+      "repeat": 2
+    },
+    {
+      "capacity": 4,
+      "messages": 100000,
+      "bytes": 176,
+      "acquisitions": 490482,
+      "contended": 49424,
+      "wait_ns": 126261000,
+      "hold_ns": 10247000,
+      "max_wait_ns": 27000,
+      "max_hold_ns": 7000,
+      "repeat": 2
+    },
+    {
+      "capacity": 16,
+      "messages": 100000,
+      "bytes": 224,
+      "acquisitions": 275731,
+      "contended": 16189,
+      "wait_ns": 45821000,
+      "hold_ns": 5348000,
+      "max_wait_ns": 26000,
+      "max_hold_ns": 8000,
+      "repeat": 2
+    },
+    {
+      "capacity": 64,
+      "messages": 100000,
+      "bytes": 416,
+      "acquisitions": 211398,
+      "contended": 6022,
+      "wait_ns": 25549000,
+      "hold_ns": 3956000,
+      "max_wait_ns": 31000,
+      "max_hold_ns": 1000,
+      "repeat": 2
+    }
+  ],
+  "limitations": [
+    "Instrumented build; clock and try-lock calls change timing, memory footprint and contention",
+    "Wall-clock hold time includes scheduling and preemption",
+    "Busy-yield producer and consumer; one host, not network workload or Liza",
+    "Aggregate and maxima only, no p99; get_metrics adds one lock acquisition",
+    "Counters do not saturate; intended only for short diagnostic runs"
+  ]
+}

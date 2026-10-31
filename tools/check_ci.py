@@ -42,6 +42,7 @@ COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline
             'aggregate-lowering', 'mutable-borrow'}
 CASES = [
     (['docs/basics.md'], {'docs'}),
+    (['experiments/scoped_channel/channel.c'], {'scoped-channel-probe'}),
     (['README.md'], set()),
     (['docs/assets/images/liza-logo.png', 'mkdocs.yml'], {'docs'}),
     (['tools/check_docs.py', 'requirements-docs.txt'], {'docs'}),
