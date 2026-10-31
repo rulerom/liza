@@ -18,6 +18,17 @@ class ChannelProbe(unittest.TestCase):
             r=subprocess.run([str(exe)],text=True,capture_output=True,timeout=60)
             self.assertEqual(r.returncode,0,r.stdout+r.stderr)
             self.assertIn('channel probe passed',r.stdout)
+    def test_instrumented_probe(self):
+        with tempfile.TemporaryDirectory(prefix='liza-channel-') as tmp:
+            exe=Path(tmp)/('measured.exe' if sys.platform=='win32' else 'measured')
+            cmd=['clang','-std=c11','-O2','-Wall','-Wextra','-Werror','-DCH_MEASURE',str(HERE/'channel.c'),str(HERE/'test_channel.c'),'-o',str(exe)]
+            if sys.platform!='win32':cmd.append('-pthread')
+            b=subprocess.run(cmd,text=True,capture_output=True,timeout=30)
+            self.assertEqual(b.returncode,0,b.stdout+b.stderr)
+            r=subprocess.run([str(exe)],text=True,capture_output=True,timeout=60)
+            self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            self.assertEqual(sum(line.startswith('capacity=') for line in r.stdout.splitlines()),4)
+
     def test_allocation_failure_and_negative_control(self):
         with tempfile.TemporaryDirectory(prefix='liza-channel-') as tmp:
             tmp=Path(tmp);exe=tmp/('probe.exe' if sys.platform=='win32' else 'probe')

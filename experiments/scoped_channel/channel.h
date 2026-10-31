@@ -15,4 +15,8 @@ void ch_close_sender(channel *c);
 size_t ch_close_receiver(channel *c);
 /* Only after all send/receive/close calls have stopped and threads joined. */
 void ch_destroy(channel *c);
+#ifdef CH_MEASURE
+typedef struct { uint64_t acquisitions, contended, wait_ns, hold_ns, max_wait_ns, max_hold_ns; } ch_metrics;
+void ch_get_metrics(channel *c, ch_metrics *out);
+#endif
 #endif

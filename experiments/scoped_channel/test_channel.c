@@ -1,6 +1,9 @@
 #include "channel.h"
 #include <stdatomic.h>
 #include <stdio.h>
+#ifdef CH_MEASURE
+#include <inttypes.h>
+#endif
 #include <stdlib.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -79,6 +82,10 @@ int main(void) {
         stress_ctx ctx={0};ctx.c=c;ctx.count=100000;atomic_init(&ctx.go,0);thread_id a,b;
         CHECK(start(&a,producer,&ctx));CHECK(start(&b,consumer,&ctx));atomic_store(&ctx.go,1);
         CHECK(join(a) && join(b));CHECK(!ctx.producer_error && !ctx.consumer_error);
+#ifdef CH_MEASURE
+        ch_metrics m;ch_get_metrics(c,&m);
+        printf("capacity=%zu messages=%u bytes=%zu acquisitions=%" PRIu64 " contended=%" PRIu64 " wait_ns=%" PRIu64 " hold_ns=%" PRIu64 " max_wait_ns=%" PRIu64 " max_hold_ns=%" PRIu64 "\n",cap,ctx.count,bytes,m.acquisitions,m.contended,m.wait_ns,m.hold_ns,m.max_wait_ns,m.max_hold_ns);
+#endif
         ch_destroy(c);
     }
     puts("channel probe passed");return 0;
