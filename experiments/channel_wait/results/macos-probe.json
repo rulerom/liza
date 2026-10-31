@@ -1,0 +1,274 @@
+{
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+  "revision": "1029ff716305bdac5f0dbea75ec8278be2471cad",
+  "dirty": " M tools/check_ci.py\n?? .github/workflows/channel-wait-probe.yml\n?? experiments/channel_wait/\n",
+  "source_sha256": {
+    "experiments/channel_wait/wait.h": "605e1b836ba0a95f1b89bee0301ac19d4e78195cad5e8993d4bb83e772fca59d",
+    "experiments/channel_wait/wait.c": "15e5605fec49c21c3653d53ceb097fa506f4f9854e35c079b20db2f5a36fb482",
+    "experiments/channel_wait/test_wait.c": "49f69481100ef283d1715ed8b9c2e97d43226036e18c165be86f816d411645bd",
+    "experiments/channel_wait/measure.py": "c6705c407edb56adf697ea40e957e027c0c3e411fdff2fc7927ffa3b2922f3fd"
+  },
+  "binary_sha256": "e1d91e9b1313dc0ff82587ea7736917fcfeb848026fee447b7e7bfc56ad9fb4c",
+  "compile_command": [
+    "clang",
+    "-std=c11",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "/private/tmp/liza-wait-probe/experiments/channel_wait/wait.c",
+    "/private/tmp/liza-wait-probe/experiments/channel_wait/test_wait.c",
+    "-o",
+    "/var/folders/gv/9t97l9_1193bb2mghgz6j90c0000gn/T/liza-wait-measure-efk_1470/wait",
+    "-pthread"
+  ],
+  "samples": [
+    {
+      "reacquire_decision_late_ms": 65,
+      "reacquire_return_late_ms": 65,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231068603,
+        "reacquire_decision_ms": 231068668,
+        "reacquire_return_ms": 231068668
+      },
+      "lock_decision_late_ms": 75,
+      "lock_return_late_ms": 75,
+      "lock_raw": {
+        "lock_deadline_ms": 231068699,
+        "lock_decision_ms": 231068774,
+        "lock_return_ms": 231068774
+      },
+      "decision_late_ms": 0,
+      "return_late_ms": 0,
+      "raw": {
+        "deadline_ms": 231068855,
+        "decision_ms": 231068855,
+        "return_ms": 231068855
+      },
+      "repeat": 0
+    },
+    {
+      "reacquire_decision_late_ms": 61,
+      "reacquire_return_late_ms": 61,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231069967,
+        "reacquire_decision_ms": 231070028,
+        "reacquire_return_ms": 231070028
+      },
+      "lock_decision_late_ms": 73,
+      "lock_return_late_ms": 73,
+      "lock_raw": {
+        "lock_deadline_ms": 231070059,
+        "lock_decision_ms": 231070132,
+        "lock_return_ms": 231070132
+      },
+      "decision_late_ms": 1,
+      "return_late_ms": 1,
+      "raw": {
+        "deadline_ms": 231070214,
+        "decision_ms": 231070215,
+        "return_ms": 231070215
+      },
+      "repeat": 1
+    },
+    {
+      "reacquire_decision_late_ms": 66,
+      "reacquire_return_late_ms": 66,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231071322,
+        "reacquire_decision_ms": 231071388,
+        "reacquire_return_ms": 231071388
+      },
+      "lock_decision_late_ms": 74,
+      "lock_return_late_ms": 74,
+      "lock_raw": {
+        "lock_deadline_ms": 231071419,
+        "lock_decision_ms": 231071493,
+        "lock_return_ms": 231071493
+      },
+      "decision_late_ms": 0,
+      "return_late_ms": 0,
+      "raw": {
+        "deadline_ms": 231071574,
+        "decision_ms": 231071574,
+        "return_ms": 231071574
+      },
+      "repeat": 2
+    },
+    {
+      "reacquire_decision_late_ms": 65,
+      "reacquire_return_late_ms": 65,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231072686,
+        "reacquire_decision_ms": 231072751,
+        "reacquire_return_ms": 231072751
+      },
+      "lock_decision_late_ms": 74,
+      "lock_return_late_ms": 74,
+      "lock_raw": {
+        "lock_deadline_ms": 231072782,
+        "lock_decision_ms": 231072856,
+        "lock_return_ms": 231072856
+      },
+      "decision_late_ms": 0,
+      "return_late_ms": 0,
+      "raw": {
+        "deadline_ms": 231072938,
+        "decision_ms": 231072938,
+        "return_ms": 231072938
+      },
+      "repeat": 3
+    },
+    {
+      "reacquire_decision_late_ms": 64,
+      "reacquire_return_late_ms": 64,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231074049,
+        "reacquire_decision_ms": 231074113,
+        "reacquire_return_ms": 231074113
+      },
+      "lock_decision_late_ms": 70,
+      "lock_return_late_ms": 70,
+      "lock_raw": {
+        "lock_deadline_ms": 231074145,
+        "lock_decision_ms": 231074215,
+        "lock_return_ms": 231074215
+      },
+      "decision_late_ms": 1,
+      "return_late_ms": 1,
+      "raw": {
+        "deadline_ms": 231074296,
+        "decision_ms": 231074297,
+        "return_ms": 231074297
+      },
+      "repeat": 4
+    },
+    {
+      "reacquire_decision_late_ms": 62,
+      "reacquire_return_late_ms": 62,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231075405,
+        "reacquire_decision_ms": 231075467,
+        "reacquire_return_ms": 231075467
+      },
+      "lock_decision_late_ms": 74,
+      "lock_return_late_ms": 74,
+      "lock_raw": {
+        "lock_deadline_ms": 231075498,
+        "lock_decision_ms": 231075572,
+        "lock_return_ms": 231075572
+      },
+      "decision_late_ms": 1,
+      "return_late_ms": 1,
+      "raw": {
+        "deadline_ms": 231075654,
+        "decision_ms": 231075655,
+        "return_ms": 231075655
+      },
+      "repeat": 5
+    },
+    {
+      "reacquire_decision_late_ms": 62,
+      "reacquire_return_late_ms": 62,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231076767,
+        "reacquire_decision_ms": 231076829,
+        "reacquire_return_ms": 231076829
+      },
+      "lock_decision_late_ms": 71,
+      "lock_return_late_ms": 71,
+      "lock_raw": {
+        "lock_deadline_ms": 231076860,
+        "lock_decision_ms": 231076931,
+        "lock_return_ms": 231076931
+      },
+      "decision_late_ms": 0,
+      "return_late_ms": 0,
+      "raw": {
+        "deadline_ms": 231077012,
+        "decision_ms": 231077012,
+        "return_ms": 231077012
+      },
+      "repeat": 6
+    },
+    {
+      "reacquire_decision_late_ms": 65,
+      "reacquire_return_late_ms": 65,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231078120,
+        "reacquire_decision_ms": 231078185,
+        "reacquire_return_ms": 231078185
+      },
+      "lock_decision_late_ms": 74,
+      "lock_return_late_ms": 74,
+      "lock_raw": {
+        "lock_deadline_ms": 231078216,
+        "lock_decision_ms": 231078290,
+        "lock_return_ms": 231078290
+      },
+      "decision_late_ms": 1,
+      "return_late_ms": 1,
+      "raw": {
+        "deadline_ms": 231078371,
+        "decision_ms": 231078372,
+        "return_ms": 231078372
+      },
+      "repeat": 7
+    },
+    {
+      "reacquire_decision_late_ms": 62,
+      "reacquire_return_late_ms": 62,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231079485,
+        "reacquire_decision_ms": 231079547,
+        "reacquire_return_ms": 231079547
+      },
+      "lock_decision_late_ms": 75,
+      "lock_return_late_ms": 75,
+      "lock_raw": {
+        "lock_deadline_ms": 231079579,
+        "lock_decision_ms": 231079654,
+        "lock_return_ms": 231079654
+      },
+      "decision_late_ms": 0,
+      "return_late_ms": 0,
+      "raw": {
+        "deadline_ms": 231079735,
+        "decision_ms": 231079735,
+        "return_ms": 231079735
+      },
+      "repeat": 8
+    },
+    {
+      "reacquire_decision_late_ms": 65,
+      "reacquire_return_late_ms": 65,
+      "reacquire_raw": {
+        "reacquire_deadline_ms": 231080846,
+        "reacquire_decision_ms": 231080911,
+        "reacquire_return_ms": 231080911
+      },
+      "lock_decision_late_ms": 71,
+      "lock_return_late_ms": 71,
+      "lock_raw": {
+        "lock_deadline_ms": 231080943,
+        "lock_decision_ms": 231081014,
+        "lock_return_ms": 231081014
+      },
+      "decision_late_ms": 1,
+      "return_late_ms": 1,
+      "raw": {
+        "deadline_ms": 231081096,
+        "decision_ms": 231081097,
+        "return_ms": 231081097
+      },
+      "repeat": 9
+    }
+  ],
+  "limitations": [
+    "millisecond clock; small local sample, not p99 or hard timing bound",
+    "test injects spurious returns and holds mutex deliberately; not production workload",
+    "instrumentation, clock overhead and OS scheduling change timings",
+    "mutex acquisition and condition-wait mutex reacquisition are not deadline bounded"
+  ]
+}
