@@ -35,6 +35,8 @@ class ChannelReactorExample(unittest.TestCase):
                             run=subprocess.run([str(exe)],text=True,capture_output=True,timeout=15)
                             self.assertEqual(run.returncode,expected,run.stdout+run.stderr)
     def test_consumer_exits_before_producer(self):
+        # Capacity is one: if the producer publishes before receiver close,
+        # one queued value is discarded; if close wins, none is published.
         source="""fn producer()->u32:io {
  while true {
   status=channels.send(7)
