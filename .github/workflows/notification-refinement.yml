@@ -1,10 +1,10 @@
 name: Notification runtime refinement probe
 on:
   pull_request:
-    paths: ['experiments/notification_refinement/**', 'experiments/notification_protocol/**', 'experiments/reactor_wakeup/probe.c', 'liza/runtime/scoped_channel_core.c', 'liza/runtime/scoped_channel_core.h', '.github/workflows/notification-refinement.yml']
+    paths: ['experiments/notification_refinement/**', 'experiments/notification_protocol/**', 'verification/notification_runtime/**', 'experiments/reactor_wakeup/probe.c', 'liza/runtime/scoped_channel_core.c', 'liza/runtime/scoped_channel_core.h', '.github/workflows/notification-refinement.yml']
   push:
     branches: [main]
-    paths: ['experiments/notification_refinement/**', 'experiments/notification_protocol/**', 'experiments/reactor_wakeup/probe.c', 'liza/runtime/scoped_channel_core.c', 'liza/runtime/scoped_channel_core.h', '.github/workflows/notification-refinement.yml']
+    paths: ['experiments/notification_refinement/**', 'experiments/notification_protocol/**', 'verification/notification_runtime/**', 'experiments/reactor_wakeup/probe.c', 'liza/runtime/scoped_channel_core.c', 'liza/runtime/scoped_channel_core.h', '.github/workflows/notification-refinement.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,3 +26,4 @@ jobs:
           python-version: '3.11'
       - run: python -m unittest discover -s experiments/notification_refinement -v
       - run: python -m unittest discover -s experiments/notification_protocol -v
+      - run: python -m unittest discover -s verification/notification_runtime -v

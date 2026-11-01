@@ -1,3 +1,6 @@
+#ifndef PROTOCOL_TRACE
+#define PROTOCOL_TRACE(p, op, value, result, reason) ((void)0)
+#endif
 /* Experimental wrapper; included after reactor_wakeup's platform helpers.
  * All users must use this wrapper, never access fifo directly. */
 typedef enum { NOT_PUBLISHED, PUBLISHED, PUBLISHED_FAULT } publication;
@@ -49,11 +52,11 @@ static int notify_locked(protocol *p) {
 }
 static publication publish(protocol *p,uint32_t value,liza_scoped_status *reason) {
     enter(p);
-    if(p->fault){*reason=CH_CLOSED;leave(p);return NOT_PUBLISHED;}
+    if(p->fault){*reason=CH_CLOSED;PROTOCOL_TRACE(p,"publish",value,NOT_PUBLISHED,*reason);leave(p);return NOT_PUBLISHED;}
     *reason=liza_scoped_send(p->fifo,value);
-    if(*reason!=CH_OK){leave(p);return NOT_PUBLISHED;}
+    if(*reason!=CH_OK){PROTOCOL_TRACE(p,"publish",value,NOT_PUBLISHED,*reason);leave(p);return NOT_PUBLISHED;}
     publication result=notify_locked(p)?PUBLISHED:PUBLISHED_FAULT;
-    leave(p);return result;
+    PROTOCOL_TRACE(p,"publish",value,result,*reason);leave(p);return result;
 }
 /* Sole consumer: only CH_EMPTY with fault==0 permits poll. The caller must
  * call this again before each sleep, including after unrelated network I/O. */
@@ -62,11 +65,11 @@ static liza_scoped_status take_or_arm(protocol *p,uint32_t *value,int *fault) {
     if(p->pending){if(!wake_drain(&p->wake))p->fault=1;p->pending=0;}
     liza_scoped_status s=liza_scoped_receive(p->fifo,value);
     if(s==CH_EMPTY&&!p->fault)p->armed=1;
-    *fault=p->fault;leave(p);return s;
+    *fault=p->fault;PROTOCOL_TRACE(p,"take",s==CH_OK?*value:0,s,0);leave(p);return s;
 }
 /* Sender close is serialized with publication and wakes an armed consumer. */
 static int protocol_close(protocol *p) {
-    enter(p);liza_scoped_close_sender(p->fifo);int ok=notify_locked(p);leave(p);return ok;
+    enter(p);liza_scoped_close_sender(p->fifo);int ok=notify_locked(p);PROTOCOL_TRACE(p,"close",0,ok,0);leave(p);return ok;
 }
 /* Independent supervisor may observe this sticky state through shared memory;
  * no automatic detection, wake or progress guarantee is implied. */
