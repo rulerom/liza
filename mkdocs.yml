@@ -50,7 +50,11 @@ markdown_extensions:
       pygments_lang_class: true
       anchor_linenums: true
       line_spans: __span
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.snippets:
       base_path: ["."]
       check_paths: true
@@ -102,6 +106,7 @@ nav:
       - Локальные subviews: local-subviews.md
       - Экспериментальные workers: scoped-workers.md
       - Экспериментальный scoped-канал: scoped-channels.md
+      - Многопоточность и сеть: concurrency-architecture.md
       - Эффекты и I/O: io-model.md
   - Библиотеки:
       - UTF-8: utf8.md
