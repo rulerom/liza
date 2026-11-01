@@ -47,4 +47,4 @@ join → free: этот порядок проверяется по реализ�
 верификации runtime этот пример не добавляет.
 
 [Контракт scoped-канала](scoped-channels.md) · [Модель и истории канала](scoped-channel-model.md) ·
-[Модель reactor](reactor.md).
+[Модель reactor](reactor.md) · [Схемы многопоточности и уведомлений](concurrency-architecture.md).
