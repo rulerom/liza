@@ -137,6 +137,7 @@ nav:
       - "MT0-A: изолированные workers": mt0a-workers.md
       - "Scoped channels: контракт": scoped-channels-contract.md
       - "Ожидание канала: контракт": scoped-channel-wait-contract.md
+      - "SG0: supervisor и shutdown": sg0-lifecycle-contract.md
       - Gateway R0 reproduction: gateway-reproduction.md
       - План разработки: roadmap.md
       - Milestones: milestones.md
