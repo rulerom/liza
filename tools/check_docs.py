@@ -61,7 +61,7 @@ def check():
     core = CodeBlocks(); core.feed((ROOT/'site/core.html').read_text(encoding='utf-8'))
     assert any({'k', 'kt', 'mi'} <= b['classes'] for b in core.blocks)
     diagrams = (ROOT/'site/concurrency-architecture.html').read_text(encoding='utf-8')
-    assert diagrams.count('class="mermaid"') == 5, 'Concurrency diagrams must render as Mermaid blocks'
+    assert diagrams.count('class="mermaid"') == 6, 'Concurrency diagrams must render as Mermaid blocks'
     # Every source example on these pages must use the Liza lexer, including
     # partial and deliberately invalid examples. Grammar stays plain text.
     for page in ('core', 'basics', 'connection-table', 'getting-started',
