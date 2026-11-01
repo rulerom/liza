@@ -45,6 +45,7 @@ CASES = [
     (['experiments/scoped_channel/channel.c'], {'scoped-channel-probe'}),
     (['experiments/reactor_wakeup/probe.c'], {'reactor-wakeup-probe', 'notification-refinement'}),
     (['experiments/notification_refinement/probe.c'], {'notification-refinement'}),
+    (['experiments/notification_protocol/probe.c'], {'notification-refinement'}),
     (['experiments/channel_wait/wait.c'], {'channel-wait-probe'}),
     (['verification/scoped_channel/model.py'], {'scoped-channel-model', 'verified-pipeline'}),
     (['verification/notification_protocol/model.py'], {'notification-protocol', 'verified-pipeline'}),
