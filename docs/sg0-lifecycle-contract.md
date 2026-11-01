@@ -4,10 +4,16 @@ description: "SG0: проект supervisor, согласованных сним�
 
 # SG0: Supervisor и жизненный цикл группы
 
-**Статус: контракт следующего C-прототипа, не реализованная возможность Liza.**
+**Статус: контракт исследовательского C-прототипа, не возможность API Liza.**
 Он продолжает [архитектуру concurrency](concurrency-architecture.md) и
 [проверку границ notification protocol](https://github.com/rulerom/liza/tree/main/verification/notification_runtime).
 API языка, Semantic IR и production runtime этим документом не изменяются.
+
+[Прототип SG0 и его тесты](https://github.com/rulerom/liza/tree/main/experiments/sg0)
+проверяют выбранные сценарии этого контракта. В нём используется отдельный
+join-service с памятью на время жизни процесса, один in-flight command и
+управляемые тестовые gates. Это ещё не переиспользуемый runtime групп;
+ограничения, бюджеты и доверенная часть журнала перечислены в README прототипа.
 
 Главный принцип: владение ресурсом заканчивается после подтверждённого
 завершения его пользователей, а не после прекращения ожидания их ответа.
