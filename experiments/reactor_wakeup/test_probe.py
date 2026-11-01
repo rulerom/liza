@@ -20,7 +20,9 @@ class ReactorWakeupProbe(unittest.TestCase):
                 self.assertEqual(r.returncode,0,r.stdout+r.stderr)
                 self.assertIn('mode=socket preposted=1 received=256 network=1',r.stdout)
                 self.assertIn('mode=socket preposted=0 received=256 network=1',r.stdout)
-                if sys.platform=='linux':self.assertIn('mode=eventfd preposted=0 received=256 network=1',r.stdout)
+                if sys.platform=='linux':
+                    self.assertIn('mode=eventfd preposted=1 received=256 network=1',r.stdout)
+                    self.assertIn('mode=eventfd preposted=0 received=256 network=1',r.stdout)
     def test_lost_or_failed_notification_is_not_silent(self):
         with tempfile.TemporaryDirectory(prefix='liza-wakeup-') as tmp:
             exe=Path(tmp)/('probe.exe' if sys.platform=='win32' else 'probe')

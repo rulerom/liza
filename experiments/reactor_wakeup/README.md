@@ -47,3 +47,7 @@ production security boundary or claim about kqueue. TCP notification and
 not establish how to handle a failed signal after message publication, safe
 coalescing, or the lifetime of endpoints across shutdown. Those must be solved
 before integration with the reactor or Liza's public channel API.
+
+The separate [notification state machine](notification-state-machine.md)
+records proposed synchronization and fault-reporting obligations; it is not
+implemented or proven by this probe.

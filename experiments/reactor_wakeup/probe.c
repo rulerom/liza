@@ -18,6 +18,7 @@ typedef SOCKET sock_t;
 typedef WSAPOLLFD poll_item;
 #define BAD_SOCKET INVALID_SOCKET
 #define close_socket closesocket
+#define READ_EVENT POLLRDNORM
 typedef HANDLE thread_id;
 #define THREAD_RESULT DWORD WINAPI
 #define THREAD_RETURN return 0
@@ -25,6 +26,7 @@ static int thread_start(thread_id *t,LPTHREAD_START_ROUTINE fn,void *arg){*t=Cre
 static int thread_join(thread_id t){DWORD s=WaitForSingleObject(t,INFINITE);CloseHandle(t);return s==WAIT_OBJECT_0;}
 static void yield_thread(void){Sleep(0);}
 static int would_block(void){return WSAGetLastError()==WSAEWOULDBLOCK;}
+static int last_error(void){return WSAGetLastError();}
 static int nonblock(sock_t s){u_long on=1;return ioctlsocket(s,FIONBIO,&on)==0;}
 static uint64_t now_ms(void){return GetTickCount64();}
 #else
@@ -43,6 +45,7 @@ typedef int sock_t;
 typedef struct pollfd poll_item;
 #define BAD_SOCKET (-1)
 #define close_socket close
+#define READ_EVENT POLLIN
 typedef pthread_t thread_id;
 #define THREAD_RESULT void *
 #define THREAD_RETURN return NULL
@@ -50,6 +53,7 @@ static int thread_start(thread_id *t,void *(*fn)(void *),void *arg){return pthre
 static int thread_join(thread_id t){return pthread_join(t,NULL)==0;}
 static void yield_thread(void){sched_yield();}
 static int would_block(void){return errno==EAGAIN||errno==EWOULDBLOCK;}
+static int last_error(void){return errno;}
 static int nonblock(sock_t s){int flags=fcntl(s,F_GETFL,0);return flags>=0&&fcntl(s,F_SETFL,flags|O_NONBLOCK)==0;}
 static uint64_t now_ms(void){struct timespec t;if(clock_gettime(CLOCK_MONOTONIC,&t))abort();return (uint64_t)t.tv_sec*1000+(uint64_t)t.tv_nsec/1000000;}
 #endif
@@ -98,7 +102,7 @@ static int wake_send(wakeup *w){
     (void)w;return 0;
 #endif
 #ifdef __linux__
-    if(w->eventfd_mode){uint64_t one=1;return write(w->write_fd,&one,sizeof(one))==(ssize_t)sizeof(one);}
+    if(w->eventfd_mode){uint64_t one=1;ssize_t n=write(w->write_fd,&one,sizeof(one));if(n!=(ssize_t)sizeof(one))fprintf(stderr,"eventfd write: result=%zd errno=%d\n",n,n<0?errno:0);return n==(ssize_t)sizeof(one);}
 #endif
     const char byte=1;
 #ifdef _WIN32
@@ -113,7 +117,7 @@ static int wake_send(wakeup *w){
 }
 static int wake_drain(wakeup *w){
 #ifdef __linux__
-    if(w->eventfd_mode){uint64_t count;ssize_t n=read(w->read_fd,&count,sizeof(count));return n==(ssize_t)sizeof(count) || (n<0&&would_block());}
+    if(w->eventfd_mode){uint64_t count=0;ssize_t n=read(w->read_fd,&count,sizeof(count));if(n!=(ssize_t)sizeof(count)&&!(n<0&&would_block()))fprintf(stderr,"eventfd read: result=%zd errno=%d\n",n,n<0?errno:0);else if(n==(ssize_t)sizeof(count))fprintf(stderr,"eventfd read: result=%zd count=%llu\n",n,(unsigned long long)count);return n==(ssize_t)sizeof(count) || (n<0&&would_block());}
 #endif
     char data[512];
     for(unsigned i=0;i<8;i++){
@@ -127,7 +131,7 @@ static int wake_drain(wakeup *w){
     }
     return 1; /* Readiness remains set for any undrained bytes. */
 }
-typedef struct {channel *queue;wakeup wake;sock_t network;atomic_int about_to_wait;uint32_t received,wake_events,net_events,timeouts;atomic_int failure;} receiver;
+typedef struct {channel *queue;wakeup wake;sock_t network;atomic_int about_to_wait;atomic_uint published;uint32_t received,wake_events,net_events,timeouts;atomic_int failure;} receiver;
 static THREAD_RESULT receive_loop(void *arg){
     receiver *r=arg;int closed=0;
     for(;;){
@@ -137,22 +141,25 @@ static THREAD_RESULT receive_loop(void *arg){
             if(s!=CH_EMPTY){atomic_store(&r->failure,2);THREAD_RETURN;}break;
         }
         if(closed&&r->net_events)break;
-        poll_item fds[2];memset(fds,0,sizeof(fds));fds[0].fd=r->wake.read_fd;fds[0].events=POLLRDNORM;fds[1].fd=r->network;fds[1].events=POLLRDNORM;
+        poll_item fds[2];memset(fds,0,sizeof(fds));fds[0].fd=r->wake.read_fd;fds[0].events=READ_EVENT;fds[1].fd=r->network;fds[1].events=READ_EVENT;
         atomic_fetch_add(&r->about_to_wait,1);
 #ifdef _WIN32
         int n=WSAPoll(fds,2,5000);
 #else
         int n=poll(fds,2,5000);
 #endif
-        if(n<=0){r->timeouts++;atomic_store(&r->failure,3);THREAD_RETURN;}
-        if((fds[0].revents|fds[1].revents)&(POLLERR|POLLHUP|POLLNVAL)){atomic_store(&r->failure,4);THREAD_RETURN;}
-        if(fds[0].revents&POLLRDNORM){if(!wake_drain(&r->wake)){atomic_store(&r->failure,5);THREAD_RETURN;}r->wake_events++;}
-        if(fds[1].revents&POLLRDNORM){char data[8];int got=(int)recv(r->network,data,sizeof(data),0);if(got!=1||data[0]!='n'){atomic_store(&r->failure,6);THREAD_RETURN;}r->net_events++;}
+        if(n<=0 || ((fds[0].revents|fds[1].revents)&(POLLERR|POLLHUP|POLLNVAL))){
+            int error=n<0?last_error():0;
+            fprintf(stderr,"poll: result=%d error=%d wake_revents=%#x network_revents=%#x published=%u received=%u (eventfd count not read: destructive; counts are concurrent)\n",n,error,(unsigned)fds[0].revents,(unsigned)fds[1].revents,atomic_load(&r->published),r->received);
+            if(n<=0)r->timeouts++;atomic_store(&r->failure,n<=0?3:4);THREAD_RETURN;
+        }
+        if(fds[0].revents&READ_EVENT){if(!wake_drain(&r->wake)){atomic_store(&r->failure,5);THREAD_RETURN;}r->wake_events++;}
+        if(fds[1].revents&READ_EVENT){char data[8];int got=(int)recv(r->network,data,sizeof(data),0);if(got!=1||data[0]!='n'){atomic_store(&r->failure,6);THREAD_RETURN;}r->net_events++;}
     }
     THREAD_RETURN;
 }
 static int run_case(int eventfd_mode,int preposted){
-    receiver r;memset(&r,0,sizeof(r));r.network=BAD_SOCKET;r.wake.read_fd=r.wake.write_fd=BAD_SOCKET;atomic_init(&r.about_to_wait,0);atomic_init(&r.failure,0);
+    receiver r;memset(&r,0,sizeof(r));r.network=BAD_SOCKET;r.wake.read_fd=r.wake.write_fd=BAD_SOCKET;atomic_init(&r.about_to_wait,0);atomic_init(&r.published,0);atomic_init(&r.failure,0);
     size_t bytes=0;thread_id thread;int started=0,result=1;sock_t network_sender=BAD_SOCKET;
     if(liza_scoped_create(8,1024,&r.queue,&bytes)!=CH_OK)goto done;
     if(!wake_init(&r.wake,eventfd_mode))goto done;
@@ -167,7 +174,7 @@ static int run_case(int eventfd_mode,int preposted){
 #endif
     if(getsockname(r.network,(struct sockaddr*)&addr,&length))goto done;
     if(sendto(network_sender,"n",1,0,(struct sockaddr*)&addr,sizeof(addr))!=1)goto done;
-    if(preposted){if(liza_scoped_send(r.queue,0)!=CH_OK||!wake_send(&r.wake))goto done;}
+    if(preposted){if(liza_scoped_send(r.queue,0)!=CH_OK)goto done;atomic_fetch_add(&r.published,1);if(!wake_send(&r.wake))goto done;}
     if(!thread_start(&thread,receive_loop,&r))goto done;started=1;
     if(!preposted){
         uint64_t until=now_ms()+10000;
@@ -177,7 +184,7 @@ static int run_case(int eventfd_mode,int preposted){
         liza_scoped_status s;
         uint64_t until=now_ms()+10000;
         while((s=liza_scoped_send(r.queue,i))==CH_FULL){if(atomic_load(&r.failure)||now_ms()>=until)goto stop;yield_thread();}
-        if(s!=CH_OK||!wake_send(&r.wake))goto stop;
+        if(s!=CH_OK)goto stop;atomic_fetch_add(&r.published,1);if(!wake_send(&r.wake))goto stop;
     }
     liza_scoped_close_sender(r.queue);if(!wake_send(&r.wake))goto stop;
     if(!thread_join(thread))abort();started=0;
