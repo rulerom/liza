@@ -4,7 +4,11 @@ description: "SG2: контракт владения FIFO, wake sockets, уча�
 
 # SG2: Scoped Runtime Ownership
 
-**Статус: проект контракта следующего runtime PR. Реализации SG2 ещё нет.**
+**Статус: контракт внутреннего runtime runner.**
+
+[Первая C-реализация SG2](sg2-runtime-runner.md) проверяет ограниченный runner
+и последовательный reuse. Публичного API Liza пока нет; границы приёмки
+и отличия тестового accounting от ресурсов ОС перечислены на странице реализации.
 
 [SG0](sg0-lifecycle-contract.md) проверил lifecycle и snapshots,
 [SG1](sg1-reactor-worker.md) — композицию с сетевым ожиданием.
@@ -249,8 +253,8 @@ baseline. Следующие 100 групп сравниваются с ним: 
 
 ## Порядок переноса
 
-Этот документ фиксирует обязательства; следующий PR реализует внутренний SG2
-runner и его fault-injection tests. После приёмки runner можно определять
+Этот документ фиксирует обязательства внутреннего SG2 runner и его
+fault-injection tests. После приёмки runner можно определять
 Liza-facing API с проверкой ролей и владения. Универсальные worker pools, MPMC,
 перезапуск зависших потоков, socket migration и изменения Semantic IR в SG2
 не входят.

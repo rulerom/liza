@@ -183,7 +183,7 @@ SG0 разделяет состояние worker и группы, snapshot и п
 | Сокеты пробуждения и независимый тестовый supervisor | C-стенды, не API Liza |
 | Согласованный notification protocol | Проверенный C-прототип SG0/SG1 |
 | TCP + заимствованные wake sources в одном ожидании | Внутренний C-интерфейс production Reactor |
-| Scoped-владение wake-ресурсами и бюджет группы | [Проект контракта SG2](sg2-scoped-runtime-ownership.md) |
+| Scoped-владение wake-ресурсами и бюджет группы | [Внутренний C-runner SG2](sg2-runtime-runner.md), пока без API Liza |
 
 Подробнее: [workers](scoped-workers.md), [scoped-канал](scoped-channels.md),
 [модель и истории FIFO](scoped-channel-model.md),

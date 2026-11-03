@@ -44,7 +44,7 @@ static uint32_t net_error(void) {
     }
 }
 #endif
-static uint64_t net_failure(uint32_t code) { return (uint64_t)code << 32; }
+static inline uint64_t net_failure(uint32_t code) { return (uint64_t)code << 32; }
 static uint32_t net_prepare(net_socket socket) {
 #ifdef _WIN32
     (void)socket;
