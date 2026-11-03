@@ -22,6 +22,7 @@ def build(folder,ports,inject_send_failure=False):
     ir=folder/'fanout.ll';run([sys.executable,'-m','liza','emit-llvm',folder/'fanout.liza','-o',ir])
     runtime=ROOT/'liza/runtime'
     common=['clang','-std=c11','-O2','-g','-I'+str(runtime),'-I'+str(folder)]
+    if sys.platform.startswith('linux'):common+=['-D_GNU_SOURCE']
     net=folder/'net.o';run(common+['-Dliza_rt_net_udp_bind=bench_net_bind_original','-c',runtime/'net_posix.c','-o',net])
     adapter=folder/'adapter.o';run(common+(['-DBENCH_TEST_SEND_FAIL'] if inject_send_failure else [])+['-Wall','-Wextra','-Werror','-c',HERE/'adapter.c','-o',adapter])
     objects=[]
