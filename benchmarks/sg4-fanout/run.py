@@ -13,6 +13,17 @@ def line(p,timeout=20):
 def send(p,c):p.stdin.write(c+'\n');p.stdin.flush()
 def stop(p):
     if p and p.poll() is None:p.kill();p.communicate()
+def linux_memory(pid):
+    """Linux ru_maxrss can retain the pre-exec launcher's high-water mark."""
+    if not sys.platform.startswith('linux'):return None
+    fields={}
+    for row in Path(f'/proc/{pid}/status').read_text().splitlines():
+        if row.startswith(('VmHWM:', 'VmRSS:')):
+            key,value,unit=row.split()
+            if unit!='kB':raise RuntimeError('unexpected proc RSS units')
+            fields[key[:-1]]=int(value)*1024
+    if len(fields)!=2:raise RuntimeError('missing live service memory counters')
+    return {'source':'/proc/PID/status before shutdown','peak_bytes':fields['VmHWM'],'resident_bytes':fields['VmRSS']}
 def percentile(hist,p,width,overflow):
     total=sum(hist.values());goal=math.ceil(total*p/100);cumulative=0
     if not total:return None
@@ -42,6 +53,7 @@ def trial(binaries,variant,rate,duration,ports,folder):
         server.stdin.write('D');server.stdin.flush();da=json.loads(line(server))
         if da['phase']!=2:raise RuntimeError('drain phase')
         time.sleep(.5)
+        memory=linux_memory(server.pid)
         server.stdin.write('S');server.stdin.flush();so,se=server.communicate(timeout=10)
         if server.returncode:raise RuntimeError('fanout: '+so+se)
         metrics=json.loads(so.strip())
@@ -84,7 +96,7 @@ def trial(binaries,variant,rate,duration,ports,folder):
              'coverage_offered':delivered/(sent*len(ports)) if sent else None,'coverage_successful':delivered/metrics['succeeded'] if metrics['succeeded'] else None,
              'throughput':{'received_including_drain_per_offer_s':metrics['received']/elapsed,'successful_sends_including_drain_per_offer_s':metrics['succeeded']/elapsed,'delivered_within_offer_window_pps':delivered_before_end/elapsed,'delivered_including_drain_per_offer_s':delivered/elapsed},
              'latency_hist_100us':hist,'latency_upper_ms':{f'p{p}':percentile(hist,p,.1,50000) for p in (50,95,99)},'pacing_hist_10us':interval_hist,'cycle_upper_us':{f'p{p}':percentile(cycle_hist,p,10,10000) for p in (50,95,99)},
-             'ready':ready,'measure_ack':ma,'drain_ack':da,'fanout':metrics,'collector':col,'collector_config':cc,'generator_cpu':{k:gen[k] for k in ('user_s','system_s','maxrss_native')},'fanout_peak_rss_bytes':metrics['maxrss_native']*rss_unit,
+             'ready':ready,'measure_ack':ma,'drain_ack':da,'fanout':metrics,'collector':col,'collector_config':cc,'generator_cpu':{k:gen[k] for k in ('user_s','system_s','maxrss_native')},'fanout_memory':memory,'fanout_peak_rss_bytes':memory['peak_bytes'] if memory else metrics['maxrss_native']*rss_unit,
              'shutdown_observe_ms':(metrics['stopping_ns']-metrics['stop_ns'])/1e6,'shutdown_join_ms':(metrics['finished_ns']-metrics['stop_ns'])/1e6,
              'drain_received':metrics['received']-metrics['phase_received'],'artifact_sha256':{name:sha(folder/name) for name in ('records.bin','collector.json','generator.json')}}
         # Histograms and counters are retained in the manifest. Raw timing records
