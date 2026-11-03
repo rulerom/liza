@@ -72,14 +72,22 @@ flowchart LR
 
 В первом slice consumer обрабатывает не более одного datagram и его 64 отправок
 между обращениями к `groups.next()`. Это ограничивает задержку команд и shutdown
-при непрерывной сети; drain-until-empty без лимита запрещён. UDP socket закрывает
+при непрерывной сети; drain-until-empty без лимита запрещён. Сам лимит в 64 sendto
+не гарантирует ограниченного wall-clock времени. Измеряются длительность
+fanout-цикла (p50/p95/p99/max), максимальный интервал между проверками control/shutdown
+и задержка от публикации команды до её обработки (включая p99).
+Для shutdown отдельно фиксируются request, наблюдение consumer и завершение join.
+Большая задержка требует сначала исследовать цикл, а не добавлять workers.
+Инструментирование и его overhead одинаковы для Liza/C. UDP socket закрывает
 consumer wrapper до выхода потока. Общие wake/FIFO уничтожаются после joins и
 handback. В budget/report добавляются UDP handle и фиксированное состояние;
 kernel socket buffers учитываются отдельно от managed bytes.
 
 Для первого воспроизводимого workload конфигурация endpoints/SSRC и параметры
 серии могут быть сгенерированы как **ограниченные константы приложения**; один
-бинарник на конфигурацию, не на отдельный повтор. Хеш generated source обязателен.
+бинарник на конфигурацию, не на отдельный повтор. Все повторы одной конфигурации
+используют один бинарник; SHA-256 generated source и бинарника сохраняются
+в manifest. Пересборка между повторами запрещена.
 Это позволяет проверить произвольный IPv4 адрес без нового механизма capture.
 Producer публикует одну заранее заданную управляющую команду и возвращается;
 consumer продолжает после Closed. Динамическая загрузка таблицы и длительный
@@ -126,6 +134,11 @@ Reactor UDP backend, с одинаковыми budget, supervisor, wake policy, 
 В длительных сериях collector обязан использовать полный ordinal, а не только
 16-bit RTP sequence. Каждый запуск имеет отдельную идентичность в артефактах;
 старые datagrams не должны попадать в следующий запуск.
+
+Readiness acknowledgement публикуется только после успешного создания и bind UDP
+endpoint, его включения в wait set и готовности consumer обслуживать вход.
+Запуск процесса сам по себе не является Ready. Warmup начинается только после
+этого подтверждения; startup failure завершает серию без измерения throughput.
 
 Фазы: setup → readiness acknowledgement → warmup в тех же процессах → подтверждённый
 reset счётчиков/новый диапазон sequence → 5 s подачи → 0.5 s fanout drain →
@@ -208,8 +221,15 @@ shutdown из poll; sustained UDP не вытесняет команду; trunca
 в consumer; joins/handback до shared destroy; compile-reject ролей и lifetime.
 На Windows проверяются те же ownership и datagram semantics, а не performance threshold.
 
-Audit PR завершён этим контрактом и навигацией. Следующий implementation PR
-реализует один UDP consumer, явный harness boundary, эквивалентный C callback и
-воспроизводимый отчёт. Отсутствующие Linux/macOS измерения нельзя заменять CI
+Audit PR завершён этим контрактом и навигацией. Реализация разделена на два PR:
+
+| Этап | Изменение | Приёмка |
+| --- | --- | --- |
+| SG4-A1 | Consumer-owned UDP endpoint в Reactor/SG3, consumer-only API и buffer origin | Linux/macOS/Windows: ownership, truncation, readiness, команды и shutdown; без benchmark features |
+| SG4-A2 | RTP fanout Liza/C, ограниченный harness, generated config и отчёт | Counters, latency, CPU/RSS, fanout/control timing, одинаковые бинарники повторов и lifecycle |
+
+A2 использует проверенную семантику A1. Если измерения выявят ошибку runtime,
+исправление и регрессионная проверка должны быть явно выделены, а не скрыты
+в изменении benchmark. Отсутствующие Linux/macOS измерения нельзя заменять CI
 smoke-test или выдуманными данными. SG4-B (1/2/4/8 владельцев, dispatcher,
 payload transfer и backpressure) остаётся без выбранной архитектуры до SG4-A.
