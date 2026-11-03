@@ -193,6 +193,6 @@ SG0 разделяет состояние worker и группы, snapshot и п
 
 ## SG3: доступ из Liza
 
-Экспериментальный [`groups.*` API](sg3-scoped-reactor-groups.md) связывает SG2 runner
+Экспериментальный [`groups.*` API](sg3-scoped-reactor-group.md) связывает SG2 runner
 со статически назначенными producer/consumer. Semantic IR проверяет полномочия
 ролей; Reactor, wake sources и join остаются внутренними ресурсами runtime.

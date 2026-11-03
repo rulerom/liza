@@ -49,7 +49,8 @@ uint32_t liza_rt_group_send(uint32_t value){
 
 uint32_t liza_rt_group_stopping(void){
     sg_group *g=sg3_context()->group;
-    if(atomic_load(&g->shutdown)&&!atomic_load(&g->shutdown_deadline)){
+    if(!atomic_load(&g->shutdown))return 0;
+    if(!atomic_load(&g->shutdown_deadline)){
         fputs("shutdown_without_deadline\n",stderr);fflush(stderr);_Exit(92);
     }
     return sg3_original_stopping();
