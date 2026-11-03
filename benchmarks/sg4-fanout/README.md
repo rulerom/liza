@@ -93,3 +93,7 @@ before shutdown. The original `linux-vm-nb1.json.gz` predates this correction:
 its rusage RSS fields include inherited launcher history and must not be treated
 as isolated service memory. The separate memory follow-up records corrected
 values. Original counters and timings have not been rewritten.
+
+The [latency follow-up](LATENCY.md) replays the preserved baseline in longer
+pairs and separately instruments stages. It does not change the original
+measurement archives or the application implementations.

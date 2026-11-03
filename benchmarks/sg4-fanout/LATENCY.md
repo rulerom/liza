@@ -54,7 +54,7 @@ application source hashes and generated ports. It runs Liza and C at 5k for
 not be pooled with baseline. Compression level 1 is used only after the
 processes have exited; compression CPU is outside the measured interval.
 
-Four bounded 1us histograms measure native receive, receive-return to first
+Four bounded 1us histograms measure the SG3 receive call (including runtime checks), receive-return to first
 send, the complete fanout, and last-send return to the next event call. The
 second interval includes observer validation, application RTP parsing, checks
 and destination lookup. It is **not** an isolated pure-parser benchmark.
@@ -74,3 +74,10 @@ The stage test verifies that both callbacks produce the expected packets,
 histogram counts equal completed fanouts, and sampled stage timestamps are
 ordered. Production runtime, Semantic IR and both application implementations
 remain unchanged.
+
+The first archived paired run used gzip level 9 after each trial. The runner now
+defaults to `--archive-level 1` to reduce post-processing time; pass
+`--archive-level 9` to match the original archival policy. This changes only
+post-exit compression, not raw records, binaries or the offered interval.
+
+Results: [macOS latency report](../../docs/sg4-a2-latency.md).

@@ -7,7 +7,7 @@ from run import trial
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--baseline',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
- p.add_argument('--duration',type=int,default=60);p.add_argument('--rate',type=int,default=5000);p.add_argument('--pairs',type=int,default=3)
+ p.add_argument('--duration',type=int,default=60);p.add_argument('--rate',type=int,default=5000);p.add_argument('--pairs',type=int,default=3);p.add_argument('--archive-level',type=int,choices=(1,9),default=1)
  a=p.parse_args()
  if a.output.exists() or not 1<=a.pairs<=10 or not 1<=a.duration<=60 or not 1<=a.rate*a.duration<=MAX_PACKETS:p.error('fresh output and bounded configuration required')
  old=json.loads((a.baseline/'report.json').read_text());bins={k:(a.baseline/'build'/k).resolve() for k in ('liza','c','collector')}
@@ -15,8 +15,8 @@ def main():
   for k,path in bins.items():
    if sha(path)!=old['build']['binary_sha256'][k]:raise RuntimeError('baseline binary changed: '+k)
  unchanged();a.output.mkdir(parents=True)
- r={'status':'incomplete','platform':platform.platform(),'baseline_report_sha256':sha(a.baseline/'report.json'),'build':old['build'],'duration_s':a.duration,'rate':a.rate,'pairs':a.pairs,'samples':[],
-    'limits':['Same baseline executables; generator/harness source SHA recorded separately.','AB/BA pair order balances first/second position; three pairs are exploratory, not a significance test.','Generator and collector process CPU cover warmup and drain; normalized CPU seconds/offer seconds are diagnostic, not isolated phase CPU.','No affinity, exclusive host reservation, or causal isolation of collector scheduling.','2s quiet interval between cases; compression and accounting finish before next trial.']}
+ r={'status':'incomplete','platform':platform.platform(),'baseline_report_sha256':sha(a.baseline/'report.json'),'build':old['build'],'duration_s':a.duration,'rate':a.rate,'pairs':a.pairs,'archive_level':a.archive_level,'samples':[],
+    'limits':['Same baseline executables; generator/harness source SHA recorded separately.','AB/BA reverses order; an odd pair count is not fully counterbalanced. Three pairs are exploratory, not a significance test.','Generator and collector process CPU cover warmup and drain; normalized CPU seconds/offer seconds are diagnostic, not isolated phase CPU.','No affinity, exclusive host reservation, or causal isolation of collector scheduling.','2s quiet interval between cases; compression and accounting finish before next trial.']}
  here=Path(__file__).resolve().parent;r['harness_sha256']={n:sha(here/n) for n in ('paired.py','run.py','generator.py')}
  expected=None
  try:
@@ -24,7 +24,7 @@ def main():
    for position,v in enumerate(('liza','c') if pair%2==0 else ('c','liza')):
     unchanged()
     if shutil.disk_usage(a.output).free<1024**3:raise RuntimeError('less than 1 GiB free; preserve previous samples and stop')
-    row=trial(bins,v,a.rate,a.duration,old['build']['ports'],a.output/f'pair-{pair}-{position}-{v}')
+    row=trial(bins,v,a.rate,a.duration,old['build']['ports'],a.output/f'pair-{pair}-{position}-{v}',archive_level=a.archive_level)
     buffers=(row['ready']['rcvbuf'],row['ready']['sndbuf'],row['collector_config']['receive_buffers'])
     if expected is not None and expected!=buffers:raise RuntimeError('socket buffers changed')
     expected=buffers;row.update(pair=pair,position=position)

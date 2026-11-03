@@ -29,7 +29,7 @@ static void stage_next(void){
  stage_active=0;
 }
 static void stage_output(void){
- const char *names[]={"native_receive","receive_return_to_first_send","fanout","last_send_to_next"};
+ const char *names[]={"sg3_receive_call","receive_return_to_first_send","fanout","last_send_to_next"};
  printf("\"stage_timing\":{\"count\":%llu,\"histograms_1us\":{",(unsigned long long)stage_count);
  for(unsigned s=0;s<4;s++){
   printf("%s\"%s\":{",s?",":"",names[s]);int first=1;
