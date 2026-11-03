@@ -114,16 +114,45 @@ process-lifetime service и одна process-lifetime запись, обслуж
 
 Запись проходит `Free -> Submitted -> Joining -> Returned -> Free`. Каждая новая
 передача имеет generation; переполнение запрещает дальнейший admission, а не
-оборачивает идентификатор. Реальные join receipts адресованы этой generation.
-Старый receipt не может завершить новую группу.
+оборачивает идентификатор. Каждый receipt содержит `(generation, participant_id)`
+и результат настоящего OS join; одной generation записи недостаточно. Owner
+принимает только receipt текущей generation и созданного участника, ровно один раз.
+Старый receipt не может завершить новую группу. Эта проверка дополняет handback,
+но не заменяет запрет поздних обращений service к возвращённой записи.
 
 Service получает только native handles и идентификатор записи, без указателей на
 FIFO, sockets или group context. Он исполняет системные join для всех созданных
 участников, включая supervisor. Supervisor получает stop лишь после завершения
 producer/consumer; owner остаётся способен наблюдать его shutdown deadline.
 
-После последнего join service публикует все receipts и `Returned` с release,
-перестаёт обращаться к содержимому переданной записи и переходит к ожиданию нового
+### Точка передачи native handles
+
+Owner заполняет запись эксклюзивно, пока service не имеет права её читать.
+Публикация `Submitted(generation)` с release — единственная точка передачи handles.
+Service принимает её через acquire. С этого момента только service исполняет
+system join и закрывает native thread handles; owner больше никогда не делает
+этого самостоятельно, даже если service не подтвердил пробуждение.
+
+Сигнал о новом запросе не является подтверждением передачи владения: его отказ
+после `Submitted` не отменяет передачу. Owner проверяет согласованное состояние
+записи и generation, а не повторно отправляет те же handles. Неопределённость
+наблюдения не разрешает ни повторный join, ни повторный submit. Deadline ведёт
+к эскалации с удержанием ресурсов.
+
+До `Submitted` handles принадлежат owner. При частичном startup он отменяет gate
+и публикует один rollback-запрос с точным набором уже созданных участников в
+заранее зарезервированную запись готового service. Если участников ещё нет,
+join-запрос не нужен. Если service отказал и для этого запроса нельзя подтвердить
+joins/handback, startup failure не разрешает освобождение живых ресурсов: действует
+та же политика deadline и process escalation. Частично заполненная запись никогда
+не публикуется как готовая; механизм notify не определяет её committed-состояние.
+
+### Возврат записи
+
+После каждого успешного join service сразу публикует соответствующий receipt
+с release: owner может увидеть завершение producer/consumer и запросить остановку
+supervisor, не ожидая его join. После последнего join service публикует `Returned`
+с release, перестаёт обращаться к содержимому переданной записи и переходит к ожиданию нового
 запроса. Owner принимает handback через acquire. Переиспользование разрешено лишь
 после этого handback и разрушения предыдущей группы. Все совместно читаемые поля
 атомарны либо имеют явный протокол эксклюзивной передачи; одних комментариев о
@@ -162,6 +191,32 @@ runtime socket handles считаются отдельно. Возврат admis
 перегрупповые allocations и sockets освобождены; process service остаётся ровно
 один, а его стоимость не растёт с числом завершённых групп.
 
+### Машинно-читаемый отчёт
+
+Runner возвращает внутреннюю структуру отчёта; тестовый harness сериализует её
+в JSON с `schema_version`, `generation`, `phase` и следующими отдельными полями:
+
+- `group_managed_bytes_live`, `group_managed_bytes_peak`, `fifo_allocation_bytes`;
+- `group_socket_handles_live`, `group_socket_handles_peak`, `participant_threads_live`;
+- `participant_native_handles_live`, `participant_stack_requested_bytes`;
+- `process_service_threads`, `process_managed_bytes`, `join_records_in_use`;
+- `service_stack_requested_bytes`, `reactor_allocation_bytes`, `reactor_socket_handles_live`;
+- `os_overhead_accounting` с явным значением `not_bounded_by_managed_budget`.
+
+Requested stack bytes — конфигурация, не измерение RSS. Live/peak — счётчики
+приобретённых runtime ресурсов, а не обещание немедленного возврата страниц ОС.
+Отчёт снимается в согласованных точках: до admission, после startup, после
+rollback или завершённого destroy. После уничтожения группы её live allocations,
+socket/native handles и participant threads равны нулю; `join_records_in_use == 0`
+допустимо только после handback и завершённого destroy. Размер FIFO/стеков и peak
+сохраняются как сведения о завершённом запуске, а не как live usage.
+
+После первого успешного запуска process service и его память образуют постоянный
+baseline. Следующие 100 групп сравниваются с ним: один service, одна выделенная
+запись, отсутствие роста managed bytes и занятых handles. Дополнительно harness
+сверяет доступные платформенные счётчики handles/descriptors в quiescent-точках,
+чтобы проверка не сводилась только к собственным счётчикам runner.
+
 ## Критерии приёмки реализации
 
 | Проверка | Требуемое свидетельство |
@@ -176,6 +231,7 @@ runtime socket handles считаются отдельно. Возврат admis
 | Supervisor или join service не отвечает | Owner не ждёт protocol mutex; admission slot не освобождается |
 | Последовательные группы | Не менее 100 create/run/join/destroy; постоянное число process service ресурсов |
 | Конкурентный admission | Второй запуск получает Busy и не создаёт участников |
+| Отказ notify после Submitted | Owner не выполняет join и не делает повторный submit; ресурсы удержаны до receipts/handback либо эскалации |
 | Старая join generation | Receipt отклоняется; новые ресурсы не уничтожаются |
 | Service задержан перед handback | Даже все receipts ещё не разрешают reuse записи |
 
