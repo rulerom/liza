@@ -17,8 +17,11 @@ uint64_t liza_rt_net_port(uint64_t);
 uint64_t liza_rt_net_read(uint64_t, uint8_t*, uint32_t);
 uint64_t liza_rt_net_write(uint64_t, const uint8_t*, uint32_t, uint32_t, uint32_t);
 uint32_t liza_rt_net_close(uint64_t);
+uint32_t liza_rt_net_udp_bind(uint32_t,uint16_t,uint64_t*);
+uint32_t liza_rt_net_udp_receive(uint64_t,uint8_t*,uint32_t,uint64_t*);
+uint64_t liza_rt_net_udp_send(uint64_t,const uint8_t*,uint32_t,uint32_t,uint32_t,uint32_t,uint16_t);
 typedef struct { uint64_t socket,generation; uint32_t live,interest,ready,phase,error,write_closed; } reactor_slot;
-typedef struct reactor { uint64_t owner,listener; uint32_t capacity,listener_open; reactor_slot slots[REACTOR_MAX]; } reactor;
+typedef struct reactor { uint64_t owner,listener,udp; uint32_t capacity,listener_open,udp_open; reactor_slot slots[REACTOR_MAX]; } reactor;
 uint64_t liza_rt_reactor_allocation_bytes(void) { return sizeof(reactor); }
 /* Owner identities are process-wide, unique and never wrap. */
 static _Atomic uint64_t reactor_next_owner;
@@ -100,23 +103,39 @@ static reactor_slot *reactor_find(reactor *r,uint64_t owner,uint64_t generation,
     reactor_slot *s=&r->slots[slot];
     return s->live && generation==s->generation ? s : NULL;
 }
-uint32_t liza_rt_reactor_create_at(uint32_t ip,uint16_t port,uint32_t capacity,reactor **out) {
+static uint32_t reactor_create_endpoint(uint32_t ip,uint16_t port,uint32_t capacity,int udp,reactor **out) {
     *out=NULL;
     if (!capacity || capacity>REACTOR_MAX) return 8;
     if (atomic_load_explicit(&reactor_next_owner,memory_order_relaxed)==UINT64_MAX) return 11;
     reactor *r=(reactor*)calloc(1,sizeof(*r));
     if (!r) return 12;
-    uint32_t e=liza_rt_net_listen_at(ip,port,&r->listener);
+    uint32_t e=udp ? liza_rt_net_udp_bind(ip,port,&r->listener) : liza_rt_net_listen_at(ip,port,&r->listener);
     if (e) {free(r);return e;}
     e=reactor_nonblocking(r->listener);
-    if (!e && listen((net_socket)r->listener,(int)capacity)!=0) e=net_error();
+    if (!e && !udp && listen((net_socket)r->listener,(int)capacity)!=0) e=net_error();
     if (e) {liza_rt_net_close(r->listener);free(r);return e;}
     uint64_t previous=atomic_load_explicit(&reactor_next_owner,memory_order_relaxed);
     do {
         if (previous==UINT64_MAX) {uint32_t close_error=liza_rt_net_close(r->listener);free(r);return close_error ? close_error : 11;}
     } while (!atomic_compare_exchange_weak_explicit(&reactor_next_owner,&previous,previous+1,
                                                       memory_order_relaxed,memory_order_relaxed));
-    r->owner=previous+1;r->capacity=capacity;r->listener_open=1;*out=r;return 0;
+    r->owner=previous+1;r->capacity=capacity;
+    if (udp) {r->udp=r->listener;r->listener=0;r->udp_open=1;}
+    else r->listener_open=1;
+    *out=r;return 0;
+}
+uint32_t liza_rt_reactor_create_at(uint32_t ip,uint16_t port,uint32_t capacity,reactor **out) {
+    return reactor_create_endpoint(ip,port,capacity,0,out);
+}
+uint32_t liza_rt_reactor_udp_create(uint32_t ip,uint16_t port,uint32_t capacity,reactor **out) {
+    return reactor_create_endpoint(ip,port,capacity,1,out);
+}
+uint64_t liza_rt_reactor_udp_port(reactor *r) {return r->udp_open ? liza_rt_net_port(r->udp) : net_failure(6);}
+uint32_t liza_rt_reactor_udp_receive(reactor *r,uint8_t *data,uint32_t capacity,uint64_t *out) {
+    *out=0;return r->udp_open ? liza_rt_net_udp_receive(r->udp,data,capacity,out) : 6;
+}
+uint64_t liza_rt_reactor_udp_send(reactor *r,const uint8_t *data,uint32_t length,uint32_t start,uint32_t count,uint32_t ip,uint16_t port) {
+    return r->udp_open ? liza_rt_net_udp_send(r->udp,data,length,start,count,ip,port) : net_failure(6);
 }
 uint32_t liza_rt_reactor_create(uint16_t port,uint32_t capacity,reactor **out) {
     return liza_rt_reactor_create_at(INADDR_LOOPBACK,port,capacity,out);
@@ -141,6 +160,7 @@ uint32_t liza_rt_reactor_accept(reactor *r,uint64_t *id) {
 /* phase: 0 connected, 1 connecting, 2 failed (sticky SO_ERROR result). */
 uint32_t liza_rt_reactor_connect_at(reactor *r,uint32_t ip,uint16_t port,uint64_t *id) {
     id[0]=id[1]=id[2]=0;
+    if (r->udp_open) return 6;
     if (!port || !ip || ip==UINT32_MAX || (ip>>24)>=224) return 6;
     uint32_t index=r->capacity;
     for (uint32_t i=0;i<r->capacity;i++)
@@ -260,7 +280,7 @@ uint64_t liza_rt_reactor_poll_sources(reactor *r,int32_t timeout,
 #ifndef _WIN32
         if (sources[i].socket>INT_MAX) return net_failure(6);
 #endif
-        if (r->listener_open&&sources[i].socket==r->listener) return net_failure(6);
+        if ((r->udp_open&&sources[i].socket==r->udp)||(r->listener_open&&sources[i].socket==r->listener)) return net_failure(6);
         for (uint32_t j=0;j<i;j++)
             if (sources[i].socket==sources[j].socket) return net_failure(6);
         for (uint32_t j=0;j<r->capacity;j++)
@@ -279,6 +299,10 @@ uint64_t liza_rt_reactor_poll_sources(reactor *r,int32_t timeout,
     }
     if (available && r->listener_open) {
         fds[n].fd=(net_socket)r->listener;fds[n].events=REACTOR_READ_EVENT;fds[n].revents=0;
+        indices[n++]=REACTOR_MAX;
+    }
+    if (r->udp_open) {
+        fds[n].fd=(net_socket)r->udp;fds[n].events=REACTOR_READ_EVENT;fds[n].revents=0;
         indices[n++]=REACTOR_MAX;
     }
     for (uint32_t i=0;i<source_count;i++) {
@@ -344,6 +368,7 @@ uint32_t liza_rt_reactor_close(reactor *r) {
         uint32_t e=liza_rt_net_close(r->slots[i].socket);if (!first) first=e;
     }
     if (r->listener_open) {uint32_t e=liza_rt_net_close(r->listener);if (!first) first=e;}
+    if (r->udp_open) {uint32_t e=liza_rt_net_close(r->udp);if (!first) first=e;}
     uint32_t unwatch=reactor_unwatch(r);if (!first) first=unwatch;
     free(r);return first;
 }

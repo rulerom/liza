@@ -4,16 +4,20 @@ from .types import product_args
 
 def external(fn, lines, types):
     name=fn.name.text
-    if name=='net.udp_receive':
+    group = name in ('groups.udp_receive', '__liza_group_udp_send')
+    handle = '' if group else 'i64 %handle, '
+    handle_abi = '' if group else 'i64, '
+    udp_prefix = 'liza_rt_group_' if group else 'liza_rt_net_'
+    if name in ('net.udp_receive','groups.udp_receive'):
         result=types[fn.result_type]
         status=types[product_args(fn.result_type)[1]]
         error=types['UdpError']
-        lines.extend(['declare i32 @liza_rt_net_udp_receive(i64, ptr, i32, ptr)',
-            f'define internal {result} @liza_net.udp_receive(i64 %handle, {{ ptr, i32 }} %buffer) {{',
+        lines.extend([f'declare i32 @{udp_prefix}udp_receive({handle_abi}ptr, i32, ptr)',
+            f'define internal {result} @liza_{name}({handle}{{ ptr, i32 }} %buffer) {{',
             '  %p = extractvalue { ptr, i32 } %buffer, 0',
             '  %n = extractvalue { ptr, i32 } %buffer, 1',
             '  %out = alloca i64', '  store i64 0, ptr %out',
-            '  %code = call i32 @liza_rt_net_udp_receive(i64 %handle, ptr %p, i32 %n, ptr %out)',
+            f'  %code = call i32 @{udp_prefix}udp_receive({handle}ptr %p, i32 %n, ptr %out)',
             '  %meta = load i64, ptr %out',
             '  %failed = icmp ne i32 %code, 0', '  %tag = zext i1 %failed to i32',
             '  %errtag = sub i32 %code, 1',
@@ -40,12 +44,12 @@ def external(fn, lines, types):
         if declaration not in lines:lines.append(declaration)
         lines.extend([f'define internal {ret} @liza_{name}(i64 %handle) {{',
             f'  %r = call {ret} @{symbol}(i64 %handle)',f'  ret {ret} %r','}'])
-    elif name=='__liza_net_udp_send':
-        lines.extend(['declare i64 @liza_rt_net_udp_send(i64, ptr, i32, i32, i32, i32, i16)',
-            f'define internal i64 @liza_{name}(i64 %handle, {{ ptr, i32 }} %data, i32 %start, i32 %count, i32 %ip, i16 %port) {{',
+    elif name in ('__liza_net_udp_send','__liza_group_udp_send'):
+        lines.extend([f'declare i64 @{udp_prefix}udp_send({handle_abi}ptr, i32, i32, i32, i32, i16)',
+            f'define internal i64 @liza_{name}({handle}{{ ptr, i32 }} %data, i32 %start, i32 %count, i32 %ip, i16 %port) {{',
             '  %p = extractvalue { ptr, i32 } %data, 0',
             '  %n = extractvalue { ptr, i32 } %data, 1',
-            '  %r = call i64 @liza_rt_net_udp_send(i64 %handle, ptr %p, i32 %n, i32 %start, i32 %count, i32 %ip, i16 %port)',
+            f'  %r = call i64 @{udp_prefix}udp_send({handle}ptr %p, i32 %n, i32 %start, i32 %count, i32 %ip, i16 %port)',
             '  ret i64 %r','}'])
     elif name=='net.read':
         result=types[fn.result_type]

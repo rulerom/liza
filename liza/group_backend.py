@@ -21,7 +21,7 @@ def external(fn, lines, types, module):
         lines.extend([f'  %r4 = insertvalue {raw} %r3, i32 %code, 4', f'  ret {raw} %r4', '}'])
         return True
     operation = name.removeprefix('__liza_group_').removeprefix('groups.')
-    if operation in ('send','listen','next','stop','stopping','busy'):
+    if operation in ('send','listen','next','stop','stopping','busy','udp_bind','udp_port'):
         params=[f'{types[t]} %p{i}' for i,(_,t) in enumerate(fn.params)]
         abi=[types[t] for _,t in fn.params]
         ret=types[fn.result_type]
@@ -30,6 +30,9 @@ def external(fn, lines, types, module):
                       f'  %result = call {ret} @liza_rt_group_{operation}({", ".join(params)})',
                       f'  ret {ret} %result', '}'])
         return True
+    if operation in ('udp_receive','udp_send'):
+        from .net_backend import external as net_external
+        return net_external(fn, lines, types)
     from .reactor_backend import external as reactor_external
     generated=[]
     reactor_external(fn, generated, types)
