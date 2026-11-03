@@ -28,3 +28,12 @@ These local directories are temporary, not permanent public artifact hosting.
 A fresh reproduction generates new endpoint ports, binary hashes and raw records;
 within one invocation all repeats reuse one configuration and binary pair.
 No 60-second or physical-network result is claimed by these archives.
+
+## Latency follow-up
+
+- `macos-paired60.json.gz`: three 60s pairs at 5k on the original executables.
+- `macos-paired60-windows.json.gz`: five-second offered-input windows and generator timing.
+- `macos-stages.json.gz`: separate 30s stage-instrumented cases; not baseline.
+
+[Interpretation and limitations](../../../docs/sg4-a2-latency.md). Raw records
+are retained in `/private/tmp/sg4-macos-paired60` and `/private/tmp/sg4-macos-stages`.
