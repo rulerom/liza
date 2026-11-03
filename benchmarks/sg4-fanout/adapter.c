@@ -41,6 +41,9 @@ static uint32_t (*app_producer)(void),(*app_consumer)(void);
 static struct rusage measure_usage;
 static uint64_t now(void){struct timespec t;if(clock_gettime(CLOCK_MONOTONIC,&t))abort();return (uint64_t)t.tv_sec*1000000000u+t.tv_nsec;}
 static uint64_t cpu(void){struct timespec t;if(clock_gettime(CLOCK_THREAD_CPUTIME_ID,&t))abort();return (uint64_t)t.tv_sec*1000000000u+t.tv_nsec;}
+#ifdef SG4_STAGE_TIMING
+#include "stages.h"
+#endif
 static double seconds(struct timeval t){return t.tv_sec+t.tv_usec/1e6;}
 static void phase(void){
  int req=atomic_load(&requested);
@@ -83,6 +86,9 @@ uint32_t liza_rt_group_udp_bind(uint32_t ip,uint16_t port){
 }
 uint32_t liza_rt_group_send(uint32_t value){command_sent_ns=now();return bench_send_original(value);}
 uint64_t liza_rt_group_next(void){
+#ifdef SG4_STAGE_TIMING
+ stage_next();
+#endif
  if(cycle_start){uint64_t elapsed=now()-cycle_start;if(current_packet==1){cycles++;if(elapsed>cycle_max)cycle_max=elapsed;uint64_t bin=elapsed/BIN_NS;cycle_hist[bin<BINS?bin:BINS-1]++;}cycle_start=0;}
  phase();uint64_t e=bench_next_original();
  if(e>>32==1)cycle_start=now();
@@ -91,7 +97,13 @@ uint64_t liza_rt_group_next(void){
  return e;
 }
 uint32_t liza_rt_group_udp_receive(uint8_t *data,uint32_t capacity,uint64_t *meta){
+#ifdef SG4_STAGE_TIMING
+ uint64_t stage_begin=now();
+#endif
  uint32_t e=bench_receive_original(data,capacity,meta);
+#ifdef SG4_STAGE_TIMING
+ uint64_t stage_end=now();
+#endif
  current_packet=current_phase?1:0;
  if(e){if(e==8){stats[current_packet].received++;stats[current_packet].truncated++;}return e;}
  uint32_t n=(uint32_t)(*meta&65535),seq=n>=16?be32(data+12):UINT32_MAX;
@@ -102,15 +114,24 @@ uint32_t liza_rt_group_udp_receive(uint8_t *data,uint32_t capacity,uint64_t *met
  if(!parse_rtp(data,n,&h))s->invalid++;
  else if(h.ssrc!=0x10203040)s->wrong_ssrc++;
  else s->valid++;
+#ifdef SG4_STAGE_TIMING
+ stage_receive(stage_begin,stage_end,seq,current_packet==1&&seq>=WARMUP&&seq<MAX_PACKETS+WARMUP);
+#endif
  return e;
 }
 uint64_t liza_rt_group_udp_send(const uint8_t *p,uint32_t n,uint32_t start,uint32_t count,uint32_t ip,uint16_t port){
  struct counts *s=&stats[current_packet];s->attempted++;
+#ifdef SG4_STAGE_TIMING
+ stage_send_begin();
+#endif
  uint64_t e;
 #ifdef BENCH_TEST_SEND_FAIL
  if(port==ports[0])e=(uint64_t)4<<32;else
 #endif
  e=bench_udp_send_original(p,n,start,count,ip,port);
+#ifdef SG4_STAGE_TIMING
+ stage_send_end();
+#endif
  if(e>>32)s->failed++;else s->succeeded++;
  return e;
 }
@@ -134,6 +155,9 @@ uint32_t liza_rt_group_run(uint64_t managed,uint64_t process,uint64_t stack,uint
  struct rusage usage;if(getrusage(RUSAGE_SELF,&usage))abort();
  struct counts *s=&stats[1];
  printf("{\"result\":%u,\"producer\":%u,\"consumer\":%u,\"fault\":%u,\"control_fault\":%u,",result,*pr,*cr,*fault,*control);
+#ifdef SG4_STAGE_TIMING
+ stage_output();
+#endif
  printf("\"received\":%llu,\"received_unique\":%llu,\"valid\":%llu,\"invalid\":%llu,\"wrong_ssrc\":%llu,\"truncated\":%llu,\"duplicates\":%llu,\"attempted\":%llu,\"succeeded\":%llu,\"failed\":%llu,",(unsigned long long)s->received,(unsigned long long)s->unique,(unsigned long long)s->valid,(unsigned long long)s->invalid,(unsigned long long)s->wrong_ssrc,(unsigned long long)s->truncated,(unsigned long long)s->duplicates,(unsigned long long)s->attempted,(unsigned long long)s->succeeded,(unsigned long long)s->failed);
  printf("\"warmup_valid\":%llu,\"phase_received\":%llu,\"phase_valid\":%llu,\"measure_ns\":%llu,\"drain_ns\":%llu,\"stop_ns\":%llu,\"stopping_ns\":%llu,\"finished_ns\":%llu,",(unsigned long long)stats[0].valid,(unsigned long long)phase_received,(unsigned long long)phase_valid,(unsigned long long)measure_ns,(unsigned long long)drain_ns,(unsigned long long)stop_ns,(unsigned long long)stopping_ns,(unsigned long long)finished_ns);
  printf("\"cycles\":%llu,\"cycle_max_ns\":%llu,\"poll_calls\":%llu,\"poll_returns\":%llu,\"command_samples\":1,\"command_latency_ns\":%llu,",(unsigned long long)cycles,(unsigned long long)cycle_max,(unsigned long long)poll_calls,(unsigned long long)poll_returns,(unsigned long long)(command_seen_ns-command_sent_ns));
