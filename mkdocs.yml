@@ -142,6 +142,7 @@ nav:
       - "SG2: scoped ownership": sg2-scoped-runtime-ownership.md
       - "SG2: runtime runner": sg2-runtime-runner.md
       - "SG3: Liza scoped Reactor group": sg3-scoped-reactor-group.md
+      - "SG4-A1: scoped UDP endpoint": sg4-a1-udp.md
       - Gateway R0 reproduction: gateway-reproduction.md
       - План разработки: roadmap.md
       - Milestones: milestones.md

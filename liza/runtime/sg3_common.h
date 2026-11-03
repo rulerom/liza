@@ -34,6 +34,24 @@ uint32_t liza_rt_group_run(uint64_t managed,uint64_t process,uint64_t stack,uint
     *p=report.producer_result;*c=report.consumer_result;*fault=report.fault;*control=report.control_fault;
     sg3_functions[0]=sg3_functions[1]=NULL;atomic_store(&sg3_admitted,0);return result;
 }
+uint32_t liza_rt_reactor_udp_create(uint32_t,uint16_t,uint32_t,reactor **);
+uint64_t liza_rt_reactor_udp_port(reactor *);
+uint32_t liza_rt_reactor_udp_receive(reactor *,uint8_t *,uint32_t,uint64_t *);
+uint64_t liza_rt_reactor_udp_send(reactor *,const uint8_t *,uint32_t,uint32_t,uint32_t,uint32_t,uint16_t);
+uint32_t liza_rt_group_udp_bind(uint32_t ip,uint16_t port){
+    liza_sg2_context *ctx=sg3_context();if(ctx->role!=1)abort();
+    sg_group *g=ctx->group;if(g->owned_reactor)return 6;
+    uint32_t e=liza_rt_reactor_udp_create(ip,port,g->config.reactor_capacity,&g->owned_reactor);
+    if(!e)g->reactor_bytes=(size_t)liza_rt_reactor_allocation_bytes();
+    return e;
+}
+uint64_t liza_rt_group_udp_port(void){return liza_rt_reactor_udp_port(liza_rt_group_reactor());}
+uint32_t liza_rt_group_udp_receive(uint8_t *data,uint32_t capacity,uint64_t *out){
+    return liza_rt_reactor_udp_receive(liza_rt_group_reactor(),data,capacity,out);
+}
+uint64_t liza_rt_group_udp_send(const uint8_t *data,uint32_t length,uint32_t start,uint32_t count,uint32_t ip,uint16_t port){
+    return liza_rt_reactor_udp_send(liza_rt_group_reactor(),data,length,start,count,ip,port);
+}
 uint32_t liza_rt_group_send(uint32_t value){return liza_sg2_send(sg3_context(),value);}
 uint32_t liza_rt_group_listen(uint16_t port){reactor *r=NULL;return liza_sg2_reactor_create(sg3_context(),port,&r);}
 uint32_t liza_rt_group_stop(void){liza_sg2_request_stop(sg3_context());return 0;}

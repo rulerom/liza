@@ -62,3 +62,20 @@ fn groups.stop_accepting()->Result<u32,ReactorError>:io {return __liza_reactor_s
 fn groups.write(id:net.Connection,data:View<u8>,start:u32,count:u32)->Result<u32,ReactorError>:io {
     return __liza_reactor_status(__liza_group_write(id,data,start,count))
 }
+
+// One consumer-owned nonblocking IPv4 UDP endpoint; mutually exclusive with listen.
+fn groups.udp_bind(address:net.Address)->Result<u32,ReactorError>:io,alloc {
+    code=__liza_group_udp_bind(net.ipv4_bits(address),address.port)
+    if code==0 {return Ok(0)}
+    return Err(__liza_reactor_error(code))
+}
+fn groups.udp_port()->Result<u16,UdpError>:io {
+    raw=__liza_group_udp_port()
+    if raw>>32==0 {return Ok(u16(raw))}
+    return Err(__liza_udp_error(u32(raw>>32)))
+}
+fn groups.udp_send(data:View<u8>,start:u32,count:u32,address:net.Address)->Result<u32,UdpError>:io {
+    raw=__liza_group_udp_send(data,start,count,net.ipv4_bits(address),address.port)
+    if raw>>32==0 {return Ok(u32(raw))}
+    return Err(__liza_udp_error(u32(raw>>32)))
+}
