@@ -18,7 +18,8 @@ uint64_t liza_rt_net_read(uint64_t, uint8_t*, uint32_t);
 uint64_t liza_rt_net_write(uint64_t, const uint8_t*, uint32_t, uint32_t, uint32_t);
 uint32_t liza_rt_net_close(uint64_t);
 typedef struct { uint64_t socket,generation; uint32_t live,interest,ready,phase,error,write_closed; } reactor_slot;
-typedef struct { uint64_t owner,listener; uint32_t capacity,listener_open; reactor_slot slots[REACTOR_MAX]; } reactor;
+typedef struct reactor { uint64_t owner,listener; uint32_t capacity,listener_open; reactor_slot slots[REACTOR_MAX]; } reactor;
+uint64_t liza_rt_reactor_allocation_bytes(void) { return sizeof(reactor); }
 /* Owner identities are process-wide, unique and never wrap. */
 static _Atomic uint64_t reactor_next_owner;
 /* Process notifications: one explicitly registered reactor, no handler access to it. */
