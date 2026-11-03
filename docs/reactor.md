@@ -201,3 +201,53 @@ mutable API. Политика времени ожидания и drain оста�
 Наблюдение не прерывает poll переносимым wakeup-механизмом; приложение должно
 ограничить poll timeout (операционный proxy использует максимум 100 мс).
 Жёсткая задержка доставки уведомления/планирования ОС не гарантируется.
+
+## Внутреннее ожидание notification sources
+
+После [SG1](sg1-reactor-worker.md) C runtime получает внутреннюю точку интеграции
+`liza_rt_reactor_poll_sources`. Она объединяет TCP listener, соединения Reactor и
+не более двух заимствованных socket sources в одном `poll/WSAPoll`. Это пока
+внутренний C-интерфейс: новых конструкций языка, bindings и Semantic IR нет.
+
+Каждый source содержит socket handle и выходной `ready`: бит 1 — готовность
+чтения, бит 4 — системный error/hangup/invalid event. Reactor не читает токены,
+не закрывает эти sockets и не владеет FIFO. Вызывающий код отвечает за
+`inspect/arm/reset`, срок жизни sources и отдельный control wake для shutdown.
+Все обращения к самому Reactor выполняет его worker-владелец.
+
+Возвращаемое число включает готовые sources и обычные сокеты. `timeout=-1`
+означает бесконечное ожидание; пустой wait set при таком timeout отклоняется.
+Остальные допустимые значения — `0..INT_MAX`. Ошибки ОС, включая прерывание wait,
+возвращаются вызывающему коду; неявного retry с продлением срока нет.
+
+Sources проверяются на повторение и совпадение с sockets Reactor. На POSIX
+используются `POLLIN/POLLOUT`, на Windows — `POLLRDNORM/POLLWRNORM`; наружу
+возвращаются нормализованные флаги. Память wait set фиксирована: максимум
+`REACTOR_MAX + 1 + 2` записей на стеке, дополнительных allocations нет.
+
+Обычный `net.reactor_poll` сохраняет прежний ABI и диапазон timeout. Если Reactor
+зарегистрирован для process shutdown signals, бесконечное внутреннее ожидание
+отклоняется: существующий signal handler не является переносимым control wake.
+Это не автоматическая интеграция process signals с новым wait set.
+
+Native-тест использует настоящий runtime Reactor: создание TCP listener,
+accept/read, bounded FIFO и два TCP wake sockets. Проверяются idle без
+периодического timeout, команда, сеть, их совместная готовность, сохранение
+публикации при инъекции notification fault, валидация аргументов, сохранение токена
+до caller reset и сохранение заимствованных sockets после reactor close.
+Общие ресурсы теста уничтожаются после системного join.
+
+Эта точка интеграции ещё не переносит supervisor, join-service или notification
+protocol в production runtime. Следующий слой должен связать их владение и
+бюджеты с scoped-группой; затем можно определять Liza-facing API.
+
+```mermaid
+flowchart LR
+    C[Caller: FIFO inspect / arm] --> W[Runtime: one bounded wait set]
+    T[Reactor-owned TCP sockets] --> W
+    D[Borrowed data wake] --> W
+    S[Borrowed shutdown wake] --> W
+    W --> R[Normalized readiness]
+    R --> C
+    R --> I[Worker: network I/O]
+```
