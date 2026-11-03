@@ -44,11 +44,9 @@ jobs:
         run: python -m mkdocs build --strict
       - name: Verify Liza highlighting and included example
         run: python tools/check_docs.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-pages-artifact@v4
         with:
-          name: documentation-site
           path: site/
-          if-no-files-found: error
           retention-days: 7
 
   deploy:
@@ -56,45 +54,16 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     concurrency:
       group: documentation-production
       cancel-in-progress: false
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: documentation-site
-          path: site/
-      - name: Publish to Yandex Object Storage
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.YC_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_ACCESS_KEY }}
-          YC_BUCKET_NAME: ${{ secrets.YC_BUCKET_NAME }}
-          AWS_DEFAULT_REGION: ru-central1
-          AWS_EC2_METADATA_DISABLED: 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          : "${AWS_ACCESS_KEY_ID:?Missing YC_ACCESS_KEY_ID}"
-          : "${AWS_SECRET_ACCESS_KEY:?Missing YC_SECRET_ACCESS_KEY}"
-          : "${YC_BUCKET_NAME:?Missing YC_BUCKET_NAME}"
-          aws --version
-          aws --endpoint-url=https://storage.yandexcloud.net s3 sync site/ "s3://${YC_BUCKET_NAME}/" \
-            --exclude 'index.html' \
-            --cache-control 'public, max-age=300' \
-            --only-show-errors
-          aws --endpoint-url=https://storage.yandexcloud.net s3 cp site/index.html "s3://${YC_BUCKET_NAME}/index.html" \
-            --content-type 'text/html; charset=utf-8' \
-            --cache-control 'no-cache' \
-            --only-show-errors
-          # Retired internal page: remove the previously published object too.
-          aws --endpoint-url=https://storage.yandexcloud.net s3 rm "s3://${YC_BUCKET_NAME}/documentation.html" \
-            --only-show-errors
-      - name: Check published pages
-        run: |
-          curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
-            --max-time 30 https://liza.rulerom.com/ -o /dev/null
-          curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
-            --max-time 30 https://liza.rulerom.com/core.html -o /dev/null
-          curl --fail --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 \
-            --max-time 30 https://liza.rulerom.com/assets/images/liza-logo.png -o /dev/null
-          echo 'Documentation: https://liza.rulerom.com/' >> "$GITHUB_STEP_SUMMARY"
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
