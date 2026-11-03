@@ -321,7 +321,7 @@ uint32_t liza_sg2_run(const liza_sg2_config *c,liza_sg2_fn producer,liza_sg2_fn 
     if(n){
         out->participant_threads_live=n;out->participant_native_handles_live=n;out->join_records_in_use=1;
         sg_submit(threads,n,g->generation,c->shutdown_ms);
-        atomic_store(&g->gate,n==3?1:-1);uint64_t until=sg_now()+c->shutdown_ms,unavailable=0;
+        atomic_store(&g->gate,n==3?1:-1);uint64_t until=n==3?0:sg_now()+c->shutdown_ms,unavailable=0;
         if(n==3)result=SG2_OK;
         for(;;){
             uint64_t now=sg_now();
@@ -335,7 +335,8 @@ uint32_t liza_sg2_run(const liza_sg2_config *c,liza_sg2_fn producer,liza_sg2_fn 
                 }
                 uint64_t st,dl;if(sg_status_read(&g->status[2],&st,&dl)){unavailable=0;if(st==1&&now>=dl){sg_fault(g,4);sg_stop(g);}}
                 else {if(!unavailable)unavailable=now;if(now-unavailable>=c->operation_ms)sg_stop(g);}
-                uint64_t deadline=atomic_load(&g->shutdown_deadline);if(deadline)until=deadline;else until=now+c->shutdown_ms;
+                /* Running has no group lifetime limit. Stop publishes one absolute deadline. */
+                until=atomic_load(&g->shutdown_deadline);
             }
 #ifdef SG2_BREAK_EARLY_REUSE
             if(n==3&&sg_receipt(g->generation,0)&&sg_receipt(g->generation,1)&&sg_receipt(g->generation,2)){
@@ -348,9 +349,9 @@ uint32_t liza_sg2_run(const liza_sg2_config *c,liza_sg2_fn producer,liza_sg2_fn 
                 break;
             }
 #ifdef SG2_BREAK_EARLY_RELEASE
-            if(now>=until)goto cleanup;
+            if(until&&now>=until)goto cleanup;
 #endif
-            if(now>=until){SG_EVENT("unresponsive",g->generation,0);SG_EVENT("retained",g->generation,0);sg_abort(g->generation);}
+            if(until&&now>=until){SG_EVENT("unresponsive",g->generation,0);SG_EVENT("retained",g->generation,0);sg_abort(g->generation);}
             sg_pause();
         }
         SG_EVENT("stopped",g->generation,0);

@@ -34,6 +34,14 @@ static void pause_one(void){
 static uint32_t produce(liza_sg2_context *ctx){
     atomic_fetch_add(&callback_count,1);
     while(!atomic_load(&waiting))pause_one();
+    if(!strcmp(mode,"long_running")){
+        /* A valid operation spans three shutdown budgets without requesting stop. */
+        uint64_t start=now_ms();
+        while(now_ms()-start<3*(uint64_t)config.shutdown_ms){
+            CHECK(!liza_sg2_stopping(ctx));pause_one();
+        }
+        CHECK(!liza_sg2_stopping(ctx));
+    }
     if(!strcmp(mode,"nested")){
         liza_sg2_report r;CHECK(liza_sg2_run(&config,produce,produce,&r)==SG2_BUSY);
     }
@@ -99,6 +107,7 @@ int main(int argc,char **argv){
     CHECK(argc>=2);mode=argv[1];config=(liza_sg2_config){0};
     config.managed_budget=65536;config.process_budget=65536;config.stack_bytes=1024*1024;config.service_stack_bytes=1024*1024;
     config.reactor_budget=65536;config.reactor_capacity=2;config.slots=2;config.max_threads=3;config.max_socket_handles=5;config.operation_ms=1000;config.shutdown_ms=500;
+    if(!strcmp(mode,"long_running"))config.operation_ms=5000;
     if(!strcmp(mode,"fault")||!strcmp(mode,"double_fault"))config.data_fault=1;
     if(!strcmp(mode,"double_fault"))config.control_fault=1;
     if(!strcmp(mode,"startup")){CHECK(argc==3);config.fail_at=(unsigned)atoi(argv[2]);}

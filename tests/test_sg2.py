@@ -27,7 +27,7 @@ class SG2(unittest.TestCase):
             normal=run('normal');steps=json.loads(normal)['startup_steps']
             for n in range(1,steps+1):
                 with self.subTest(startup=n):run('startup',str(n))
-            for case in ('idle','fault','nested','budget','stack_overflow','handles','process_budget','reactor_budget','reuse','rollback_reuse'):
+            for case in ('idle','long_running','fault','nested','budget','stack_overflow','handles','process_budget','reactor_budget','reuse','rollback_reuse'):
                 with self.subTest(case=case):
                     output=run(case)
                     if case=='reuse':self.assertEqual(len(output.splitlines()),100)
