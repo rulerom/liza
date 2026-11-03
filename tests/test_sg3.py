@@ -72,6 +72,26 @@ class SG3(unittest.TestCase):
                     self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
                     self.assertIn(message,result.stderr)
 
+    def test_shared_helpers_use_intersection_of_roles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src=Path(tmp)/'shared.liza'
+            for body,effect,allowed in [('return value-value','',True),
+                                       ('x=groups.send(value)\nreturn 0',':io',False),
+                                       ('x=groups.port()\nreturn 0',':io',False)]:
+                with self.subTest(body=body):
+                    helper=f'fn shared(value:u32)->u32{effect} {{{body}}}'
+                    src.write_text(program(producer='return shared(7)',consumer='return shared(9)',helpers=helper))
+                    result=liza('emit-ir',src)
+                    if allowed:
+                        self.assertEqual(result.returncode,0,result.stderr)
+                        roles=json.loads(result.stdout)['group_contract']['reachable_roles']['shared.shared']
+                        self.assertEqual(set(roles),{'producer','consumer'})
+                        run=liza('run',src)
+                        self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+                    else:
+                        self.assertNotEqual(result.returncode,0)
+                        self.assertIn('group role cannot',result.stderr)
+
     def test_imported_generic_role(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
@@ -167,6 +187,17 @@ fn main()->u32:io,alloc {{
  GroupEvent.Command(v)=>{return 4}
  GroupEvent.NotificationFault=>{return 5}
  }}}}''')
+        closed_idle_source=program(consumer='''match groups.listen(0) {Err(e)=>{return 1} Ok(x)=>{}}
+ var closed:u32=0
+ while true {match groups.next() {Err(e)=>{return 2} Ok(event)=>{match event {
+ GroupEvent.Closed=>{closed=closed+1
+if closed!=1 {return 3}}
+ GroupEvent.Stopping=>{if closed!=1 {return 4}
+return 0}
+ GroupEvent.Network(n)=>{return 5}
+ GroupEvent.Command(v)=>{return 6}
+ GroupEvent.NotificationFault=>{return 7}
+ }}}}''')
         with tempfile.TemporaryDirectory() as tmp:
             tmp=Path(tmp);suffix='windows' if sys.platform=='win32' else 'posix'
             src=tmp/'faults.liza';ir=tmp/'faults.ll';exe=tmp/('faults.exe' if sys.platform=='win32' else 'faults')
@@ -180,7 +211,7 @@ fn main()->u32:io,alloc {{
             reordered='atomic_store(&g->shutdown,1);SG_EVENT("test_reordered_stop",g->generation,0);atomic_store(&g->shutdown_deadline,sg_now()+g->config.shutdown_ms);'
             for source,macro,code in ((startup_source,'SG3_STARTUP_FAIL',0),(fault_source,'SG3_DATA_FAIL',0),
                                       (fault_source,'SG3_DOUBLE_FAIL',86),(stop_source,'SG3_NORMAL_STOP',0),
-                                      (stop_source,'SG3_REORDER_STOP',92),(idle_source,'SG3_IDLE_STOP',0)):
+                                      (stop_source,'SG3_REORDER_STOP',92),(idle_source,'SG3_IDLE_STOP',0),(closed_idle_source,'SG3_CLOSED_IDLE',0)):
                 with self.subTest(macro=macro):
                     src.write_text(source)
                     result=liza('emit-llvm',src,'-o',ir)

@@ -11,6 +11,9 @@
 #include <stdio.h>
 atomic_int sg2_test_handback_gate,sg2_test_stale_receipt,sg2_test_supervisor_gate;
 static atomic_uint submitted,joined,handback;
+#ifdef SG3_CLOSED_IDLE
+static _Atomic(sg_group *) closed_idle_group;
+#endif
 void sg3_test_config(liza_sg2_config *cfg){
 #ifdef SG3_STARTUP_FAIL
     cfg->fail_at=23;
@@ -21,12 +24,24 @@ void sg3_test_config(liza_sg2_config *cfg){
 #ifdef SG3_DOUBLE_FAIL
     cfg->data_fault=1;cfg->control_fault=1;
 #endif
+#ifdef SG3_CLOSED_IDLE
+    cfg->operation_ms=1000;
+#endif
     (void)cfg;
 }
 void sg2_test_event(const char *kind,uint64_t generation,unsigned role){
     (void)generation;(void)role;
     if(!strcmp(kind,"submitted"))atomic_store(&submitted,role);
     if(!strcmp(kind,"join"))atomic_fetch_add(&joined,1);
+#ifdef SG3_CLOSED_IDLE
+    if(!strcmp(kind,"join")&&role==0){
+        sg_group *g;
+        while(!(g=atomic_load(&closed_idle_group)))sg_pause();
+        uint64_t start=sg_now();while(sg_now()-start<1500)sg_pause();
+        if(atomic_load(&g->fault)||atomic_load(&g->shutdown))_Exit(94);
+        atomic_store(&g->stop_intent,1);
+    }
+#endif
     if(!strcmp(kind,"handback"))atomic_store(&handback,1);
     if(!strcmp(kind,"destroy")&&atomic_load(&submitted)){
         if(atomic_load(&joined)!=atomic_load(&submitted)||!atomic_load(&handback))_Exit(91);
@@ -61,7 +76,14 @@ uint64_t liza_rt_reactor_poll_sources(reactor *,int32_t,sg3_source *,uint32_t);
 uint64_t sg3_test_poll(reactor *r,int32_t timeout,sg3_source *sources,uint32_t count){
     uint64_t start=sg_now();
     int first=!atomic_exchange(&poll_entered,1);
+#ifdef SG3_CLOSED_IDLE
+    int after_closed=sg3_closed;
+    if(after_closed)atomic_store(&closed_idle_group,sg3_context()->group);
+#endif
     uint64_t result=liza_rt_reactor_poll_sources(r,timeout,sources,count);
+#ifdef SG3_CLOSED_IDLE
+    if(after_closed&&(timeout!=-1||sg_now()-start<1500))_Exit(95);
+#endif
 #ifdef SG3_IDLE_STOP
     if(timeout!=-1||(first&&sg_now()-start<750))_Exit(93);
 #else
