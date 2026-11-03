@@ -170,7 +170,7 @@ class Parser:
         self.tokens = lex(source, filename)
         self.index = 0
         self.generic_scope = {}
-        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"ReactorError", "FrameError", "NetError", "IoError", "FileError", "MemoryError", "FileCreateError", "FileWriteError", "Utf8ErrorKind", "Utf8StreamErrorKind", "JsonErrorKind", "ChannelError"}
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"ReactorError", "FrameError", "NetError", "IoError", "FileError", "MemoryError", "FileCreateError", "FileWriteError", "Utf8ErrorKind", "Utf8StreamErrorKind", "JsonErrorKind", "ChannelError", "GroupError", "GroupPublication", "GroupEvent"}
 
     @property
     def current(self):
@@ -424,6 +424,7 @@ class Parser:
 
     def parse(self):
         functions = Program()
+        functions.uses_groups = any(t.text == 'groups' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
         functions.uses_channels = any(t.text == 'channels' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
         functions.uses_workers = any(t.text == 'workers' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
         functions.uses_json = any(t.text in ('JsonState','JsonError','JsonErrorKind') or (t.text == 'json' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))

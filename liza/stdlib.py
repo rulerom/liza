@@ -12,6 +12,10 @@ def attach(program):
         libraries.append('json_mut')
     uses_workers = getattr(program, 'uses_workers', False)
     uses_channels = getattr(program, 'uses_channels', False)
+    uses_group = getattr(program, 'uses_groups', False)
+    if uses_group:
+        if 'net' not in libraries: libraries.append('net')
+        libraries.append('groups')
     if uses_channels: libraries.append('channels')
     if not libraries and not uses_workers and not uses_channels:
         return program, []
@@ -37,6 +41,7 @@ def attach(program):
     combined.module_names = getattr(program,"module_names",[])
     combined.uses_workers = uses_workers
     combined.uses_channels = uses_channels
+    combined.uses_groups = uses_group
     combined.declarations = getattr(program,"declarations",[])
     combined.extend(program)
     def calls(node):
@@ -126,6 +131,22 @@ def attach(program):
          product_type('memory.Buffer<u8>','Result<u32,ReactorError>'),[0], 'io'),
         ('net.connection_slot',['net.Connection'],'u32',[], 'pure'),
     ]
+    group_externals = [
+        ('__liza_group_run',['u64']*5+['u32']*4,'__liza_GroupRaw',[], 'io,alloc'),
+        ('__liza_group_send',['u32'],'u32',[], 'io'),
+        ('__liza_group_listen',['u16'],'u32',[], 'io,alloc'),
+        ('__liza_group_next',[],'u64',[], 'io'),
+        ('groups.stop',[],'u32',[], 'io'),
+        ('groups.stopping',[],'u32',[], 'io'),
+        ('groups.busy',[],'u32',[], 'io'),
+    ]
+    group_network = {'accept','connect','port','finish_connect','interest','ready','disconnect','stop_accepting','write'}
+    for n,params,result,borrowed,effect in reactor_externals:
+        if n.removeprefix('__liza_reactor_') in group_network:
+            group_externals.append((n.replace('__liza_reactor_','__liza_group_'),params[1:],result,[],effect))
+        if n == 'net.reactor_read':
+            group_externals.append(('groups.read',params[1:],result,[],effect))
+    reactor_externals += group_externals
     externals.extend(Function(Token(n,1,1),[(Token('p'+str(i),1,1),t) for i,t in enumerate(params)],[],result,effect,borrowed_params=borrowed)
                      for n,params,result,borrowed,effect in reactor_externals)
     externals.extend(Function(Token(n,1,1),[(Token('p'+str(i),1,1),t) for i,t in enumerate(params)],[],result,'io',borrowed_params=borrowed)
@@ -146,17 +167,19 @@ def link_flags(module):
     net_names = reactor_names | {n for n in names if n.startswith('__liza_net_') or n in ('net.read','net.udp_receive')}
     worker_names = {'workers.run'} & names
     channel_names = {n for n in names if n.startswith('channels.') or n == '__liza_channels_run'}
+    group_names = {n for n in names if n.startswith(('groups.', '__liza_group_'))}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
-    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names else []) + (['file'] if names & file_names else [])
+    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names-group_names else []) + (['file'] if names & file_names else [])
     if worker_names: libraries.append('workers')
     if channel_names: libraries.append('channels')
-    if net_names: libraries.append('net')
-    if reactor_names: libraries.append('reactor')
+    if group_names: libraries.append('sg3')
+    if net_names or group_names: libraries.append('net')
+    if reactor_names or group_names: libraries.append('reactor')
     if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
-    if channel_names: files.append(str(Path(__file__).parent/'runtime'/'scoped_channel_core.c'))
+    if channel_names or group_names: files.append(str(Path(__file__).parent/'runtime'/'scoped_channel_core.c'))
     if sys.platform == 'win32':
-        return files + (['-lws2_32'] if net_names else [])
+        return files + (['-lws2_32'] if net_names or group_names else [])
     if sys.platform not in ('darwin','linux'):
         raise ValueError('console runtime currently supports Linux, macOS and Windows only')
     return files + ['-pthread']

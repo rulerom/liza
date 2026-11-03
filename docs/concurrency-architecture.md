@@ -190,3 +190,9 @@ SG0 разделяет состояние worker и группы, snapshot и п
 [контракт ожидания](scoped-channel-wait-contract.md),
 [платформенный probe](https://github.com/rulerom/liza/tree/main/experiments/reactor_wakeup)
 и [исследование runtime-последовательностей](https://github.com/rulerom/liza/pull/67).
+
+## SG3: доступ из Liza
+
+Экспериментальный [`groups.*` API](sg3-scoped-reactor-group.md) связывает SG2 runner
+со статически назначенными producer/consumer. Semantic IR проверяет полномочия
+ролей; Reactor, wake sources и join остаются внутренними ресурсами runtime.
