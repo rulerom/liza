@@ -1,0 +1,64 @@
+// SG3: statically assigned producer/consumer, one hidden worker-local Reactor.
+struct GroupConfig {
+    managed_budget:u64; process_budget:u64; stack_bytes:u64; service_stack_bytes:u64
+    reactor_budget:u64; reactor_capacity:u32; slots:u32; operation_ms:u32; shutdown_ms:u32
+}
+struct GroupRun { producer:u32; consumer:u32; fault:u32; control_fault:u32 }
+enum GroupError { InvalidConfig; Busy; StartupFailed; Faulted(GroupRun) }
+enum GroupPublication { NotPublished; Published; PublishedFault }
+enum GroupEvent { Command(u32); Network(u32); Closed; Stopping; NotificationFault }
+struct __liza_GroupRaw { producer:u32; consumer:u32; fault:u32; control_fault:u32; error:u32 }
+fn groups.run(config:GroupConfig)->Result<GroupRun,GroupError>:io,alloc {
+    raw=__liza_group_run(config.managed_budget,config.process_budget,config.stack_bytes,config.service_stack_bytes,config.reactor_budget,config.reactor_capacity,config.slots,config.operation_ms,config.shutdown_ms)
+    result=GroupRun(raw.producer,raw.consumer,raw.fault,raw.control_fault)
+    if raw.error==0 {return Ok(result)}
+    if raw.error==1 {return Err(GroupError.Busy)}
+    if raw.error==2 {return Err(GroupError.InvalidConfig)}
+    if raw.error==3 {return Err(GroupError.StartupFailed)}
+    return Err(GroupError.Faulted(result))
+}
+fn groups.send(value:u32)->GroupPublication:io {
+    status=__liza_group_send(value)
+    if status==1 {return GroupPublication.Published}
+    if status==2 {return GroupPublication.PublishedFault}
+    return GroupPublication.NotPublished
+}
+fn groups.listen(port:u16)->Result<u32,ReactorError>:io,alloc {
+    code=__liza_group_listen(port)
+    if code==0 {return Ok(0)}
+    return Err(__liza_reactor_error(code))
+}
+fn groups.next()->Result<GroupEvent,ReactorError>:io {
+    raw=__liza_group_next()
+    kind=raw>>32
+    value=u32.wrap(raw)
+    if kind==0 {return Ok(GroupEvent.Command(value))}
+    if kind==1 {return Ok(GroupEvent.Network(value))}
+    if kind==2 {return Ok(GroupEvent.Closed)}
+    if kind==3 {return Ok(GroupEvent.Stopping)}
+    if kind==4 {return Ok(GroupEvent.NotificationFault)}
+    return Err(__liza_reactor_error(value))
+}
+fn groups.port()->Result<u32,ReactorError>:io {return __liza_reactor_status(__liza_group_port())}
+fn groups.accept()->Result<net.Connection,ReactorError>:io {
+    raw=__liza_group_accept()
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_reactor_error(raw.error))
+}
+fn groups.connect(port:u16)->Result<net.Connection,ReactorError>:io {
+    raw=__liza_group_connect(port)
+    if raw.error==0 {return Ok(raw.handle)}
+    return Err(__liza_reactor_error(raw.error))
+}
+fn groups.finish_connect(id:net.Connection)->Result<bool,ReactorError>:io {
+    raw=__liza_group_finish_connect(id)
+    if raw>>32==0 {return Ok(u32.wrap(raw)!=0)}
+    return Err(__liza_reactor_error(u32(raw>>32)))
+}
+fn groups.interest(id:net.Connection,flags:u32)->Result<u32,ReactorError>:io {return __liza_reactor_status(__liza_group_interest(id,flags))}
+fn groups.ready(id:net.Connection)->Result<u32,ReactorError>:io {return __liza_reactor_status(__liza_group_ready(id))}
+fn groups.disconnect(id:net.Connection)->Result<u32,ReactorError>:io {return __liza_reactor_status(__liza_group_disconnect(id))}
+fn groups.stop_accepting()->Result<u32,ReactorError>:io {return __liza_reactor_status(__liza_group_stop_accepting())}
+fn groups.write(id:net.Connection,data:View<u8>,start:u32,count:u32)->Result<u32,ReactorError>:io {
+    return __liza_reactor_status(__liza_group_write(id,data,start,count))
+}

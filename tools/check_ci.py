@@ -39,7 +39,7 @@ def selected(workflows, paths, event='pull_request', branch='feature/example'):
 # These expectations are independent of the actual YAML filter lists.
 COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline',
             'verified-relay-r1', 'verified-relay-r2b', 'verified-relay-r2c',
-            'aggregate-lowering', 'mutable-borrow'}
+            'aggregate-lowering', 'mutable-borrow', 'sg3-api'}
 CASES = [
     (['docs/basics.md'], {'docs'}),
     (['experiments/scoped_channel/channel.c'], {'scoped-channel-probe'}),
@@ -61,6 +61,9 @@ CASES = [
     (['tests/fixtures/borrow.liza'], {'test', 'editor'}),
     (['tests/test_proxy_lifecycle.py'], {'test'}),
     (['tests/test_sg2.py'], {'test', 'sg2-runtime'}),
+    (['tests/test_sg3.py'], {'test', 'sg3-api'}),
+    (['tests/fixtures/sg3_faults.c'], {'test', 'editor', 'sg3-api'}),
+    (['examples/workers/reactor_group.liza'], {'test', 'docs', 'editor', 'sg3-api'}),
     (['tests/native/sg2_runner.c'], {'test', 'sg2-runtime'}),
     (['liza/runtime/sg2_common.h'], COMPILER | {'reactor-sources', 'sg2-runtime'}),
     (['tests/test_reactor_sources.py'], {'test', 'reactor-sources'}),

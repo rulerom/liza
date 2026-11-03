@@ -4,14 +4,16 @@ from .types import product_args
 
 def external(fn, lines, types):
     name = fn.name.text
+    group = name.startswith('__liza_group_') or name == 'groups.read'
+    prelude = ['  %r = call ptr @liza_rt_group_reactor()'] if group else []
     if name == 'net.connection_slot':
         lines.extend(['define internal i32 @liza_net.connection_slot([3 x i64] %id) {',
                       '  %slot = extractvalue [3 x i64] %id, 2',
                       '  %r = trunc i64 %slot to i32', '  ret i32 %r', '}'])
         return True
-    if not name.startswith('__liza_reactor_') and name != 'net.reactor_read':
+    if not group and not name.startswith('__liza_reactor_') and name != 'net.reactor_read':
         return False
-    operation = 'read' if name == 'net.reactor_read' else name.removeprefix('__liza_reactor_')
+    operation = 'read' if name in ('net.reactor_read','groups.read') else name.removeprefix('__liza_group_' if group else '__liza_reactor_')
     result = types[fn.result_type]
     if operation == 'clock':
         lines.extend(['declare i32 @liza_rt_reactor_clock(ptr)',
@@ -34,17 +36,18 @@ def external(fn, lines, types):
             params='i32 %ip, i16 %port, i32 %capacity';abi='i32, i16, i32, ptr';args='i32 %ip, i16 %port, i32 %capacity, ptr %out'
         if operation == 'connect_at':
             params='ptr %r, i32 %ip, i16 %port';abi='ptr, i32, i16, ptr';args='ptr %r, i32 %ip, i16 %port, ptr %out'
+        if group: params = params.removeprefix('ptr %r, ').removeprefix('ptr %r')
         handle = 'ptr' if create else '[3 x i64]'
         lines.extend([f'declare i32 @liza_rt_reactor_{operation}({abi})',
                       f'define internal {result} @liza_{name}({params}) {{',
-                      f'  %out = alloca {handle}',
+                      *prelude, f'  %out = alloca {handle}',
                       f'  %code = call i32 @liza_rt_reactor_{operation}({args})',
                       f'  %value = load {handle}, ptr %out',
                       f'  %r0 = insertvalue {result} zeroinitializer, {handle} %value, 0',
                       f'  %r1 = insertvalue {result} %r0, i32 %code, 1',
                       f'  ret {result} %r1', '}'])
         return True
-    params=['ptr %r'];abi=['ptr'];args=['ptr %r'];body=[]
+    params=[] if group else ['ptr %r'];abi=['ptr'];args=['ptr %r'];body=list(prelude)
     if operation in ('read','write','interest','ready','disconnect','finish_connect','shutdown_write'):
         params.append('[3 x i64] %id')
         for i in range(3):

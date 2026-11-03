@@ -1,0 +1,72 @@
+/* Language adapter: contexts, native handles and Reactor ownership never escape. */
+#include "sg2_common.h"
+typedef struct {uint64_t socket;uint32_t ready;} sg3_source;
+uint64_t liza_rt_reactor_poll_sources(reactor *,int32_t,sg3_source *,uint32_t);
+typedef uint32_t (*sg3_fn)(void);
+static atomic_int sg3_admitted;
+static sg3_fn sg3_functions[2];
+static _Thread_local int sg3_closed;
+static liza_sg2_context *sg3_context(void){sg_check_context(sg_current);return sg_current;}
+reactor *liza_rt_group_reactor(void){
+    liza_sg2_context *ctx=sg3_context();
+    if(ctx->role!=1||!ctx->group->owned_reactor)abort();
+    return ctx->group->owned_reactor;
+}
+static uint32_t sg3_entry(liza_sg2_context *ctx){sg3_closed=0;return sg3_functions[ctx->role]();}
+uint32_t liza_rt_group_run(uint64_t managed,uint64_t process,uint64_t stack,uint64_t service_stack,
+                          uint64_t reactor_budget,uint32_t capacity,uint32_t slots,uint32_t operation,uint32_t shutdown,
+                          sg3_fn producer,sg3_fn consumer,uint32_t *p,uint32_t *c,uint32_t *fault,uint32_t *control){
+    *p=*c=*fault=*control=0;
+    if(managed>SIZE_MAX||process>SIZE_MAX||stack>SIZE_MAX||service_stack>SIZE_MAX||reactor_budget>SIZE_MAX)return SG2_INVALID;
+    /* Adapter bookkeeping is part of the process budget, in addition to SG2. */
+    size_t overhead=sizeof(sg3_admitted)+sizeof(sg3_functions);
+    if(process<overhead)return SG2_INVALID;
+    int zero=0;if(!atomic_compare_exchange_strong(&sg3_admitted,&zero,1))return SG2_BUSY;
+    liza_sg2_config cfg={0};cfg.managed_budget=(size_t)managed;cfg.process_budget=(size_t)process-overhead;
+    cfg.stack_bytes=(size_t)stack;cfg.service_stack_bytes=(size_t)service_stack;cfg.reactor_budget=(size_t)reactor_budget;
+    cfg.reactor_capacity=capacity;cfg.slots=slots;cfg.max_threads=3;cfg.max_socket_handles=5;cfg.operation_ms=operation;cfg.shutdown_ms=shutdown;
+#ifdef LIZA_SG2_TESTING
+    extern void sg3_test_config(liza_sg2_config *);
+    sg3_test_config(&cfg);
+#endif
+    sg3_functions[0]=producer;sg3_functions[1]=consumer;
+    liza_sg2_report report;uint32_t result=liza_sg2_run(&cfg,sg3_entry,sg3_entry,&report);
+    *p=report.producer_result;*c=report.consumer_result;*fault=report.fault;*control=report.control_fault;
+    sg3_functions[0]=sg3_functions[1]=NULL;atomic_store(&sg3_admitted,0);return result;
+}
+uint32_t liza_rt_group_send(uint32_t value){return liza_sg2_send(sg3_context(),value);}
+uint32_t liza_rt_group_listen(uint16_t port){reactor *r=NULL;return liza_sg2_reactor_create(sg3_context(),port,&r);}
+uint32_t liza_rt_group_stop(void){liza_sg2_request_stop(sg3_context());return 0;}
+uint32_t liza_rt_group_busy(void){liza_sg2_busy(sg3_context());return 0;}
+uint32_t liza_rt_group_stopping(void){
+    liza_sg2_context *ctx=sg3_context();
+    int stopped=liza_sg2_stopping(ctx);
+    /* Observing stop must publish its deadline, including through this ABI. */
+    if(stopped&&!atomic_load(&ctx->group->shutdown_deadline))abort();
+    return (uint32_t)stopped;
+}
+uint64_t liza_rt_group_next(void){
+    liza_sg2_context *ctx=sg3_context();reactor *r=liza_rt_group_reactor();
+    uint64_t handles[2];liza_sg2_sources(ctx,handles);
+    sg3_source sources[2]={{handles[0],0},{handles[1],0}};
+    for(;;){
+        uint32_t value=0,status=liza_sg2_take_or_arm(ctx,&value);
+        if(status==SG2_VALUE)return value;
+        if(liza_rt_group_stopping())return (uint64_t)3<<32;
+        if(status==SG2_NOTIFY_FAULT)return (uint64_t)4<<32;
+        if(status==SG2_CLOSED&&!sg3_closed){sg3_closed=1;liza_sg2_busy(ctx);return (uint64_t)2<<32;}
+        /* Sender closure is reported once; existing TCP work can continue. */
+        if(sg3_closed)sg_status_set(&ctx->group->status[1],0,0);
+        uint64_t events=liza_rt_reactor_poll_sources(r,-1,sources,2);
+        liza_sg2_busy(ctx);
+        if(events>>32)return ((uint64_t)5<<32)|(events>>32);
+        if(sources[1].ready)liza_sg2_control_drain(ctx);
+        /* Inspect accepted work before reporting Stopping, even on a control-only wake. */
+        if(liza_rt_group_stopping())continue;
+        /* Data/control-only wakeups are handled internally; no Empty polling API. */
+        if(sources[0].ready&4)sg_fault(ctx->group,1);
+        if(sources[1].ready&4){atomic_store(&ctx->group->control_fault,1);sg_fault(ctx->group,2);}
+        uint32_t network=(uint32_t)events-(sources[0].ready!=0)-(sources[1].ready!=0);
+        if(network)return ((uint64_t)1<<32)|network;
+    }
+}

@@ -87,7 +87,11 @@ def llvm(module, target=None):
                       'declare i64 @liza_rt_err(ptr, i32)',
                       'declare i64 @liza_rt_err_print_u64(i64)',
                       'declare i64 @liza_rt_err_print_i64(i64)'])
+        if getattr(module, 'group_entries', None):
+            lines.append('declare ptr @liza_rt_group_reactor()')
         for fn in module.externals:
+            from .group_backend import external as group_external
+            if group_external(fn, lines, types, module): continue
             if fn.name.text == '__liza_channels_run':
                 producer, consumer = module.channel_entries
                 raw = types['__liza_ChannelRaw']

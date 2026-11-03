@@ -1,0 +1,122 @@
+// SG3: one command and a real loopback TCP exchange, all sockets consumer-local.
+fn producer()->u32:io {
+    match groups.send(42) {
+        GroupPublication.Published=>{return 0}
+        GroupPublication.PublishedFault=>{return 1}
+        GroupPublication.NotPublished=>{return 2}
+    }
+}
+fn wait_network()->bool:io {
+    match groups.next() {
+        Err(error)=>{return false}
+        Ok(event)=>{match event {
+            GroupEvent.Network(count)=>{return true}
+            GroupEvent.Closed=>{return true}
+            GroupEvent.Command(value)=>{return false}
+            GroupEvent.Stopping=>{return false}
+            GroupEvent.NotificationFault=>{return false}
+        }}
+    }
+}
+fn read_byte(peer:net.Connection, initial:memory.Buffer<u8>)->u32:io {
+    var buffer=move initial
+    var outcome:u32=0
+    var finished=false
+    while !finished {
+        (next,result)=groups.read(peer,move buffer,0,1)
+        buffer=move next
+        match result {
+            Ok(count)=>{
+                if count!=1 {outcome=10}
+                if count==1 {data=memory.view(buffer)
+                    if data[0]!=42 {outcome=11}}
+                finished=true
+            }
+            Err(error)=>{match error {
+                ReactorError.WouldBlock=>{if !wait_network() {outcome=12;finished=true}}
+                ReactorError.Interrupted=>{}
+                ReactorError.AddressInUse=>{outcome=13;finished=true}
+                ReactorError.PermissionDenied=>{outcome=13;finished=true}
+                ReactorError.Disconnected=>{outcome=13;finished=true}
+                ReactorError.InvalidRange=>{outcome=13;finished=true}
+                ReactorError.Other=>{outcome=13;finished=true}
+                ReactorError.InvalidCapacity=>{outcome=13;finished=true}
+                ReactorError.Full=>{outcome=13;finished=true}
+                ReactorError.InvalidConnection=>{outcome=13;finished=true}
+                ReactorError.Exhausted=>{outcome=13;finished=true}
+                ReactorError.OutOfMemory=>{outcome=13;finished=true}
+            }}
+        }
+    }
+    released=memory.release(move buffer)
+    return outcome
+}
+fn exchange(client:net.Connection,peer:net.Connection)->u32:io,alloc {
+    match memory.create(1024) {
+        Err(error)=>{return 15}
+        Ok(region)=>{
+            var result:u32=16
+            match memory.alloc<u8>(region,1,42) {
+                Err(error)=>{}
+                Ok(buffer)=>{
+                    var wrote=false
+                    {
+                        data=memory.view(buffer)
+                        match groups.write(client,data,0,1) {
+                            Err(error)=>{}
+                            Ok(count)=>{wrote=count==1}
+                        }
+                    }
+                    if wrote {result=read_byte(peer,move buffer)}
+                    else {released=memory.release(move buffer);result=17}
+                }
+            }
+            done=memory.close(move region)
+            return result
+        }
+    }
+}
+fn connected(client:net.Connection)->u32:io,alloc {
+    var ready=false
+    while !ready {
+        match groups.finish_connect(client) {Err(error)=>{return 18} Ok(value)=>{ready=value}}
+        if !ready {if !wait_network() {return 19}}
+    }
+    match groups.interest(client,1) {Err(error)=>{return 20} Ok(done)=>{}}
+    while true {
+        match groups.accept() {
+            Ok(peer)=>{return exchange(client,peer)}
+            Err(error)=>{if !wait_network() {return 21}}
+        }
+    }
+}
+fn consumer()->u32:io,alloc {
+    match groups.listen(0) {Err(error)=>{return 23} Ok(done)=>{}}
+    match groups.next() {
+        Err(error)=>{return 24}
+        Ok(event)=>{match event {
+            GroupEvent.Command(value)=>{if value!=42 {return 25}}
+            GroupEvent.Network(count)=>{return 26}
+            GroupEvent.Closed=>{return 27}
+            GroupEvent.Stopping=>{return 28}
+            GroupEvent.NotificationFault=>{return 29}
+        }}
+    }
+    match groups.port() {
+        Err(error)=>{return 30}
+        Ok(port)=>{match groups.connect(u16.wrap(port)) {
+            Err(error)=>{return 31}
+            Ok(client)=>{return connected(client)}
+        }}
+    }
+    // The consumer wrapper closes the Reactor after this callback returns.
+}
+fn main()->u32:io,alloc {
+    config=GroupConfig(65536,65536,1048576,1048576,65536,2,2,5000,1000)
+    match groups.run(config) {
+        Err(error)=>{return 32}
+        Ok(result)=>{if result.producer!=0 {return 33}
+            return result.consumer
+        }
+    }
+}
