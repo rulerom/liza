@@ -251,3 +251,5 @@ flowchart LR
     R --> C
     R --> I[Worker: network I/O]
 ```
+
+Следующий контракт владения источниками: [SG2: Scoped Runtime Ownership](sg2-scoped-runtime-ownership.md).

@@ -171,7 +171,7 @@ stateDiagram-v2
 
 Жизненный цикл описан в [SG0: supervisor и жизненный цикл группы](sg0-lifecycle-contract.md).
 Композиция с реальной UDP-сетью исследуется в [SG1: reactor worker](sg1-reactor-worker.md).
-Он разделяет состояние worker и группы, snapshot и подтверждённый join;
+SG0 разделяет состояние worker и группы, snapshot и подтверждённый join;
 его C-прототип проверяет выбранные сценарии и пока не интегрирован в API Liza.
 
 | Компонент | Состояние |
@@ -181,7 +181,9 @@ stateDiagram-v2
 | Команды и локальный TCP reactor | Исполняемый пример с повторными попытками |
 | Модель FIFO и историй, модель уведомлений | Ограниченные исследовательские проверки |
 | Сокеты пробуждения и независимый тестовый supervisor | C-стенды, не API Liza |
-| Согласованный notification protocol и единое ожидание reactor | Будущая работа |
+| Согласованный notification protocol | Проверенный C-прототип SG0/SG1 |
+| TCP + заимствованные wake sources в одном ожидании | Внутренний C-интерфейс production Reactor |
+| Scoped-владение wake-ресурсами и бюджет группы | [Проект контракта SG2](sg2-scoped-runtime-ownership.md) |
 
 Подробнее: [workers](scoped-workers.md), [scoped-канал](scoped-channels.md),
 [модель и истории FIFO](scoped-channel-model.md),
