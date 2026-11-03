@@ -169,7 +169,8 @@ stateDiagram-v2
 
 ## Что доступно сегодня
 
-Следующий контракт — [SG0: supervisor и жизненный цикл группы](sg0-lifecycle-contract.md).
+Жизненный цикл описан в [SG0: supervisor и жизненный цикл группы](sg0-lifecycle-contract.md).
+Композиция с реальной UDP-сетью исследуется в [SG1: reactor worker](sg1-reactor-worker.md).
 Он разделяет состояние worker и группы, snapshot и подтверждённый join;
 его C-прототип проверяет выбранные сценарии и пока не интегрирован в API Liza.
 

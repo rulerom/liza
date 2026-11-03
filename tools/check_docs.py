@@ -62,6 +62,8 @@ def check():
     assert any({'k', 'kt', 'mi'} <= b['classes'] for b in core.blocks)
     diagrams = (ROOT/'site/concurrency-architecture.html').read_text(encoding='utf-8')
     assert diagrams.count('class="mermaid"') == 6, 'Concurrency diagrams must render as Mermaid blocks'
+    sg1 = (ROOT/'site/sg1-reactor-worker.html').read_text(encoding='utf-8')
+    assert sg1.count('class="mermaid"') == 1, 'SG1 architecture must render as a Mermaid block'
     # Every source example on these pages must use the Liza lexer, including
     # partial and deliberately invalid examples. Grammar stays plain text.
     for page in ('core', 'basics', 'connection-table', 'getting-started',
