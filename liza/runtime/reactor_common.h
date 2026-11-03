@@ -235,27 +235,60 @@ uint64_t liza_rt_reactor_ready(reactor *r,uint64_t owner,uint64_t generation,uin
     reactor_slot *s=reactor_find(r,owner,generation,slot);
     return s ? s->ready : net_failure(10);
 }
-uint64_t liza_rt_reactor_poll(reactor *r,uint32_t timeout) {
+/* Internal C integration boundary. Borrowed sources must outlive this call;
+ * the reactor neither drains nor closes them. Caller owns arm/reset protocol.
+ * Readiness flags: 1 readable, 4 error/hangup/invalid. Count includes sources.
+ * -1 is indefinite; watched process-signal reactors require finite waits. */
+#define REACTOR_SOURCE_MAX 2
+#ifdef _WIN32
+#define REACTOR_READ_EVENT POLLRDNORM
+#define REACTOR_WRITE_EVENT POLLWRNORM
+#else
+#define REACTOR_READ_EVENT POLLIN
+#define REACTOR_WRITE_EVENT POLLOUT
+#endif
+typedef struct { uint64_t socket; uint32_t ready; } reactor_source;
+uint64_t liza_rt_reactor_poll_sources(reactor *r,int32_t timeout,
+                                      reactor_source *sources,uint32_t source_count) {
     for (uint32_t i=0;i<r->capacity;i++) r->slots[i].ready=0;
-    if (timeout>INT_MAX) return net_failure(6);
-    reactor_pollfd fds[REACTOR_MAX+1];uint32_t indices[REACTOR_MAX+1];uint32_t n=0;
+    if (source_count>REACTOR_SOURCE_MAX || (source_count&&!sources)) return net_failure(6);
+    for (uint32_t i=0;i<source_count;i++) sources[i].ready=0;
+    if (timeout < -1 || (timeout==-1&&reactor_watcher==r->owner)) return net_failure(6);
+    for (uint32_t i=0;i<source_count;i++) {
+        if (sources[i].socket==(uint64_t)NET_INVALID) return net_failure(6);
+#ifndef _WIN32
+        if (sources[i].socket>INT_MAX) return net_failure(6);
+#endif
+        if (r->listener_open&&sources[i].socket==r->listener) return net_failure(6);
+        for (uint32_t j=0;j<i;j++)
+            if (sources[i].socket==sources[j].socket) return net_failure(6);
+        for (uint32_t j=0;j<r->capacity;j++)
+            if (r->slots[j].live&&sources[i].socket==r->slots[j].socket) return net_failure(6);
+    }
+    reactor_pollfd fds[REACTOR_MAX+1+REACTOR_SOURCE_MAX];uint32_t indices[REACTOR_MAX+1+REACTOR_SOURCE_MAX];uint32_t n=0;
     int available=0;
     for (uint32_t i=0;i<r->capacity;i++) {
         reactor_slot *s=&r->slots[i];
         if (!s->live) {if (s->generation!=UINT64_MAX) available=1;continue;}
         if (!s->interest) continue;
         fds[n].fd=(net_socket)s->socket;fds[n].events=0;fds[n].revents=0;
-        if (s->interest&1) fds[n].events|=POLLRDNORM;
-        if (s->interest&2) fds[n].events|=POLLWRNORM;
+        if (s->interest&1) fds[n].events|=REACTOR_READ_EVENT;
+        if (s->interest&2) fds[n].events|=REACTOR_WRITE_EVENT;
         indices[n++]=i;
     }
     if (available && r->listener_open) {
-        fds[n].fd=(net_socket)r->listener;fds[n].events=POLLRDNORM;fds[n].revents=0;
+        fds[n].fd=(net_socket)r->listener;fds[n].events=REACTOR_READ_EVENT;fds[n].revents=0;
         indices[n++]=REACTOR_MAX;
     }
+    for (uint32_t i=0;i<source_count;i++) {
+        fds[n].fd=(net_socket)sources[i].socket;
+        fds[n].events=REACTOR_READ_EVENT;fds[n].revents=0;
+        indices[n++]=REACTOR_MAX+1+i;
+    }
+    if (!n&&timeout==-1) return net_failure(6);
     /* WSAPoll rejects an empty set. Sleep is the defined empty-set wait. */
 #ifdef _WIN32
-    if (!n) {Sleep(timeout);return 0;}
+    if (!n) {Sleep((DWORD)timeout);return 0;}
     int count=WSAPoll(fds,n,(int)timeout);
 #else
     int count=poll(fds,n,(int)timeout);
@@ -264,12 +297,21 @@ uint64_t liza_rt_reactor_poll(reactor *r,uint32_t timeout) {
     for (uint32_t i=0;i<n;i++) {
         if (indices[i]==REACTOR_MAX) continue;
         uint32_t flags=0;
-        if (fds[i].revents&POLLRDNORM) flags|=1;
-        if (fds[i].revents&POLLWRNORM) flags|=2;
+        if (fds[i].revents&REACTOR_READ_EVENT) flags|=1;
+        if (fds[i].revents&REACTOR_WRITE_EVENT) flags|=2;
         if (fds[i].revents&(POLLERR|POLLHUP|POLLNVAL)) flags|=4;
-        r->slots[indices[i]].ready=flags;
+        if (indices[i]>REACTOR_MAX) sources[indices[i]-REACTOR_MAX-1].ready=flags;
+        else r->slots[indices[i]].ready=flags;
     }
     return (uint32_t)count;
+}
+/* Existing language-facing ABI and timeout range stay unchanged. */
+uint64_t liza_rt_reactor_poll(reactor *r,uint32_t timeout) {
+    if (timeout>INT_MAX) {
+        for (uint32_t i=0;i<r->capacity;i++) r->slots[i].ready=0;
+        return net_failure(6);
+    }
+    return liza_rt_reactor_poll_sources(r,(int32_t)timeout,NULL,0);
 }
 uint64_t liza_rt_reactor_read(reactor *r,uint64_t owner,uint64_t generation,uint64_t slot,
                              uint8_t *data,uint32_t length,uint32_t start,uint32_t count) {
