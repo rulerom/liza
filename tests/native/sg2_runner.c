@@ -80,13 +80,14 @@ static unsigned os_handles(void){
 #endif
 }
 static void validate_events(unsigned start,uint64_t gen,int callbacks){
-    int joined[3]={0},submitted=0,returned=0,destroyed=0;
+    int exited[3]={0},joined[3]={0},submitted=0,returned=0,destroyed=0;
     unsigned count=atomic_load(&event_count);
     for(unsigned i=start;i<count;i++){
         CHECK(events[i].generation==gen);const char *k=events[i].kind;unsigned role=events[i].role;
         if(!strcmp(k,"submitted"))submitted=1;
         if(!strcmp(k,"callback"))CHECK(callbacks);
-        if(!strcmp(k,"join")){CHECK(submitted);CHECK(!joined[role]);joined[role]=1;}
+        if(!strcmp(k,"exit")){CHECK(!exited[role]);exited[role]=1;}
+        if(!strcmp(k,"join")){CHECK(submitted);CHECK(exited[role]);CHECK(!joined[role]);joined[role]=1;}
         if(!strcmp(k,"receipt"))CHECK(joined[role]);
         if(!strcmp(k,"handback"))returned=1;
         if(!strcmp(k,"stopped")){CHECK(returned);if(callbacks)CHECK(joined[0]&&joined[1]&&joined[2]);}
@@ -126,7 +127,7 @@ int main(int argc,char **argv){
         CHECK(report.group_socket_handles_peak<=5);CHECK(report.process_service_threads<=1);
         unsigned handles=os_handles();if(!i){baseline=handles;process_bytes=report.process_managed_bytes;}else CHECK(baseline==handles&&process_bytes==report.process_managed_bytes);
         printf("{\"fifo_allocation_bytes\":%zu,\"participant_threads_live\":%u,\"participant_native_handles_live\":%u,\"participant_stack_requested_bytes\":%zu,\"service_stack_requested_bytes\":%zu,\"reactor_allocation_bytes\":%zu,\"reactor_socket_handles_live\":%u,",report.fifo_allocation_bytes,report.participant_threads_live,report.participant_native_handles_live,report.participant_stack_requested_bytes,report.service_stack_requested_bytes,report.reactor_allocation_bytes,report.reactor_socket_handles_live);
-        printf("\"schema_version\":1,\"generation\":%llu,\"phase\":\"destroyed\",\"result\":%u,\"group_managed_bytes_live\":%zu,\"group_managed_bytes_peak\":%zu,\"group_socket_handles_live\":%u,\"group_socket_handles_peak\":%u,\"process_service_threads\":%u,\"process_managed_bytes\":%zu,\"join_records_in_use\":%u,\"os_handles\":%u,\"startup_steps\":%u,\"os_overhead_accounting\":\"not_bounded_by_managed_budget\"}\n",(unsigned long long)last,result,report.group_managed_bytes_live,report.group_managed_bytes_peak,report.group_socket_handles_live,report.group_socket_handles_peak,report.process_service_threads,report.process_managed_bytes,report.join_records_in_use,handles,report.startup_steps);
+        printf("\"schema_version\":1,\"generation\":%llu,\"phase\":\"%s\",\"result\":%u,\"group_managed_bytes_live\":%zu,\"group_managed_bytes_peak\":%zu,\"group_socket_handles_live\":%u,\"group_socket_handles_peak\":%u,\"process_service_threads\":%u,\"process_managed_bytes\":%zu,\"join_records_in_use\":%u,\"os_handles\":%u,\"startup_steps\":%u,\"os_overhead_accounting\":\"not_bounded_by_managed_budget\"}\n",(unsigned long long)last,config.fail_at?"rolled_back":"destroyed",result,report.group_managed_bytes_live,report.group_managed_bytes_peak,report.group_socket_handles_live,report.group_socket_handles_peak,report.process_service_threads,report.process_managed_bytes,report.join_records_in_use,handles,report.startup_steps);
     }
     return 0;
 }
