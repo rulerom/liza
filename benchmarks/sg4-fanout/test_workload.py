@@ -58,4 +58,9 @@ class Workload(unittest.TestCase):
                 self.assertEqual(s['input_sent'],20);self.assertEqual(s['delivered_unique'],40)
                 self.assertIsNotNone(s['latency_upper_ms']['p99'])
                 self.assertLess(s['latency_upper_ms']['p99'],1000)
+                if sys.platform.startswith('linux'):
+                    memory=s['fanout_memory']
+                    self.assertGreater(memory['resident_bytes'],0)
+                    self.assertGreaterEqual(memory['peak_bytes'],memory['resident_bytes'])
+                    self.assertEqual(s['fanout_peak_rss_bytes'],memory['peak_bytes'])
 if __name__=='__main__':unittest.main()

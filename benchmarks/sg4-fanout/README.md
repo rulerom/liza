@@ -85,4 +85,11 @@ docker run --rm -v "$PWD:/src:ro" -v /tmp/sg4-linux-output:/out liza-sg4-bench -
 
 Record the image ID, Docker/VM CPU and memory configuration and host model. Run
 Linux and macOS measurements sequentially to avoid competition between the two
-suites. Archives and interpretation will be added after the first full series.
+suites. See [the measured report](../../docs/sg4-a2-rtp-fanout.md) and `results/`
+for the first macOS/Linux VM series and separate macOS stack samples.
+
+On Linux, current runs read service peak/resident RSS from `/proc/PID/status`
+before shutdown. The original `linux-vm-nb1.json.gz` predates this correction:
+its rusage RSS fields include inherited launcher history and must not be treated
+as isolated service memory. The separate memory follow-up records corrected
+values. Original counters and timings have not been rewritten.
