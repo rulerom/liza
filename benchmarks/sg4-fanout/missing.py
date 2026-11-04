@@ -9,6 +9,7 @@ def main():
  r=json.loads(a.report.read_text());sample=r['samples'][a.sample]
  with gzip.open(a.case/'generator.json.gz','rt') as f:g=json.load(f)
  total=len(g['times_ns']);receivers=len(sample['per_receiver'])
+ if sample['input_sent']!=total-WARMUP:raise RuntimeError('audit requires every offered ordinal to have been sent')
  if total>MAX_PACKETS+WARMUP or not 1<=receivers<=64:raise RuntimeError('unbounded archive')
  stamps=[array.array('Q',[0])*total for _ in range(receivers)]
  previous=[0]*receivers;max_gaps=[(0,0,0)]*receivers;digest=hashlib.sha256();count=0;global_previous=None;global_gap=(0,None,None)
@@ -19,7 +20,7 @@ def main():
    if not b:break
    digest.update(b)
    for ts,seq,receiver,port in rec.iter_unpack(b):
-    if receiver>=receivers or seq>=total or stamps[receiver][seq]:raise RuntimeError('invalid identity/duplicate')
+    if receiver>=receivers or seq>=total or port!=sample['ready']['port'] or stamps[receiver][seq]:raise RuntimeError('invalid identity/duplicate')
     stamps[receiver][seq]=ts;count+=1
     if seq>=WARMUP:
      current=(ts,seq,receiver)

@@ -25,11 +25,18 @@ static struct timing polling,receiving,storing,between;
 struct store_event {uint64_t begin,end;uint32_t seq,receiver;};
 static struct store_event store_events[8192];
 static unsigned store_events_used,store_events_dropped;
+#ifdef SG4_COLLECTOR_TESTING
+static long test_pause_seq=-1;static int test_paused;
+#endif
 static void observe(struct timing *t,uint64_t n){t->calls++;t->total+=n;if(n>t->max)t->max=n;t->hist[n/1000<10001?n/1000:10000]++;}
 static void timing_json(FILE *f,const char *name,struct timing *t){fprintf(f,"\"%s\":{\"calls\":%llu,\"total_ns\":%llu,\"max_ns\":%llu,\"hist_1us\":{",name,(unsigned long long)t->calls,(unsigned long long)t->total,(unsigned long long)t->max);int first=1;for(unsigned i=0;i<10001;i++)if(t->hist[i]){fprintf(f,"%s\"%u\":%llu",first?"":",",i,(unsigned long long)t->hist[i]);first=0;}fprintf(f,"}}");}
 static uint32_t be32(const unsigned char *p){return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3];}
 int main(int argc,char **argv){
  if(argc!=5)return 2;
+#ifdef SG4_COLLECTOR_TESTING
+ const char *pause=getenv("SG4_COLLECTOR_TEST_PAUSE_SEQ");
+ if(pause){char *e;test_pause_seq=strtol(pause,&e,10);if(*e||test_pause_seq<0||test_pause_seq>=MAX_PACKETS+WARMUP)return 2;}
+#endif
  char *end;long num=strtol(argv[1],&end,10);if(*end||num<1||num>MAX_RECEIVERS)return 2;
  long packets=strtol(argv[2],&end,10);if(*end||packets<1||packets>MAX_PACKETS+WARMUP)return 2;
  const char *mode=getenv("SG4_COLLECTOR_MODE");int buffered=mode&&strcmp(mode,"memory")==0;
@@ -75,6 +82,9 @@ int main(int argc,char **argv){
     struct record record={(uint64_t)ts.tv_sec*1000000000u+(uint64_t)ts.tv_nsec,seq,(uint16_t)i,ntohs(peer.sin_port)};
     received++;per_receiver[i]++;last_receive[i]=record.time_ns;
     uint64_t store_begin=ns();
+#ifdef SG4_COLLECTOR_TESTING
+    if(!test_paused&&i==0&&test_pause_seq==(long)seq){struct timespec delay={0,500000000};while(nanosleep(&delay,&delay)&&errno==EINTR){}test_paused=1;}
+#endif
     if(buffered){if(stored==record_limit){overflow=1;running=0;observe(&storing,ns()-store_begin);goto finished;}memory[stored]=record;}
     else if(fwrite(&record,sizeof record,1,records)!=1)return 3;
     stored++;uint64_t store_end=ns();observe(&storing,store_end-store_begin);
@@ -96,6 +106,9 @@ finished:
  struct rusage r;if(getrusage(RUSAGE_SELF,&r))return 3;
  FILE *meta=fopen(argv[4],"w");if(!meta)return 3;
  fprintf(meta,"{\"mode\":\"%s\",\"measurement_valid\":%s,\"record_overflow\":%s,\"record_limit\":%zu,\"records_stored\":%llu,\"stop_ns\":%llu,\"flush_ns\":%llu,",buffered?"memory":"file",overflow?"false":"true",overflow?"true":"false",record_limit,(unsigned long long)stored,(unsigned long long)stop_ns,(unsigned long long)flush_ns);
+#ifdef SG4_COLLECTOR_TESTING
+ fprintf(meta,"\"test_pause_injected\":%s,",test_paused?"true":"false");
+#endif
  fprintf(meta,"\"store_events_threshold_ns\":100000,\"store_events_dropped\":%u,\"store_events\":[",store_events_dropped);
  for(unsigned j=0;j<store_events_used;j++){struct store_event *v=&store_events[j];fprintf(meta,"%s[%llu,%llu,%u,%u]",j?",":"",(unsigned long long)v->begin,(unsigned long long)v->end,v->seq,v->receiver);}fprintf(meta,"],");
  fprintf(meta,"\"timing\":{");timing_json(meta,"poll",&polling);fputc(',',meta);timing_json(meta,"recv",&receiving);fputc(',',meta);timing_json(meta,"store",&storing);fputc(',',meta);timing_json(meta,"outside_recv",&between);fprintf(meta,"},\"receivers\":[");
