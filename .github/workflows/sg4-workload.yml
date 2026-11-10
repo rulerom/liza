@@ -1,0 +1,27 @@
+name: SG4 RTP workload correctness
+on:
+  pull_request:
+    paths: ['benchmarks/sg4-fanout/**', 'examples/apps/rtp/**', 'liza/**', '.github/workflows/sg4-workload.yml']
+  push:
+    branches: [main]
+    paths: ['benchmarks/sg4-fanout/**', 'examples/apps/rtp/**', 'liza/**', '.github/workflows/sg4-workload.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  workload:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python benchmarks/sg4-fanout/test_workload.py -v
