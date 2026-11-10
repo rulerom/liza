@@ -42,6 +42,7 @@ COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline
             'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload'}
 CASES = [
     (['benchmarks/sg4-fanout/adapter.c'], {'sg4-workload'}),
+    (['benchmarks/sg4-dual/adapter.c'], {'sg4-workload'}),
     (['examples/apps/rtp/packet.liza'], {'test', 'docs', 'editor', 'sg4-workload'}),
     (['docs/basics.md'], {'docs'}),
     (['experiments/scoped_channel/channel.c'], {'scoped-channel-probe'}),

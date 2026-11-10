@@ -1,0 +1,80 @@
+import rtp.packet
+import rtp.receivers
+import config
+
+fn publish()->u32:io {
+    match groups.send(42) {GroupPublication.Published=>{return 0} GroupPublication.PublishedFault=>{return 1} GroupPublication.NotPublished=>{return 2}}
+}
+fn fanout(borrow table:rtp.receivers.Receivers,data:View<u8>)->u32:io {
+    var i:u32=0
+    while i<64 {
+        match rtp.receivers.destination(table,i) {None=>{} Some(endpoint)=>{
+            sent=groups.udp_send(data,0,data.len,net.ipv4(127,0,0,1,endpoint.port))
+        }}
+        i=i+1
+    }
+    return 0
+}
+// owner 0/1 accepts only its stream; owner 2 multiplexes both streams.
+fn serve(owner:u32,borrow a:rtp.receivers.Receivers,borrow b:rtp.receivers.Receivers)->u32:io,alloc {
+    match groups.udp_bind(config.bind_address(owner)) {Err(e)=>{return 2147483649} Ok(v)=>{}}
+    var accepted:u32=0
+    var status:u32=0
+    var stopping=false
+    match memory.create(4096) {Err(e)=>{return 2147483650} Ok(region)=>{
+        match memory.alloc<u8>(region,2048,0) {Err(e)=>{status=3} Ok(input)=>{
+            var buffer=move input
+            while status==0 && !stopping {
+                match groups.next() {Err(e)=>{status=4} Ok(event)=>{match event {
+                    GroupEvent.Command(v)=>{if v!=42 {status=5}}
+                    GroupEvent.Closed=>{}
+                    GroupEvent.Stopping=>{stopping=true}
+                    GroupEvent.NotificationFault=>{stopping=true}
+                    GroupEvent.Network(n)=>{
+                        (next,received)=groups.udp_receive(move buffer)
+                        buffer=move next
+                        match received {Err(e)=>{match e {
+                            UdpError.WouldBlock=>{} UdpError.Interrupted=>{} UdpError.Truncated=>{}
+                            UdpError.AddressInUse=>{status=7} UdpError.PermissionDenied=>{status=7}
+                            UdpError.Disconnected=>{status=7} UdpError.InvalidRange=>{status=7} UdpError.Other=>{status=7}
+                        }} Ok(meta)=>{
+                            data=memory.view(buffer)
+                            packet=view data[0..net.udp_length(meta)]
+                            match rtp.packet.parse(packet) {Err(e)=>{} Ok(header)=>{
+                                if header.ssrc==270544960 && owner!=1 {
+                                    accepted=accepted+1
+                                    sent=fanout(a,packet)
+                                }
+                                if header.ssrc==1348497536 && owner!=0 {
+                                    accepted=accepted+1
+                                    sent=fanout(b,packet)
+                                }
+                            }}
+                        }}
+                    }
+                }}}
+            }
+            released=memory.release(move buffer)
+        }}
+        closed=memory.close(move region)
+    }}
+    if status!=0 {return 2147483648+status}
+    return accepted
+}
+fn consume_a()->u32:io,alloc {
+    var table=rtp.receivers.empty()
+    configured=config.setup(borrow mut table,0)
+    return serve(0,table,table)
+}
+fn consume_b()->u32:io,alloc {
+    var table=rtp.receivers.empty()
+    configured=config.setup(borrow mut table,1)
+    return serve(1,table,table)
+}
+fn consume_both()->u32:io,alloc {
+    var a=rtp.receivers.empty()
+    var b=rtp.receivers.empty()
+    configured_a=config.setup(borrow mut a,0)
+    configured_b=config.setup(borrow mut b,1)
+    return serve(2,a,b)
+}
