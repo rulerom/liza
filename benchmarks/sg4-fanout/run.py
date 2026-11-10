@@ -31,10 +31,10 @@ def percentile(hist,p,width,overflow):
         cumulative+=n
         if cumulative>=goal:return None if bucket>=overflow else (bucket+1)*width
 
-def trial(binaries,variant,rate,duration,ports,folder,archive_level=9):
+def trial(binaries,variant,rate,duration,ports,folder,archive_level=9,collector_env=None,collector_finished=None):
     folder.mkdir();packets=round(rate*duration);server=collector=generator=None
     try:
-        collector=subprocess.Popen([str(binaries['collector']),str(len(ports)),str(packets+WARMUP),str(folder/'records.bin'),str(folder/'collector.json')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        collector=subprocess.Popen([str(binaries['collector']),str(len(ports)),str(packets+WARMUP),str(folder/'records.bin'),str(folder/'collector.json')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env=collector_env)
         cc=json.loads(line(collector))
         if cc['ports']!=ports:raise RuntimeError('collector port configuration changed')
         server=subprocess.Popen([str(binaries[variant])],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
@@ -58,8 +58,10 @@ def trial(binaries,variant,rate,duration,ports,folder,archive_level=9):
         if server.returncode:raise RuntimeError('fanout: '+so+se)
         metrics=json.loads(so.strip())
         time.sleep(1)
+        collector_stop_requested_ns=time.clock_gettime_ns(time.CLOCK_MONOTONIC)
         collector.stdin.write('S');collector.stdin.flush();co,ce=collector.communicate(timeout=10)
-        if collector.returncode:raise RuntimeError('collector: '+ce)
+        if collector.returncode:raise RuntimeError(f'collector exited {collector.returncode}; inspect collector.json for explicit recorder failure: '+ce)
+        collector_exit_observation=collector_finished() if collector_finished else None
         gen=json.loads((folder/'generator.json').read_text());col=json.loads((folder/'collector.json').read_text())
         if metrics['result'] or metrics['fault'] or metrics['producer'] or metrics['control_fault']:raise RuntimeError('runtime failure')
         if metrics['consumer']!=metrics['valid']+metrics['warmup_valid']:raise RuntimeError('application result disagrees with independent observer')
@@ -91,7 +93,7 @@ def trial(binaries,variant,rate,duration,ports,folder,archive_level=9):
         interval_hist={}
         for delta in intervals:
             bucket=min(delta//10000,10000);interval_hist[bucket]=interval_hist.get(bucket,0)+1
-        row={'status':'measured','variant':variant,'requested_input_pps':rate,'duration_s':duration,'input_sent':sent,'input_errors':gen['errors'],'generator_phases':gen['phases'],'actual_offer_s':elapsed,
+        row={'status':'measured','collector_exit_observation':collector_exit_observation,'collector_stop_requested_ns':collector_stop_requested_ns,'variant':variant,'requested_input_pps':rate,'duration_s':duration,'input_sent':sent,'input_errors':gen['errors'],'generator_phases':gen['phases'],'actual_offer_s':elapsed,
              'input_shortfall':sent-metrics['received_unique'],'delivered_unique':delivered,'per_receiver':per_receiver,'delivery_gap_from_local_success':metrics['succeeded']-delivered,'reordered':reordered,'corrupt':col['invalid'],'duplicates':col['duplicates'],
              'coverage_offered':delivered/(sent*len(ports)) if sent else None,'coverage_successful':delivered/metrics['succeeded'] if metrics['succeeded'] else None,
              'throughput':{'received_including_drain_per_offer_s':metrics['received']/elapsed,'successful_sends_including_drain_per_offer_s':metrics['succeeded']/elapsed,'delivered_within_offer_window_pps':delivered_before_end/elapsed,'delivered_including_drain_per_offer_s':delivered/elapsed},

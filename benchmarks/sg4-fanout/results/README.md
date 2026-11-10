@@ -37,3 +37,19 @@ No 60-second or physical-network result is claimed by these archives.
 
 [Interpretation and limitations](../../../docs/sg4-a2-latency.md). Raw records
 are retained in `/private/tmp/sg4-macos-paired60` and `/private/tmp/sg4-macos-stages`.
+
+## Collector reliability follow-up
+
+- `macos-historical-missing.json.gz`: exact missing ranges and observation gaps
+  for historical paired60 sample 1, verified against its raw-record hash.
+- `macos-collector-ab60.json.gz`: original reference and two alternating
+  file/memory pairs, 60s at 5k, using the unchanged original C service.
+- `macos-collector-pause.json.gz`: separate test-only 500ms collector pause,
+  five seconds at 5k, with global kernel-counter snapshots.
+- `macos-collector-pause-missing.json.gz`: exact identity audit of that control.
+
+[Interpretation](../../../docs/sg4-a2-collector.md). Raw new trial records remain
+in `/private/tmp/sg4-collector-ab60` and `/private/tmp/sg4-collector-pause`.
+The historical audit consumes `/private/tmp/sg4-macos-paired60/pair-0-1-c`.
+These are local temporary paths, not permanent artifact hosting. The historical
+cause remains unresolved; the controlled pause demonstrates a possible mechanism.

@@ -25,3 +25,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: python benchmarks/sg4-fanout/test_workload.py -v
+      - run: python benchmarks/sg4-fanout/test_collector_ab.py -v
