@@ -133,6 +133,7 @@ def attach(program):
     ]
     group_externals = [
         ('__liza_group_run',['u64']*5+['u32']*4,'__liza_GroupRaw',[], 'io,alloc'),
+        ('__liza_group_run_pair',(['u64']*5+['u32']*4)*2,'__liza_GroupPairRaw',[], 'io,alloc'),
         ('__liza_group_send',['u32'],'u32',[], 'io'),
         ('__liza_group_listen',['u16'],'u32',[], 'io,alloc'),
         ('__liza_group_next',[],'u64',[], 'io'),

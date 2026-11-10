@@ -1,6 +1,6 @@
 # SG4-B1: Multiple Active Groups
 
-Статус: контракт следующего этапа; реализация ещё не начата.
+Статус: контракт и экспериментальная реализация B1; платформенная приёмка в CI.
 Критерий успеха — независимое владение и завершение двух одновременно
 активных scoped-групп. Прирост packets/sec не является критерием этого этапа.
 
@@ -52,7 +52,7 @@ Consumer владеет своим Reactor и сетевыми сокетами.
 
 ## Независимое завершение и бюджет
 
-Текущий SG2 использует один process-lifetime service, одну join-запись и
+Исходный SG2 использовал один process-lifetime service, одну join-запись и
 последовательные блокирующие joins. Простого снятия admission restriction
 недостаточно. Ожидание живого участника A не должно лишать завершившуюся B
 возможности получить собственные receipts, handback и выполнить cleanup до
@@ -121,3 +121,97 @@ SG5 начинается после измерения конкретной тя
 
 Общий dispatcher, work stealing, миграция callbacks, разделяемый Reactor,
 автоматическое распределение потоков и вычислительный пул в B1 не входят.
+
+## Реализация B1
+
+Реализация снимает admission restriction в SG2 для **двух** одновременно
+активных групп. Две фиксированные join lanes имеют собственные записи,
+condition variables и process-lifetime reaper threads. Каждый reaper работает
+только со своими handles; блокирующий native join A не занимает lane B.
+Инициализация lane выполняется её единственным admitted owner. Слоты остаются
+заняты до cleanup и handback, generation выдаётся общим атомарным счётчиком
+без wraparound. Идентичность receipt — выбранная lane, generation и participant.
+
+Каждая lane запоминает запрошенный размер service stack при первом успешном
+запуске. Повторное использование этой lane требует такого же размера.
+Admission сначала ищет свободную lane с совместимым размером, затем новую.
+Одновременные группы могут иметь разные размеры, но для переносимого reuse
+следует задавать одинаковый service stack всем группам. В B1 нет обещания
+справедливого admission или ожидания свободного слота: исчерпание даёт `Busy`.
+
+Контекст `groups.*` находится в TLS callback и указывает на конкретную группу.
+Глобальная таблица callback-функций SG3 заменена immutable записью на время
+вызова runner. Её срок жизни покрывает native joins и handback. Вызовы runner
+из participant callback и рекурсивный запуск owner отклоняются.
+
+### Языковой вход
+
+`groups.run_pair(a:GroupConfig,b:GroupConfig)->GroupPairRun` запускает две
+независимые группы с четырьмя статическими функциями entry-модуля:
+
+```liza
+fn producer_a()->u32:io {return 17}
+fn consumer_a()->u32:io {return 23}
+fn producer_b()->u32:io {return 18}
+fn consumer_b()->u32:io {return 24}
+```
+
+`GroupPairRun.first` и `.second` имеют тип `Result<GroupRun,GroupError>`.
+Оба результата возвращаются после окончания обоих owner threads и их native
+join. Native handles, дескрипторы и join lanes не доступны Liza-программе.
+Callbacks нельзя вызывать как обычные функции. Semantic IR проверяет роли
+после specialization для всех четырёх корней, включая общие helpers.
+`groups.run` остаётся входом для одной группы с `producer/consumer`.
+
+Два ограниченных owner threads создаются перед запуском групп. Если создание
+любого owner thread не удалось, callbacks обеих групп не стартуют, созданный
+owner joined, обе стороны получают `StartupFailed`. После успешного создания
+owners startup каждой группы независим: ошибка A не отменяет успешный запуск
+B. При необходимости callbacks должны сами определять условия завершения B.
+Один pair runner допускается на процесс; дополнительный одновременный pair
+получает `Busy`. Native C callers могут независимо вызывать SG2 runner из
+разных owner threads, соблюдая тот же предел двух групп.
+
+Рабочий [пример двух UDP-групп](https://github.com/rulerom/liza/blob/sg4-b1-runtime/examples/workers/udp_groups.liza)
+использует общий consumer helper для отдельных UDP endpoints. Это функциональная
+проверка; разнесение по NIC и измерение throughput относятся к B2.
+
+### Учёт ресурсов и отказы
+
+Внутренний `liza_sg2_report` schema 2 содержит `group_slot`, уникальный
+`generation`, `max_active_groups=2`, число и суммарные запрошенные стеки
+инициализированных reapers. `process_managed_bytes` резервирует две
+join-записи, admission flags и generation counter даже при одной группе.
+`service_stack_requested_bytes` относится к выбранной lane; process-level
+сумма стеков отражает успешно инициализированные lanes.
+
+В парном языковом запуске максимум — шесть участников групп, два reapers и
+два owner threads. Участники используют `3 * config.stack_bytes` на группу,
+owner каждой стороны запрашивает дополнительно `config.stack_bytes`.
+Реальные стеки и socket buffers учитываются отдельно от managed bytes.
+Process budget каждой стороны проверяется как общий допустимый потолок
+фиксированной инфраструктуры, а не как выдача ещё одной независимой копии
+этой инфраструктуры. Pair bookkeeping и callback records также вычитаются
+из process budget. Число runtime threads и запросов не растёт при reuse.
+
+Fail-stop политика SG2 сохраняется: неподтверждённый shutdown или неверный
+receipt приводит к process abort без возвращаемого результата и без обещания
+cleanup другой группы. Локальный notification fault при отвечающих участниках
+даёт `Faulted` только своей группе.
+
+### Выполненная локальная приёмка
+
+Приёмочный runner проверяет UDP-трафик B через startup rollback, notification
+fault и cleanup A; настоящее завершение B при удержанном worker A и при
+задержанном handback A; reuse освободившейся lane до завершения A; 100 циклов
+двух групп без роста занятых handles; 24 startup boundaries A при работающей
+B; два отказа создания pair owners. Oracle проверяет native exit/join,
+handback, destroy и free с номерами событий и идентичностью поколения.
+
+Отдельные дочерние процессы проверяют stale/foreign receipts и process abort
+при живом worker после deadline. Мутации убирают проверку generation,
+разрешают ранний reuse и пытаются перейти к cleanup при истечении deadline.
+Liza-пример собирается при `-O0` и `-O2`; запрещённые операции через общие
+helpers и прямые вызовы callbacks отклоняются. Платформенная матрица CI
+запускает эти проверки на Linux/macOS/Windows; её статус следует проверять
+для конкретного HEAD, локальный прогон macOS не заменяет матрицу.
