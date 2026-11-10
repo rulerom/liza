@@ -32,7 +32,9 @@ python3 benchmarks/sg4-dual/run.py --output /tmp/sg4-b2 --duration 5 --repeats 5
 
 POSIX harness: Linux/macOS. B1's Windows runtime acceptance remains separate.
 `--bind-a` and `--bind-b` accept IPv4 addresses already configured on the host;
-loopback defaults use `127.0.0.1` with distinct kernel-assigned ports. No host
+loopback defaults use `127.0.0.1` with distinct kernel-assigned ports. In single
+mode both sources target bind-a; in dual mode B targets bind-b. Different bind
+IPs can therefore also change the network path, not just ownership. No host
 network settings are modified. Collectors are loopback-only, so this first
 harness does not implement a multi-host/NIC benchmark. Physical NIC testing is
 future work, with routing and collector placement explicitly controlled.
@@ -117,3 +119,5 @@ Functional CI covers identity, malformed RTP/truncation/wrong-stream rejection,
 independent stop/fault and recorder failure. It does not enforce a throughput or
 latency threshold. No claim of QoS or CPU isolation follows from ownership
 isolation, and SG5 is not part of this experiment.
+
+Completed reports can be summarized with `python3 benchmarks/sg4-dual/summarize.py REPORT.json SUMMARY.json`. Pair ratios use adjacent alternating single/dual runs; trial percentiles are never pooled.
