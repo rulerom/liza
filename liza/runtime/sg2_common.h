@@ -73,23 +73,26 @@ uint32_t liza_rt_reactor_close(reactor *);
 uint64_t liza_rt_reactor_allocation_bytes(void);
 enum {SG_FREE,SG_SUBMITTED,SG_JOINING,SG_RETURNED};
 typedef struct {
-    sg_mutex lock;sg_cond ready;int initialized;
+    sg_mutex lock;sg_cond ready;atomic_int initialized;
     size_t stack;
     atomic_int state;uint64_t generation;
     sg_thread handles[3];unsigned count;
     atomic_uint_fast64_t receipts[3];
 } sg_service;
-static sg_service service;
-static atomic_int admitted;
-static uint64_t next_generation;
-static SG_ENTRY sg_reaper(void *unused) {
-    (void)unused;
+/* Two fixed join lanes. A blocked native join cannot occupy B's lane. */
+#define SG_GROUP_LIMIT 2
+static sg_service services[SG_GROUP_LIMIT];
+static atomic_int admitted[SG_GROUP_LIMIT];
+static atomic_uint_fast64_t next_generation;
+static _Thread_local int sg_owner_active;
+static SG_ENTRY sg_reaper(void *ptr) {
+    sg_service *service=ptr;
     for(;;){
-        sg_lock(&service.lock);
-        while(atomic_load(&service.state)!=SG_SUBMITTED)sg_wait(&service.ready,&service.lock);
-        sg_thread handles[3];unsigned count=service.count;uint64_t generation=service.generation;
-        for(unsigned i=0;i<count;i++)handles[i]=service.handles[i];
-        atomic_store(&service.state,SG_JOINING);sg_unlock(&service.lock);
+        sg_lock(&service->lock);
+        while(atomic_load(&service->state)!=SG_SUBMITTED)sg_wait(&service->ready,&service->lock);
+        sg_thread handles[3];unsigned count=service->count;uint64_t generation=service->generation;
+        for(unsigned i=0;i<count;i++)handles[i]=service->handles[i];
+        atomic_store(&service->state,SG_JOINING);sg_unlock(&service->lock);
         for(unsigned i=0;i<count;i++){
 #ifdef SG2_BREAK_RECEIPT_ORDER
             SG_EVENT("receipt",generation,i);
@@ -98,17 +101,17 @@ static SG_ENTRY sg_reaper(void *unused) {
             SG_EVENT("join",generation,i);
             SG_EVENT("receipt",generation,i);
 #ifdef LIZA_SG2_TESTING
-            if(atomic_load(&sg2_test_stale_receipt))atomic_store(&service.receipts[i],generation-1);
+            if(atomic_load(&sg2_test_stale_receipt))atomic_store(&service->receipts[i],generation-1);
             else
 #endif
-            atomic_store_explicit(&service.receipts[i],generation,memory_order_release);
+            atomic_store_explicit(&service->receipts[i],generation,memory_order_release);
         }
 #ifdef LIZA_SG2_TESTING
         while(atomic_load(&sg2_test_handback_gate))sg_pause();
 #endif
         SG_EVENT("handback",generation,0);
         /* Last access to request contents. Subsequent loop accesses only mailbox. */
-        atomic_store_explicit(&service.state,SG_RETURNED,memory_order_release);
+        atomic_store_explicit(&service->state,SG_RETURNED,memory_order_release);
     }
     SG_RETURN;
 }
@@ -120,24 +123,24 @@ static int sg_step(const liza_sg2_config *c,unsigned *step){
     (void)c;return 1;
 #endif
 }
-static int sg_service_init(const liza_sg2_config *c,unsigned *step){
-    if(service.initialized)return service.stack==c->service_stack_bytes;
-    if(!sg_step(c,step)||!sg_mutex_init(&service.lock))return 0;
-    if(!sg_step(c,step)||!sg_cond_init(&service.ready)){sg_mutex_destroy(&service.lock);return 0;}
-    atomic_init(&service.state,SG_FREE);for(unsigned i=0;i<3;i++)atomic_init(&service.receipts[i],0);
+static int sg_service_init(sg_service *service,const liza_sg2_config *c,unsigned *step){
+    if(service->initialized)return service->stack==c->service_stack_bytes;
+    if(!sg_step(c,step)||!sg_mutex_init(&service->lock))return 0;
+    if(!sg_step(c,step)||!sg_cond_init(&service->ready)){sg_mutex_destroy(&service->lock);return 0;}
+    atomic_init(&service->state,SG_FREE);for(unsigned i=0;i<3;i++)atomic_init(&service->receipts[i],0);
     sg_thread t;
-    if(!sg_step(c,step)||!sg_start(&t,sg_reaper,NULL,c->service_stack_bytes)){
+    if(!sg_step(c,step)||!sg_start(&t,sg_reaper,service,c->service_stack_bytes)){
 #ifndef _WIN32
-        pthread_cond_destroy(&service.ready);
+        pthread_cond_destroy(&service->ready);
 #endif
-        sg_mutex_destroy(&service.lock);return 0;
+        sg_mutex_destroy(&service->lock);return 0;
     }
 #ifdef _WIN32
     if(!CloseHandle(t))abort();
 #else
     if(pthread_detach(t))abort();
 #endif
-    service.stack=c->service_stack_bytes;service.initialized=1;return 1;
+    service->stack=c->service_stack_bytes;atomic_store(&service->initialized,1);return 1;
 }
 typedef struct {net_socket read,write;} sg_wake;
 typedef struct sg_group sg_group;
@@ -280,28 +283,51 @@ static void sg_stop(sg_group *g){
 #endif
     if(!sg_wake_send(&g->control)){atomic_store(&g->control_fault,1);sg_fault(g,2);SG_EVENT("control_fault",g->generation,0);}
 }
-static int sg_receipt(uint64_t generation,unsigned i){return atomic_load_explicit(&service.receipts[i],memory_order_acquire)==generation;}
-static void sg_submit(sg_thread *threads,unsigned n,uint64_t generation,uint32_t timeout){
+static int sg_receipt(sg_service *service,uint64_t generation,unsigned i){
+#ifdef SG2_BREAK_FOREIGN_RECEIPT
+    (void)generation;return atomic_load_explicit(&service->receipts[i],memory_order_acquire)!=0;
+#else
+    return service->generation==generation&&atomic_load_explicit(&service->receipts[i],memory_order_acquire)==generation;
+#endif
+}
+static void sg_submit(sg_service *service,sg_thread *threads,unsigned n,uint64_t generation,uint32_t timeout){
     uint64_t deadline=sg_now()+timeout;
-    while(!sg_trylock(&service.lock)){if(sg_now()>=deadline)sg_abort(generation);sg_pause();}
-    if(atomic_load(&service.state)!=SG_FREE)abort();
-    for(unsigned i=0;i<3;i++){atomic_store(&service.receipts[i],0);if(i<n)service.handles[i]=threads[i];}
-    service.count=n;service.generation=generation;SG_EVENT("submitted",generation,n);
-    atomic_store_explicit(&service.state,SG_SUBMITTED,memory_order_release);sg_signal(&service.ready);sg_unlock(&service.lock);
+    while(!sg_trylock(&service->lock)){if(sg_now()>=deadline)sg_abort(generation);sg_pause();}
+    if(atomic_load(&service->state)!=SG_FREE)abort();
+    for(unsigned i=0;i<3;i++){atomic_store(&service->receipts[i],0);if(i<n)service->handles[i]=threads[i];}
+    service->count=n;service->generation=generation;SG_EVENT("submitted",generation,n);
+    atomic_store_explicit(&service->state,SG_SUBMITTED,memory_order_release);sg_signal(&service->ready);sg_unlock(&service->lock);
 }
 uint32_t liza_sg2_run(const liza_sg2_config *c,liza_sg2_fn producer,liza_sg2_fn consumer,liza_sg2_report *out){
-    if(!out)return SG2_INVALID;memset(out,0,sizeof(*out));out->schema_version=1;
-    int zero=0;if(!atomic_compare_exchange_strong(&admitted,&zero,1)){out->result=SG2_BUSY;return SG2_BUSY;}
+    if(!out)return SG2_INVALID;memset(out,0,sizeof(*out));out->schema_version=2;out->max_active_groups=SG_GROUP_LIMIT;
+    if(sg_current||sg_owner_active){out->result=SG2_BUSY;return SG2_BUSY;}
+    unsigned slot=SG_GROUP_LIMIT;
+    /* Reuse a compatible initialized lane before allocating another reaper.
+     * stack is immutable after initialized's atomic publication. */
+    for(unsigned pass=0;pass<2&&slot==SG_GROUP_LIMIT;pass++)for(unsigned i=0;i<SG_GROUP_LIMIT;i++){
+        int initialized=atomic_load(&services[i].initialized);
+        if((pass==0&&!initialized)||(pass==1&&initialized))continue;
+        if(initialized&&c&&services[i].stack!=c->service_stack_bytes)continue;
+        int zero=0;if(atomic_compare_exchange_strong(&admitted[i],&zero,1)){slot=i;break;}
+    }
+    if(slot==SG_GROUP_LIMIT){
+        uint32_t denied=SG2_INVALID;
+        for(unsigned i=0;i<SG_GROUP_LIMIT;i++)if(!atomic_load(&services[i].initialized)||!c||services[i].stack==c->service_stack_bytes)denied=SG2_BUSY;
+        out->result=denied;return denied;
+    }
+    sg_owner_active=1;sg_service *service=&services[slot];out->group_slot=slot;
     uint32_t result=SG2_INVALID;unsigned step=0,n=0;sg_thread threads[3];sg_group *g=NULL;
     size_t fifo_bytes=0;int lock_ready=0,net_ready=0;
-    if(!c||!producer||!consumer||c->managed_budget<sizeof(sg_group)||c->process_budget<sizeof(service)+sizeof(admitted)+sizeof(next_generation)||
+    if(!c||!producer||!consumer||c->managed_budget<sizeof(sg_group)||c->process_budget<sizeof(services)+sizeof(admitted)+sizeof(next_generation)||
        c->reactor_capacity==0||c->reactor_capacity>32||c->reactor_budget<liza_rt_reactor_allocation_bytes()||c->max_threads<3||c->max_socket_handles<5||!c->slots||c->slots>65536||!c->operation_ms||!c->shutdown_ms||
        c->stack_bytes<65536||c->stack_bytes>SIZE_MAX/3||c->stack_bytes%65536||
-       c->service_stack_bytes<65536||c->service_stack_bytes%65536||next_generation==UINT64_MAX)goto finish;
-    if(service.initialized&&service.stack!=c->service_stack_bytes)goto finish;
-    out->generation=++next_generation;out->participant_stack_requested_bytes=3*c->stack_bytes;
+       c->service_stack_bytes<65536||c->service_stack_bytes%65536)goto finish;
+    if(service->initialized&&service->stack!=c->service_stack_bytes)goto finish;
+    uint_fast64_t generation=atomic_load(&next_generation);
+    do{if(generation==UINT64_MAX)goto finish;}while(!atomic_compare_exchange_weak(&next_generation,&generation,generation+1));
+    out->generation=generation+1;SG_EVENT("slot",out->generation,slot);out->participant_stack_requested_bytes=3*c->stack_bytes;
     out->service_stack_requested_bytes=c->service_stack_bytes;result=SG2_STARTUP_FAILED;
-    if(!sg_service_init(c,&step))goto finish;
+    if(!sg_service_init(service,c,&step))goto finish;
     if(!sg_step(c,&step))goto finish;
     g=calloc(1,sizeof(*g));if(!g)goto finish;g->config=*c;g->generation=out->generation;
     g->data.read=g->data.write=g->control.read=g->control.write=NET_INVALID;
@@ -320,7 +346,7 @@ uint32_t liza_sg2_run(const liza_sg2_config *c,liza_sg2_fn producer,liza_sg2_fn 
     for(unsigned i=0;i<3;i++){if(!sg_step(c,&step)||!sg_start(&threads[i],sg_participant,&g->contexts[i],c->stack_bytes))break;n++;}
     if(n){
         out->participant_threads_live=n;out->participant_native_handles_live=n;out->join_records_in_use=1;
-        sg_submit(threads,n,g->generation,c->shutdown_ms);
+        sg_submit(service,threads,n,g->generation,c->shutdown_ms);
         atomic_store(&g->gate,n==3?1:-1);uint64_t until=n==3?0:sg_now()+c->shutdown_ms,unavailable=0;
         if(n==3)result=SG2_OK;
         for(;;){
@@ -330,7 +356,7 @@ uint32_t liza_sg2_run(const liza_sg2_config *c,liza_sg2_fn producer,liza_sg2_fn 
                 if(sg_status_read(&g->status[0],&s0,&d0)&&sg_status_read(&g->status[1],&s1,&d1)&&s0==2&&s1==2)sg_stop(g);
                 if(atomic_load(&g->overdue))sg_fault(g,3);
                 if(atomic_load(&g->fault)||atomic_load(&g->stop_intent))sg_stop(g);
-                if(sg_receipt(g->generation,0)&&sg_receipt(g->generation,1)&&!atomic_load(&g->monitor_stop)){
+                if(sg_receipt(service,g->generation,0)&&sg_receipt(service,g->generation,1)&&!atomic_load(&g->monitor_stop)){
                     sg_stop(g);atomic_store(&g->monitor_stop,1);
                 }
                 uint64_t st,dl;if(sg_status_read(&g->status[2],&st,&dl)){unavailable=0;if(st==1&&now>=dl){sg_fault(g,4);sg_stop(g);}}
@@ -339,12 +365,12 @@ uint32_t liza_sg2_run(const liza_sg2_config *c,liza_sg2_fn producer,liza_sg2_fn 
                 until=atomic_load(&g->shutdown_deadline);
             }
 #ifdef SG2_BREAK_EARLY_REUSE
-            if(n==3&&sg_receipt(g->generation,0)&&sg_receipt(g->generation,1)&&sg_receipt(g->generation,2)){
-                SG_EVENT("record_free",g->generation,0);atomic_store(&service.state,SG_FREE);
+            if(n==3&&sg_receipt(service,g->generation,0)&&sg_receipt(service,g->generation,1)&&sg_receipt(service,g->generation,2)){
+                SG_EVENT("record_free",g->generation,0);atomic_store(&service->state,SG_FREE);
             }
 #endif
-            if(atomic_load_explicit(&service.state,memory_order_acquire)==SG_RETURNED){
-                for(unsigned i=0;i<n;i++)if(!sg_receipt(g->generation,i))sg_abort(g->generation);
+            if(atomic_load_explicit(&service->state,memory_order_acquire)==SG_RETURNED){
+                for(unsigned i=0;i<n;i++)if(!sg_receipt(service,g->generation,i))sg_abort(g->generation);
                 out->participant_threads_live=0;out->participant_native_handles_live=0;
                 break;
             }
@@ -358,7 +384,7 @@ uint32_t liza_sg2_run(const liza_sg2_config *c,liza_sg2_fn producer,liza_sg2_fn 
     }
 cleanup:
     /* Any Submitted request must have fully handed back before cleanup/reuse. */
-    if(n&&atomic_load_explicit(&service.state,memory_order_acquire)!=SG_RETURNED){SG_EVENT("release_rejected",g->generation,0);sg_abort(g->generation);}
+    if(n&&atomic_load_explicit(&service->state,memory_order_acquire)!=SG_RETURNED){SG_EVENT("release_rejected",g->generation,0);sg_abort(g->generation);}
     if(g){out->control_fault=(uint32_t)atomic_load(&g->control_fault);out->reactor_allocation_bytes=g->reactor_bytes;out->fault=(uint32_t)atomic_load(&g->fault);out->producer_result=g->results[0];out->consumer_result=g->results[1];out->group_socket_handles_peak=g->peak_sockets;
         sg_socket_close(g,&g->control.read);sg_socket_close(g,&g->control.write);sg_socket_close(g,&g->data.read);sg_socket_close(g,&g->data.write);
         if(net_ready)net_stop();
@@ -368,10 +394,13 @@ cleanup:
         if(lock_ready)sg_mutex_destroy(&g->lock);
         out->group_socket_handles_live=g->sockets;SG_EVENT("destroy",g->generation,0);free(g);out->group_managed_bytes_live-=sizeof(*g);
     }
-    if(n){out->join_records_in_use=0;atomic_store(&service.state,SG_FREE);SG_EVENT("record_free",out->generation,0);}
+    if(n){out->join_records_in_use=0;atomic_store(&service->state,SG_FREE);SG_EVENT("record_free",out->generation,0);}
     if(result==SG2_OK&&out->fault)result=SG2_FAULTED;
 finish:
-    out->startup_steps=step;out->result=result;out->process_service_threads=service.initialized?1:0;
-    out->process_managed_bytes=sizeof(service)+sizeof(admitted)+sizeof(next_generation);
-    atomic_store(&admitted,0);return result;
+    out->startup_steps=step;out->result=result;out->process_service_threads=0;
+    for(unsigned i=0;i<SG_GROUP_LIMIT;i++)if(atomic_load(&services[i].initialized)){
+        out->process_service_threads++;out->process_service_stack_requested_bytes+=services[i].stack;
+    }
+    out->process_managed_bytes=sizeof(services)+sizeof(admitted)+sizeof(next_generation);
+    sg_owner_active=0;atomic_store(&admitted[slot],0);return result;
 }

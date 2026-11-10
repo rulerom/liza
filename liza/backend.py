@@ -87,7 +87,7 @@ def llvm(module, target=None):
                       'declare i64 @liza_rt_err(ptr, i32)',
                       'declare i64 @liza_rt_err_print_u64(i64)',
                       'declare i64 @liza_rt_err_print_i64(i64)'])
-        if getattr(module, 'group_entries', None):
+        if getattr(module, 'group_entries', None) or getattr(module, 'group_pair_entries', None):
             lines.append('declare ptr @liza_rt_group_reactor()')
         for fn in module.externals:
             from .group_backend import external as group_external

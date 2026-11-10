@@ -9,6 +9,7 @@ typedef uint32_t (*liza_sg2_fn)(liza_sg2_context *);
 typedef struct {
     size_t managed_budget,process_budget,stack_bytes,service_stack_bytes,reactor_budget;
     uint32_t reactor_capacity;
+    const void *user_data; /* Immutable callback configuration, valid through run return. */
     uint32_t slots,max_threads,max_socket_handles,operation_ms,shutdown_ms;
 #ifdef LIZA_SG2_TESTING
     unsigned fail_at,data_fault,control_fault;
@@ -17,6 +18,8 @@ typedef struct {
 typedef struct {
     uint32_t schema_version,result,fault,control_fault,producer_result,consumer_result;
     uint64_t generation;
+    uint32_t group_slot,max_active_groups;
+    size_t process_service_stack_requested_bytes;
     size_t group_managed_bytes_live,group_managed_bytes_peak,fifo_allocation_bytes;
     unsigned group_socket_handles_live,group_socket_handles_peak,participant_threads_live;
     unsigned participant_native_handles_live,process_service_threads,join_records_in_use;
