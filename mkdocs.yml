@@ -146,6 +146,7 @@ nav:
       - "SG4-A2: RTP fanout measurements": sg4-a2-rtp-fanout.md
       - "SG4-A2: macOS latency tails": sg4-a2-latency.md
       - "SG4-A2: collector reliability": sg4-a2-collector.md
+      - "SG4-B1: независимые scoped-группы": sg4-b1-multiple-groups.md
       - Gateway R0 reproduction: gateway-reproduction.md
       - План разработки: roadmap.md
       - Milestones: milestones.md
