@@ -4,7 +4,7 @@ from pathlib import Path
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
 from build import build,WARMUP
-from run import line,stop
+from run import line,stop,trial
 from generator import packet
 
 class Workload(unittest.TestCase):
@@ -47,6 +47,30 @@ class Workload(unittest.TestCase):
                             finally:sender.close();stop(p)
                 finally:
                     for s in sockets:s.close()
+
+    def test_stage_observation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp=Path(tmp);reserved=[]
+            try:
+                for _ in range(2):
+                    s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+                    s.bind(('127.0.0.1',0));reserved.append(s)
+                ports=[s.getsockname()[1] for s in reserved]
+                bins,_=build(tmp/'build',ports,stage_timing=True)
+            finally:
+                for s in reserved:s.close()
+            for variant in ('liza','c'):
+                row=trial(bins,variant,1000,.3,ports,tmp/variant)
+                stages=row['fanout']['stage_timing']
+                self.assertEqual(stages['count'],300)
+                self.assertEqual(row['delivered_unique'],600)
+                for hist in stages['histograms_1us'].values():
+                    self.assertEqual(sum(hist.values()),300)
+                self.assertTrue(stages['samples'])
+                for seq,rx,first,last in stages['samples']:
+                    self.assertEqual(seq%256,0)
+                    self.assertLessEqual(rx,first)
+                    self.assertLessEqual(first,last)
 
     def test_short_driver_clock_and_accounting(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -31,7 +31,7 @@ def percentile(hist,p,width,overflow):
         cumulative+=n
         if cumulative>=goal:return None if bucket>=overflow else (bucket+1)*width
 
-def trial(binaries,variant,rate,duration,ports,folder):
+def trial(binaries,variant,rate,duration,ports,folder,archive_level=9):
     folder.mkdir();packets=round(rate*duration);server=collector=generator=None
     try:
         collector=subprocess.Popen([str(binaries['collector']),str(len(ports)),str(packets+WARMUP),str(folder/'records.bin'),str(folder/'collector.json')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
@@ -103,7 +103,7 @@ def trial(binaries,variant,rate,duration,ports,folder):
         # are compressed on disk, outside the source repository.
         for name in ('records.bin','generator.json'):
             path=folder/name
-            with path.open('rb') as src,gzip.open(str(path)+'.gz','wb') as dst:
+            with path.open('rb') as src,gzip.open(str(path)+'.gz','wb',compresslevel=archive_level) as dst:
                 import shutil;shutil.copyfileobj(src,dst)
             path.unlink()
         return row

@@ -144,6 +144,7 @@ nav:
       - "SG3: Liza scoped Reactor group": sg3-scoped-reactor-group.md
       - "SG4-A1: scoped UDP endpoint": sg4-a1-udp.md
       - "SG4-A2: RTP fanout measurements": sg4-a2-rtp-fanout.md
+      - "SG4-A2: macOS latency tails": sg4-a2-latency.md
       - Gateway R0 reproduction: gateway-reproduction.md
       - План разработки: roadmap.md
       - Milestones: milestones.md
