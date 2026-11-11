@@ -1,10 +1,10 @@
 name: SG4 RTP workload correctness
 on:
   pull_request:
-    paths: ['benchmarks/sg4-fanout/**', 'examples/apps/rtp/**', 'liza/**', '.github/workflows/sg4-workload.yml']
+    paths: ['benchmarks/sg4-fanout/**', 'benchmarks/sg4-dual/**', 'examples/apps/rtp/**', 'liza/**', '.github/workflows/sg4-workload.yml']
   push:
     branches: [main]
-    paths: ['benchmarks/sg4-fanout/**', 'examples/apps/rtp/**', 'liza/**', '.github/workflows/sg4-workload.yml']
+    paths: ['benchmarks/sg4-fanout/**', 'benchmarks/sg4-dual/**', 'examples/apps/rtp/**', 'liza/**', '.github/workflows/sg4-workload.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,3 +26,4 @@ jobs:
           python-version: '3.11'
       - run: python benchmarks/sg4-fanout/test_workload.py -v
       - run: python benchmarks/sg4-fanout/test_collector_ab.py -v
+      - run: python benchmarks/sg4-dual/test_dual.py -v
