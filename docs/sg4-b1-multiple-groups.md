@@ -172,7 +172,7 @@ B. При необходимости callbacks должны сами опред�
 получает `Busy`. Native C callers могут независимо вызывать SG2 runner из
 разных owner threads, соблюдая тот же предел двух групп.
 
-Рабочий [пример двух UDP-групп](https://github.com/rulerom/liza/blob/sg4-b1-runtime/examples/workers/udp_groups.liza)
+Рабочий [пример двух UDP-групп](https://github.com/rulerom/liza/blob/03744883fb2724c795be0f8672ebccaec32e8b81/examples/workers/udp_groups.liza)
 использует общий consumer helper для отдельных UDP endpoints. Это функциональная
 проверка; разнесение по NIC и измерение throughput относятся к B2.
 

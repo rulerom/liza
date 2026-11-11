@@ -45,7 +45,7 @@ collectors, файловый I/O и все groups конкурируют за о
 B1; POSIX benchmark не выдаётся за новый Windows workload. Порогов throughput
 или latency в CI нет.
 
-[Исходники и воспроизведение](https://github.com/rulerom/liza/blob/sg4-b2-dual-owners/benchmarks/sg4-dual/README.md)
+[Исходники и воспроизведение](https://github.com/rulerom/liza/blob/1523c46d7974dd9d2e55c561212fec0fc3a52988/benchmarks/sg4-dual/README.md)
 описывают фазы, bounded recording, управляющие потоки стенда, ресурсные лимиты
 и сохранение артефактов. SG5 и динамическое управление группами в этот этап не входят.
 
@@ -150,7 +150,7 @@ OS buffers, default stacks harness threads и другие накладные р
 учитываются отдельно. После joins общий live socket count каждой группы — 0;
 максимальное наблюдённое время stop intent → destroy — 5.379 мс.
 
-[Архивы отчётов и provenance](https://github.com/rulerom/liza/blob/sg4-b2-dual-owners/benchmarks/sg4-dual/results/README.md)
+[Архивы отчётов и provenance](https://github.com/rulerom/liza/blob/1523c46d7974dd9d2e55c561212fec0fc3a52988/benchmarks/sg4-dual/results/README.md)
 содержат raw counters и SHA-256. Исходники, бинарники и сжатые packet records
 сохранены также вне temporary-каталога, в gitignored
 `build/sg4-b2-macos-cfaf8d4` рабочего репозитория. В provenance явно отмечено,

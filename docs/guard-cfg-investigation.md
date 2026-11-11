@@ -126,7 +126,7 @@ overflow intrinsic на входной байт**. На ASCII: 17,376 → 16,376
 эксплуатационная приёмка Gateway сохраняют приоритет. Следующая оптимизация должна
 так же иметь конкретное условие, проверяемую семантику и измеренный эффект.
 
-[Воспроизведение](https://github.com/rulerom/liza/tree/perf-guard-cfg/benchmarks/guards),
-[измерения](https://github.com/rulerom/liza/blob/perf-guard-cfg/benchmarks/guards/results/apple-m4-llvm23/report.json),
-[исходники, SIR, LLVM, assembly, binaries и проверки](https://github.com/rulerom/liza/blob/perf-guard-cfg/benchmarks/guards/results/apple-m4-llvm23/evidence.tar.gz),
-[SHA-256](https://github.com/rulerom/liza/blob/perf-guard-cfg/benchmarks/guards/results/apple-m4-llvm23/manifest.json).
+[Воспроизведение](https://github.com/rulerom/liza/tree/36de5cbf49bf427c951460d0a467de83f41a0efc/benchmarks/guards),
+[измерения](https://github.com/rulerom/liza/blob/36de5cbf49bf427c951460d0a467de83f41a0efc/benchmarks/guards/results/apple-m4-llvm23/report.json),
+[исходники, SIR, LLVM, assembly, binaries и проверки](https://github.com/rulerom/liza/blob/36de5cbf49bf427c951460d0a467de83f41a0efc/benchmarks/guards/results/apple-m4-llvm23/evidence.tar.gz),
+[SHA-256](https://github.com/rulerom/liza/blob/36de5cbf49bf427c951460d0a467de83f41a0efc/benchmarks/guards/results/apple-m4-llvm23/manifest.json).
