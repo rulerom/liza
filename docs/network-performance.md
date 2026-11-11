@@ -2,7 +2,12 @@
 description: "Сетевые измерения Liza и C: TCP relay и UDP/RTP fanout на Apple M4, методика и ограничения."
 ---
 
-# Сетевые бенчмарки: Liza и C
+# Сетевые бенчмарки: исторические TCP/NB1 pilot
+
+Эта страница сохраняет ранние baseline. Актуальный каталог — [измерения](benchmarks.md);
+scoped RTP Liza/C описан в [SG4-A2](sg4-a2-rtp-fanout.md), single/dual owners —
+в [SG4-B2](sg4-b2-dual-owners.md). У этих серий разные workload/lifecycle: числа
+нельзя объединять в одну таблицу паритета или scaling.
 
 Мы измеряем Liza на сетевых задачах и используем C как ориентир на том же
 стенде. Ниже — сохранённые **экспериментальные измерения на одном Apple M4**,

@@ -10,8 +10,8 @@ hide:
   <p class="liza-eyebrow">LIZA · ЭКСПЕРИМЕНТАЛЬНЫЙ ЯЗЫК</p>
   <h1>Сетевые сервисы.<br>Явные ресурсы. Проверяемые свойства.</h1>
   <p class="liza-definition">Liza — экспериментальный системный язык для сетевой инфраструктуры: прокси, шлюзов и протокольных сервисов. Он сочетает определённую семантику, явное управление ресурсами и инструменты проверки отдельных свойств программ.</p>
-  <p class="liza-lead"><strong>Сегодня:</strong> нативные TCP-прокси и Message Router, UDP API и экспериментальный RTP fanout. Сетевые примеры пока работают в одном потоке.</p>
-  <p class="liza-lead"><strong>В разработке:</strong> многопоточность, сетевые измерения и расширение проверок реальных приложений. Язык и его API ещё могут меняться.</p>
+  <p class="liza-lead"><strong>Сегодня:</strong> нативные TCP-прокси и Message Router, UDP API, scoped-группы и RTP fanout с одним или двумя независимыми сетевыми владельцами.</p>
+  <p class="liza-lead"><strong>В разработке:</strong> дальнейшие измерения реальных приложений и расширение проверяемого фрагмента. Язык и его API ещё могут меняться.</p>
   <div class="liza-actions">
     <a class="liza-button liza-button-primary" href="getting-started.html">Написать первую программу</a>
     <a class="liza-button" href="network-gateway.html">Verified Network Gateway</a>
@@ -26,10 +26,13 @@ hide:
 - [Язык](basics.md) — синтаксис, значения, владение и заимствования;
   [модель вычислений и памяти](design.md) объясняет общие принципы.
 - [Библиотеки](owned-string.md) — текст, коллекции и работа с данными.
+- [Сеть и потоки](networking.md) — выбор между UDP/TCP, Reactor, scoped-группами и изолированными workers.
 - [Приложения и примеры](reference-programs.md) — от разбора пакета до TCP-прокси.
-- [Бенчмарки](network-performance.md) — сетевые измерения Liza и C, методика и ограничения.
+- [Измерения](benchmarks.md) — актуальные workloads, исторические baseline, методика и ограничения.
 - [Исследования и проверки](research.md) — отдельный каталог Verified,
   аудитов и экспериментов производительности.
+- [История архитектуры](architecture-history.md) — завершённые MT/SG этапы;
+  [roadmap](roadmap.md) — открытые задачи, [milestones](milestones.md) — достигнутое.
 
 ## Всегда иметь план Б
 
