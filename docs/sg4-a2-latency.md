@@ -120,7 +120,7 @@ recur in these diagnostic runs and must not be assigned this same explanation.
 ## Evidence and next decision
 
 Source and reproduction instructions:
-[latency harness](https://github.com/rulerom/liza/blob/sg4-a2-latency/benchmarks/sg4-fanout/LATENCY.md).
+[latency harness](https://github.com/rulerom/liza/blob/752f88732c07de4dca33a238268a02a5d1c090dc/benchmarks/sg4-fanout/LATENCY.md).
 Compressed reports in `benchmarks/sg4-fanout/results/`:
 `macos-paired60.json.gz`, `macos-paired60-windows.json.gz`, `macos-stages.json.gz`.
 They retain per-trial histograms, counters, CPU, stage samples, build provenance

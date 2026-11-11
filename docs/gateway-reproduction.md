@@ -14,9 +14,9 @@ R0 проверяет воспроизводимость процедуры сб
 - Pilot: macOS ARM64, Homebrew Clang 23.1.4, Python 3.9.6, target и flags в отчёте.
 - 18 тестов на O0/O2, один платформенный skip. Сборки и тесты успешны.
 
-[Исходный отчёт](https://github.com/rulerom/liza/blob/gateway-r0-baseline/maintenance/gateway-r0/macos-pilot/report.json),
-[IR, бинарники, исходники приложения и журналы](https://github.com/rulerom/liza/blob/gateway-r0-baseline/maintenance/gateway-r0/macos-pilot/evidence.tar.gz),
-[manifest SHA-256](https://github.com/rulerom/liza/blob/gateway-r0-baseline/maintenance/gateway-r0/macos-pilot/manifest.json).
+[Исходный отчёт](https://github.com/rulerom/liza/blob/209cf630d76b3a017f20679a45912183bfc326bc/maintenance/gateway-r0/macos-pilot/report.json),
+[IR, бинарники, исходники приложения и журналы](https://github.com/rulerom/liza/blob/209cf630d76b3a017f20679a45912183bfc326bc/maintenance/gateway-r0/macos-pilot/evidence.tar.gz),
+[manifest SHA-256](https://github.com/rulerom/liza/blob/209cf630d76b3a017f20679a45912183bfc326bc/maintenance/gateway-r0/macos-pilot/manifest.json).
 Абсолютные пути в исходном отчёте описывают исторический прогон, а не требуемую
 структуру каталогов другой машины. Теперь отчёт доступен без доступа к машине автора.
 

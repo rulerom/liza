@@ -74,9 +74,9 @@ each socket. No memory-recording overflow or corrupt packet was reported.
 
 ## Reproduction and limits
 
-[Collector protocol and commands](https://github.com/rulerom/liza/blob/sg4-a2-collector/benchmarks/sg4-fanout/COLLECTOR.md) describe
+[Collector protocol and commands](https://github.com/rulerom/liza/blob/76ba608a235d48b91ca57e02b16c1c5af8a12ca1/benchmarks/sg4-fanout/COLLECTOR.md) describe
 the bounded buffers, explicit recorder failure, timing hooks, cutoff inspection
-and kernel snapshots. [Evidence archives](https://github.com/rulerom/liza/blob/sg4-a2-collector/benchmarks/sg4-fanout/results/README.md)
+and kernel snapshots. [Evidence archives](https://github.com/rulerom/liza/blob/76ba608a235d48b91ca57e02b16c1c5af8a12ca1/benchmarks/sg4-fanout/results/README.md)
 include manifests, source/binary hashes and per-receiver ranges. Raw records
 remain in local temporary run directories; those paths are not permanent public
 artifact hosting. The original Liza/C applications, runtime and baseline are

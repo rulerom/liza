@@ -120,8 +120,8 @@ Frame `liza_json.feed_mut` увеличивается с 64 до 96 байт п�
 
 ## Воспроизведение и артефакты
 
-[Инструкция и harness](https://github.com/rulerom/liza/tree/perf-json-arm64/benchmarks/parity),
-[отчёт и сырые samples](https://github.com/rulerom/liza/blob/perf-json-arm64/benchmarks/parity/results/apple-m4/report.json),
-[исходники, бинарники, IR, assembly и профили](https://github.com/rulerom/liza/blob/perf-json-arm64/benchmarks/parity/results/apple-m4/evidence.tar.gz),
-[хеши](https://github.com/rulerom/liza/blob/perf-json-arm64/benchmarks/parity/results/apple-m4/manifest.json).
+[Инструкция и harness](https://github.com/rulerom/liza/tree/352f669657efb5ed6daf345938bec647a15decd2/benchmarks/parity),
+[отчёт и сырые samples](https://github.com/rulerom/liza/blob/352f669657efb5ed6daf345938bec647a15decd2/benchmarks/parity/results/apple-m4/report.json),
+[исходники, бинарники, IR, assembly и профили](https://github.com/rulerom/liza/blob/352f669657efb5ed6daf345938bec647a15decd2/benchmarks/parity/results/apple-m4/evidence.tar.gz),
+[хеши](https://github.com/rulerom/liza/blob/352f669657efb5ed6daf345938bec647a15decd2/benchmarks/parity/results/apple-m4/manifest.json).
 Это свидетельства воспроизводимого измерения, не новые сертификаты Verified.

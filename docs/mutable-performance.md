@@ -34,9 +34,9 @@ bulk-copy составляют: A0 ~721, A3 ~256, M0 0 байтов на вхо�
 Данные включают 360 сырых core samples, версии инструментов, целевую архитектуру,
 хеши корпуса и артефактов. CLI throughput здесь не измеряется.
 
-[Полный отчёт](https://github.com/rulerom/liza/blob/mutable-borrow-implementation/benchmarks/mutable/results/apple-m4/report.json),
-[IR, assembly и frame](https://github.com/rulerom/liza/blob/mutable-borrow-implementation/benchmarks/mutable/results/apple-m4/evidence.tar.gz),
-[манифест](https://github.com/rulerom/liza/blob/mutable-borrow-implementation/benchmarks/mutable/results/apple-m4/manifest.json).
+[Полный отчёт](https://github.com/rulerom/liza/blob/05dd227527c6787c82a2c6e343653eb6b5998d2b/benchmarks/mutable/results/apple-m4/report.json),
+[IR, assembly и frame](https://github.com/rulerom/liza/blob/05dd227527c6787c82a2c6e343653eb6b5998d2b/benchmarks/mutable/results/apple-m4/evidence.tar.gz),
+[манифест](https://github.com/rulerom/liza/blob/05dd227527c6787c82a2c6e343653eb6b5998d2b/benchmarks/mutable/results/apple-m4/manifest.json).
 
 Воспроизведение: `benchmarks/mutable/run.py --candidate <commit> --output <new-dir>`.
 Без измерений скорости используется `--check-only`. Исходный baseline и его
