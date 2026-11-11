@@ -1,0 +1,74 @@
+import rtp.packet
+import rtp.receivers
+import config
+
+fn producer()->u32:io {
+    match groups.send(42) {
+        GroupPublication.Published=>{return 0}
+        GroupPublication.PublishedFault=>{return 1}
+        GroupPublication.NotPublished=>{return 2}
+    }
+}
+fn consumer()->u32:io,alloc {
+    var table=rtp.receivers.empty()
+    configured=config.setup(borrow mut table)
+    match groups.udp_bind(net.ipv4(127,0,0,1,0)) {Err(e)=>{return 2147483649} Ok(v)=>{}}
+    var accepted:u32=0
+    var status:u32=0
+    var stopping=false
+    match memory.create(4096) {Err(e)=>{return 2147483650} Ok(region)=>{
+        match memory.alloc<u8>(region,2048,0) {Err(e)=>{status=3} Ok(input)=>{
+            var buffer=move input
+            while status==0 && !stopping {
+                match groups.next() {Err(e)=>{status=4} Ok(event)=>{match event {
+                    GroupEvent.Command(v)=>{if v!=42 {status=5}}
+                    GroupEvent.Closed=>{}
+                    GroupEvent.Stopping=>{stopping=true}
+                    GroupEvent.NotificationFault=>{status=6}
+                    GroupEvent.Network(n)=>{
+                        (next,received)=groups.udp_receive(move buffer)
+                        buffer=move next
+                        match received {
+                            Err(e)=>{match e {
+                                UdpError.WouldBlock=>{}
+                                UdpError.Interrupted=>{}
+                                UdpError.Truncated=>{}
+                                UdpError.AddressInUse=>{status=7}
+                                UdpError.PermissionDenied=>{status=7}
+                                UdpError.Disconnected=>{status=7}
+                                UdpError.InvalidRange=>{status=7}
+                                UdpError.Other=>{status=7}
+                            }}
+                            Ok(meta)=>{
+                                data=memory.view(buffer)
+                                packet=view data[0..net.udp_length(meta)]
+                                match rtp.packet.parse(packet) {Err(e)=>{} Ok(header)=>{
+                                    if header.ssrc==270544960 {
+                                        accepted=accepted+1
+                                        var i:u32=0
+                                        while i<64 {
+                                            match rtp.receivers.destination(table,i) {None=>{} Some(endpoint)=>{
+                                                sent=groups.udp_send(packet,0,net.udp_length(meta),net.ipv4(127,0,0,1,endpoint.port))
+                                            }}
+                                            i=i+1
+                                        }
+                                    }
+                                }}
+                            }
+                        }
+                    }
+                }}}
+            }
+            released=memory.release(move buffer)
+        }}
+        closed=memory.close(move region)
+    }}
+    if status!=0 {return 2147483648+status}
+    return accepted
+}
+fn main()->u32:io,alloc {
+    match groups.run(GroupConfig(65536,65536,1048576,1048576,65536,2,2,5000,2000)) {
+        Err(e)=>{return 1}
+        Ok(r)=>{if r.producer!=0 || r.consumer>=2147483648 {return 2} return 0}
+    }
+}

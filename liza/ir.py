@@ -754,18 +754,23 @@ def lower(functions, dependency_audit=None):
             if fn is None or fn.generic_params or fn.params or fn.result_type != 'u32':
                 raise CompileError(signatures['main'].name, 'channels.run requires fn producer()->u32 and fn consumer()->u32 in the entry module')
     group_entries = None
+    group_pair_entries = None
     group_externals = {f.name.text for f in externals if f.name.text.startswith(('__liza_group_', 'groups.'))}
     if group_externals:
-        if '__liza_group_run' not in group_externals:
+        if not group_externals & {'__liza_group_run', '__liza_group_run_pair'}:
             raise CompileError(signatures['main'].name, 'group operations require groups.run in the program')
         if channel_entries or worker_symbol:
             raise CompileError(signatures['main'].name, 'SG3 cannot mix groups.run with channels.run or workers.run')
         prefix = signatures['main'].module
-        group_entries = tuple((prefix + '.' if prefix else '') + n for n in ('producer','consumer'))
-        for name in group_entries:
+        ordinary = ('producer','consumer') if '__liza_group_run' in group_externals else ()
+        paired = ('producer_a','consumer_a','producer_b','consumer_b') if '__liza_group_run_pair' in group_externals else ()
+        qualify = lambda n: (prefix + '.' if prefix else '') + n
+        group_entries = tuple(map(qualify, ordinary))
+        group_pair_entries = tuple(map(qualify, paired))
+        for name in group_entries + group_pair_entries:
             fn = signatures.get(name)
             if fn is None or fn.generic_params or fn.params or fn.result_type != 'u32':
-                raise CompileError(signatures['main'].name, 'groups.run requires fn producer()->u32 and fn consumer()->u32 in the entry module')
+                raise CompileError(signatures['main'].name, 'groups.run requires fn producer()->u32 and fn consumer()->u32; groups.run_pair requires producer_a/consumer_a/producer_b/consumer_b, each ()->u32 in the entry module')
     lowered = []
     dependency_records = {}
     expression_maps = {}
@@ -865,20 +870,20 @@ def lower(functions, dependency_audit=None):
                 for op in block.operations:
                     if op.op == 'call': pending.append(op.callee)
     group_roles = {}
-    if group_entries:
+    if group_entries or group_pair_entries:
         by_name = {fn.name: fn for fn in lowered}
         common = {'groups.stop', 'groups.stopping', 'groups.busy', '__liza_reactor_clock'}
         allowed_by_role = {
             'producer': common | {'__liza_group_send'},
-            'consumer': common | (group_externals - {'__liza_group_send', '__liza_group_run'}),
+            'consumer': common | (group_externals - {'__liza_group_send', '__liza_group_run', '__liza_group_run_pair'}),
         }
         # Entry functions are native callbacks, never ordinary callable helpers.
         for fn in lowered:
             for block in fn.blocks:
                 for op in block.operations:
-                    if op.op == 'call' and op.callee in group_entries:
+                    if op.op == 'call' and op.callee in group_entries + group_pair_entries:
                         raise CompileError(signatures[fn.name].name, 'group callback cannot be called directly: '+op.callee)
-        for entry, role in [*zip(group_entries, ('producer','consumer')), ('main','owner')]:
+        for entry, role in [*zip(group_entries + group_pair_entries, ('producer','consumer') * ((len(group_entries)+len(group_pair_entries))//2)), ('main','owner')]:
             pending, seen = [entry], set()
             while pending:
                 name = pending.pop()
@@ -887,12 +892,13 @@ def lower(functions, dependency_audit=None):
                 fn = by_name.get(name)
                 if fn is None:
                     if role == 'owner':
-                        if name in group_externals - {'__liza_group_run'}:
+                        if name in group_externals - {'__liza_group_run', '__liza_group_run_pair'}:
                             raise CompileError(signatures[entry].name, 'group operation outside its assigned role: '+name)
                     elif name not in allowed_by_role[role]:
                         raise CompileError(signatures[entry].name, 'group role cannot call unaudited external '+name)
                     continue
-                group_roles.setdefault(name, []).append(role)
+                roles = group_roles.setdefault(name, [])
+                if role not in roles: roles.append(role)
                 for block in fn.blocks:
                     for op in block.operations:
                         if op.op == 'call': pending.append(op.callee)
@@ -906,10 +912,12 @@ def lower(functions, dependency_audit=None):
     module.worker_symbol = worker_symbol
     module.channel_entries = channel_entries
     module.group_entries = group_entries
+    module.group_pair_entries = group_pair_entries
     module.group_contract = ({'version': 1, 'entries': group_entries, 'reachable_roles': group_roles,
         'reactor_owner': 'consumer', 'notification_owner': 'runtime',
         'return_requires': 'all_native_joins_and_handback', 'escalation': 'process_abort_no_result',
-        'shutdown_publication': 'deadline_before_shutdown'} if group_entries else None)
+        'shutdown_publication': 'deadline_before_shutdown', 'max_active_groups': 2,
+        'pair_entries': group_pair_entries} if group_entries or group_pair_entries else None)
     module.modules = getattr(functions,"module_names",[])
     module.declarations = getattr(functions,"declarations",[])
     annotate_traps(module)

@@ -136,10 +136,10 @@ Cost 400 — более простой кандидат, чем Guided, но е�
 Для большего inlining потребуется ограничение дублирования кода по callsites;
 глобальное увеличение порога эту задачу не решает.
 
-[Воспроизведение](https://github.com/rulerom/liza/tree/perf-inline-policy/benchmarks/inlining),
-[полный отчёт](https://github.com/rulerom/liza/blob/perf-inline-policy/benchmarks/inlining/results/apple-m4/report.json),
-[артефакты](https://github.com/rulerom/liza/blob/perf-inline-policy/benchmarks/inlining/results/apple-m4/evidence.tar.gz),
-[хеши](https://github.com/rulerom/liza/blob/perf-inline-policy/benchmarks/inlining/results/apple-m4/manifest.json).
+[Воспроизведение](https://github.com/rulerom/liza/tree/fc75e5d9a2960569262503d1d8f8824056e8ae0b/benchmarks/inlining),
+[полный отчёт](https://github.com/rulerom/liza/blob/fc75e5d9a2960569262503d1d8f8824056e8ae0b/benchmarks/inlining/results/apple-m4/report.json),
+[артефакты](https://github.com/rulerom/liza/blob/fc75e5d9a2960569262503d1d8f8824056e8ae0b/benchmarks/inlining/results/apple-m4/evidence.tar.gz),
+[хеши](https://github.com/rulerom/liza/blob/fc75e5d9a2960569262503d1d8f8824056e8ae0b/benchmarks/inlining/results/apple-m4/manifest.json).
 Источники JSON/compiler закреплены на `899855a`; база исследования — `9f159fd`.
 Harness проверяет отсутствие изменений compiler/examples между этими версиями.
 Исходные отчёты P0/M0 не переписаны; новые гарантии Verified не объявляются.

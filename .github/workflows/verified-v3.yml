@@ -74,9 +74,8 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: |
           brew update
-          brew install llvm@23 z3 re2c cmake ninja
-          brew upgrade llvm@23 z3
-      - name: Restore locked Z3 bottle
+          brew install llvm z3 re2c cmake ninja
+      - name: Restore locked proof toolchain bottles
         env:
           # Local formula loading is opt-in; the archive SHA-256 is checked first.
           HOMEBREW_DEVELOPER: '1'
@@ -84,22 +83,26 @@ jobs:
           HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
           HOMEBREW_NO_INSTALL_CLEANUP: '1'
         run: |
-          bottle="$(python -m verification.v3.fetch_bottle --package z3 --directory "$RUNNER_TEMP/proof-bottles")"
-          brew reinstall "$bottle"
+          # Formula names and prefixes are part of the audited environment:
+          # llvm@23 is not interchangeable with the locked llvm bottle.
+          for package in llvm z3 zstd; do
+            bottle="$(python -m verification.v3.fetch_bottle --package "$package" --directory "$RUNNER_TEMP/proof-bottles")"
+            brew reinstall "$bottle"
+          done
       - name: Reject toolchain drift before building Alive2
         run: |
           python verification/v3/toolchain.py \
-            --llvm-prefix "$(brew --prefix llvm@23)" \
+            --llvm-prefix "$(brew --prefix llvm)" \
             --z3-prefix "$(brew --prefix z3)" \
             --zstd-prefix "$(brew --prefix zstd)"
       - name: Build pinned unmodified Alive2
         run: |
           git clone https://github.com/AliveToolkit/alive2 "$RUNNER_TEMP/alive2"
           git -C "$RUNNER_TEMP/alive2" checkout --detach a68009c9e81575bdcc249d3cc534514a76112221
-          ALIVE_SOURCE="$RUNNER_TEMP/alive2" LLVM_PREFIX="$(brew --prefix llvm@23)" Z3_PREFIX="$(brew --prefix z3)" sh verification/v3/build.sh
+          ALIVE_SOURCE="$RUNNER_TEMP/alive2" LLVM_PREFIX="$(brew --prefix llvm)" Z3_PREFIX="$(brew --prefix z3)" sh verification/v3/build.sh
       - name: Calibrate and validate every recorded pair
         run: |
-          llvm_prefix="$(brew --prefix llvm@23)"
+          llvm_prefix="$(brew --prefix llvm)"
           python verification/v3/check.py \
             --alive-tv "$RUNNER_TEMP/alive2/build/alive-tv" \
             --alive-source "$RUNNER_TEMP/alive2" \

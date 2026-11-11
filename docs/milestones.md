@@ -6,7 +6,8 @@ description: "Milestones Liza: от первого вычислительног�
 
 **Состояние реализации:** нативные сетевые приложения, эксплуатационный срез
 TCP Proxy Operations, ресурсные структуры, `borrow` / `borrow mut`, локальные
-subviews, владеющий UTF-8 String, StringBuilder и потоковые JSON check/format.
+subviews, владеющий UTF-8 String, StringBuilder и потоковые JSON check/format,
+а также native workers и scoped-сеть с одним или двумя независимыми owners.
 Следующий основной рубеж — воспроизводимый [Verified Network Gateway](network-gateway.md).
 
 Номера 0.0.x ниже обозначают исторические этапы, а не единую версию всех
@@ -68,6 +69,10 @@ Milestone означает работающую возможность с опр
 | **T3 · Текстовый вывод** | [StringBuilder](string-builder.md), целые числа, [JSON check/format](json.md) | Ограниченная память; format сохраняет лексемы и может вывести префикс до ошибки |
 | **A3 · Lowering агрегатов** | [Специализация преобразований значений](aggregate-lowering.md) | Независимость снимков и обязательные traps сохраняются; это не mutable-семантика |
 | **P3-P · Field forwarding** | [Передача LLVM факта неизменности поля](field-forwarding.md) в штатном backend | Ограниченные ациклические pure-функции; независимая проверка выбранных случаев |
+| **Native workers** | [`workers.run(1..8)`](scoped-workers.md), scalar вход/результат, локальные ресурсы | Start gate, partial-start rollback и joins; не динамический compute pool |
+| **SG2/SG3** | [Scoped-группы](scoped-groups.md), команды и единое ожидание TCP/control | Результат после native joins/handback; fail-stop граница |
+| **SG4-A** | [UDP endpoint](sg4-a1-udp.md), [Liza/C RTP workload](sg4-a2-rtp-fanout.md), [collector audit](sg4-a2-collector.md) | Сохранённые измерения и явные ограничения стенда |
+| **SG4-B1/B2** | [Две группы](sg4-b1-multiple-groups.md) и [dual RTP workload](sg4-b2-dual-owners.md) | Изоляция ресурсов/завершения; эффект CPU и UDP queues не разделён |
 
 Эксперименты Verified V0–V4 и Relay проверяют выбранные модели и фрагменты IR.
 Они не доказывают корректность всех новых механизмов языка, сетевого runtime

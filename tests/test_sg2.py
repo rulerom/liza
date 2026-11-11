@@ -18,7 +18,7 @@ class SG2(unittest.TestCase):
                  str(ROOT/f'liza/runtime/sg2_{platform}.c'),str(ROOT/f'liza/runtime/net_{platform}.c'),
                  str(ROOT/'liza/runtime/scoped_channel_core.c'),'-o',str(exe)]
             cmd+=['-lws2_32'] if sys.platform=='win32' else ['-pthread']
-            build=subprocess.run(cmd,capture_output=True,text=True,timeout=30)
+            build=subprocess.run(cmd,capture_output=True,text=True,timeout=120)
             self.assertEqual(build.returncode,0,build.stdout+build.stderr)
             def run(*args,code=0):
                 r=subprocess.run([str(exe),*args],capture_output=True,text=True,timeout=20)
@@ -42,7 +42,7 @@ class SG2(unittest.TestCase):
                 ('SG2_BREAK_RECEIPT_ORDER','normal',2,'oracle_joins'),
                 ('SG2_BREAK_ROLLBACK','normal',2,'group_managed_bytes_live'),
             ):
-                mutated=subprocess.run(cmd+['-D'+macro],capture_output=True,text=True,timeout=30)
+                mutated=subprocess.run(cmd+['-D'+macro],capture_output=True,text=True,timeout=120)
                 self.assertEqual(mutated.returncode,0,mutated.stderr)
                 r=subprocess.run([str(exe),case],capture_output=True,text=True,timeout=10)
                 self.assertEqual(r.returncode,code,r.stdout+r.stderr)

@@ -1,5 +1,10 @@
 # SG2: внутренний runtime runner
 
+**Описание исходного SG2-среза.** Его single-active-group restriction снято
+в [B1](sg4-b1-multiple-groups.md), языковой интерфейс реализован в SG3.
+Текущий пользовательский вход — [scoped-группы](scoped-groups.md).
+Ниже сохранены исходная композиция и приёмка первого runner.
+
 Первый внутренний C-runner реализует ограниченную композицию из
 [контракта SG2](sg2-scoped-runtime-ownership.md). Код находится в
 `liza/runtime/sg2.h`, `sg2_common.h` и платформенных translation units.

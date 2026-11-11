@@ -1,0 +1,62 @@
+// B1: two independent groups, four statically assigned callback roots.
+fn producer_a()->u32:io {
+    match groups.send(42) {GroupPublication.Published=>{} GroupPublication.PublishedFault=>{return 90} GroupPublication.NotPublished=>{return 91}}
+    return 17
+}
+fn producer_b()->u32:io {
+    match groups.send(42) {GroupPublication.Published=>{} GroupPublication.PublishedFault=>{return 92} GroupPublication.NotPublished=>{return 93}}
+    return 18
+}
+fn exchange(result_code:u32)->u32:io,alloc {
+    match groups.udp_bind(net.ipv4(127,0,0,1,0)) {Err(e)=>{return 1} Ok(v)=>{}}
+    var port:u16=0
+    match groups.udp_port() {Err(e)=>{return 2} Ok(v)=>{port=v}}
+    match groups.udp_bind(net.ipv4(127,0,0,1,0)) {Ok(v)=>{return 3} Err(e)=>{}}
+    match groups.listen(0) {Ok(v)=>{return 4} Err(e)=>{}}
+    var result:u32=0
+    match memory.create(4096) {Err(e)=>{return 5} Ok(region)=>{
+        match memory.alloc<u8>(region,4,7) {Err(e)=>{result=6} Ok(input)=>{
+            var buffer=move input
+            (empty,first)=groups.udp_receive(move buffer)
+            buffer=move empty
+            match first {Ok(meta)=>{result=7} Err(e)=>{match e {UdpError.WouldBlock=>{} UdpError.AddressInUse=>{result=8} UdpError.PermissionDenied=>{result=8} UdpError.Interrupted=>{result=8} UdpError.Disconnected=>{result=8} UdpError.InvalidRange=>{result=8} UdpError.Other=>{result=8} UdpError.Truncated=>{result=8}}}}
+            {
+                data=memory.view(buffer)
+                match groups.udp_send(data,0,4,net.ipv4(127,0,0,1,port)) {Err(e)=>{result=9} Ok(n)=>{if n!=4 {result=10}}}
+            }
+            var command=false
+            var network=false
+            while result==0 && (!command || !network) {
+                match groups.next() {Err(e)=>{result=11} Ok(event)=>{match event {
+                    GroupEvent.Command(v)=>{if v!=42 {result=12} command=true}
+                    GroupEvent.Network(n)=>{
+                        (next,received)=groups.udp_receive(move buffer)
+                        buffer=move next
+                        match received {Err(e)=>{result=13} Ok(meta)=>{
+                            if net.udp_length(meta)!=4 || net.udp_source_port(meta)!=port || net.udp_source_ip(meta)!=2130706433 {result=14}
+                            data=memory.view(buffer)
+                            if data[0]!=7 || data[3]!=7 {result=15}
+                        }}
+                        network=true
+                    }
+                    GroupEvent.Closed=>{}
+                    GroupEvent.Stopping=>{result=16}
+                    GroupEvent.NotificationFault=>{result=17}
+                }}}
+            }
+            released=memory.release(move buffer)
+        }}
+        closed=memory.close(move region)
+    }}
+    if result==0 {return result_code}
+    return 100+result
+}
+fn consumer_a()->u32:io,alloc {return exchange(23)}
+fn consumer_b()->u32:io,alloc {return exchange(24)}
+fn main()->u32:io,alloc {
+    config=GroupConfig(65536,65536,1048576,1048576,65536,2,2,10000,3000)
+    pair=groups.run_pair(config,config)
+    match pair.first {Err(e)=>{return 1} Ok(r)=>{if r.producer!=17 || r.consumer!=23 {return 2}}}
+    match pair.second {Err(e)=>{return 3} Ok(r)=>{if r.producer!=18 || r.consumer!=24 {return 4}}}
+    return 0
+}

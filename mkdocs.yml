@@ -62,10 +62,8 @@ markdown_extensions:
 extra_css:
   - assets/stylesheets/site.css
 
-# Published and searchable, but reached through the research index rather than
-# filling the primary navigation with individual experiment reports.
+# Research reports keep their existing URLs and are linked from topic indexes.
 not_in_nav: |
-  research.md
   scoped-channel-model.md
   json-performance.md
   mutable-audit.md
@@ -76,7 +74,6 @@ not_in_nav: |
   guard-cfg-investigation.md
   field-forwarding.md
   aggregate-lowering.md
-  verification-pipeline.md
   verified.md
   verified-v1.md
   verified-v2.md
@@ -86,12 +83,32 @@ not_in_nav: |
   verified-relay-r2.md
   verified-relay-r2b.md
   verified-relay-r2c.md
+  mt0a-workers.md
+  concurrency-architecture.md
+  channel-reactor-example.md
+  scoped-channels-contract.md
+  scoped-channel-wait-contract.md
+  sg0-lifecycle-contract.md
+  sg1-reactor-worker.md
+  sg2-scoped-runtime-ownership.md
+  sg2-runtime-runner.md
+  sg3-scoped-reactor-group.md
+  sg4-a-udp-baseline.md
+  sg4-a1-udp.md
+  sg4-a2-rtp-fanout.md
+  sg4-a2-latency.md
+  sg4-a2-collector.md
+  sg4-b1-multiple-groups.md
+  sg4-b2-dual-owners.md
+  gateway-reproduction.md
+  network-performance.md
 
 nav:
   - Главная: index.md
   - Начало работы:
       - Быстрый старт: getting-started.md
       - Редактор Zed: editor.md
+      - Карта примеров: reference-programs.md
   - Язык:
       - Основы: basics.md
       - Модель вычислений и памяти: design.md
@@ -104,9 +121,6 @@ nav:
       - Readonly-заимствование: readonly-access.md
       - Mutable-заимствование: mutable-access.md
       - Локальные subviews: local-subviews.md
-      - Экспериментальные workers: scoped-workers.md
-      - Экспериментальный scoped-канал: scoped-channels.md
-      - Многопоточность и сеть: concurrency-architecture.md
       - Эффекты и I/O: io-model.md
   - Библиотеки:
       - UTF-8: utf8.md
@@ -118,31 +132,28 @@ nav:
       - Линейные результаты и Vec: bounded-vec.md
       - Явный рост Vec: vec-reserve.md
       - Таблица соединений: connection-table.md
-  - Приложения и примеры:
-      - Эталонные программы: reference-programs.md
-      - Управление reactor через канал: channel-reactor-example.md
+  - Сеть и потоки:
+      - Выбор модели: networking.md
+      - UDP: udp.md
+      - TCP: tcp.md
+      - Reactor: reactor.md
+      - Scoped-группы: scoped-groups.md
+      - Изолированные workers: scoped-workers.md
+      - Scoped-канал u32: scoped-channels.md
+  - Примеры приложений:
       - Разбор программы Vec: bounded-vec-walkthrough.md
       - CLI-приложение liza-text: cli.md
       - Запись файлов и liza-copy: file-output.md
-      - UDP: udp.md
-      - TCP echo server: tcp.md
       - TCP message server: message-server.md
-      - TCP reactor: reactor.md
       - Message Router: message-router.md
       - L4 TCP Proxy: tcp-proxy.md
       - TCP Proxy Operations: tcp-proxy-operations.md
-  - Бенчмарки: network-performance.md
+  - Исследования:
+      - Каталог и границы выводов: research.md
+      - Измерения производительности: benchmarks.md
+      - Verification pipeline: verification-pipeline.md
+      - История архитектурных этапов: architecture-history.md
   - Проект:
-      - Verified Network Gateway: network-gateway.md
-      - "MT0-A: изолированные workers": mt0a-workers.md
-      - "Scoped channels: контракт": scoped-channels-contract.md
-      - "Ожидание канала: контракт": scoped-channel-wait-contract.md
-      - "SG0: supervisor и shutdown": sg0-lifecycle-contract.md
-      - "SG1: reactor worker": sg1-reactor-worker.md
-      - "SG2: scoped ownership": sg2-scoped-runtime-ownership.md
-      - "SG2: runtime runner": sg2-runtime-runner.md
-      - "SG3: Liza scoped Reactor group": sg3-scoped-reactor-group.md
-      - "SG4-A: UDP workload audit": sg4-a-udp-baseline.md
-      - Gateway R0 reproduction: gateway-reproduction.md
       - План разработки: roadmap.md
-      - Milestones: milestones.md
+      - Достигнутые рубежи: milestones.md
+      - Цель Verified Network Gateway: network-gateway.md

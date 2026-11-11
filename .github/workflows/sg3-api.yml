@@ -1,10 +1,10 @@
 name: SG3 Liza scoped reactor group
 on:
   pull_request:
-    paths: ['tests/test_sg3.py', 'tests/fixtures/sg3_faults.c', 'examples/workers/reactor_group.liza', 'liza/**', '.github/workflows/sg3-api.yml']
+    paths: ['tests/test_sg3.py', 'tests/test_sg4_groups.py', 'tests/native/sg4_groups.c', 'examples/workers/udp_groups.liza', 'tests/test_sg4_udp.py', 'tests/fixtures/sg4_udp.c', 'examples/workers/udp_group.liza', 'tests/fixtures/sg3_faults.c', 'examples/workers/reactor_group.liza', 'liza/**', '.github/workflows/sg3-api.yml']
   push:
     branches: [main]
-    paths: ['tests/test_sg3.py', 'tests/fixtures/sg3_faults.c', 'examples/workers/reactor_group.liza', 'liza/**', '.github/workflows/sg3-api.yml']
+    paths: ['tests/test_sg3.py', 'tests/test_sg4_groups.py', 'tests/native/sg4_groups.c', 'examples/workers/udp_groups.liza', 'tests/test_sg4_udp.py', 'tests/fixtures/sg4_udp.c', 'examples/workers/udp_group.liza', 'tests/fixtures/sg3_faults.c', 'examples/workers/reactor_group.liza', 'liza/**', '.github/workflows/sg3-api.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,3 +25,5 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -s tests -p test_sg3.py -v
+      - run: python -m unittest discover -s tests -p test_sg4_udp.py -v
+      - run: python -m unittest discover -s tests -p test_sg4_groups.py -v

@@ -62,3 +62,36 @@ fn groups.stop_accepting()->Result<u32,ReactorError>:io {return __liza_reactor_s
 fn groups.write(id:net.Connection,data:View<u8>,start:u32,count:u32)->Result<u32,ReactorError>:io {
     return __liza_reactor_status(__liza_group_write(id,data,start,count))
 }
+
+// One consumer-owned nonblocking IPv4 UDP endpoint; mutually exclusive with listen.
+fn groups.udp_bind(address:net.Address)->Result<u32,ReactorError>:io,alloc {
+    code=__liza_group_udp_bind(net.ipv4_bits(address),address.port)
+    if code==0 {return Ok(0)}
+    return Err(__liza_reactor_error(code))
+}
+fn groups.udp_port()->Result<u16,UdpError>:io {
+    raw=__liza_group_udp_port()
+    if raw>>32==0 {return Ok(u16(raw))}
+    return Err(__liza_udp_error(u32(raw>>32)))
+}
+fn groups.udp_send(data:View<u8>,start:u32,count:u32,address:net.Address)->Result<u32,UdpError>:io {
+    raw=__liza_group_udp_send(data,start,count,net.ipv4_bits(address),address.port)
+    if raw>>32==0 {return Ok(u32(raw))}
+    return Err(__liza_udp_error(u32(raw>>32)))
+}
+
+// Two independent groups with statically named producer_a/consumer_a and producer_b/consumer_b.
+struct GroupPairRun { first:Result<GroupRun,GroupError>; second:Result<GroupRun,GroupError> }
+struct __liza_GroupPairRaw { ap:u32; ac:u32; af:u32; ax:u32; ae:u32; bp:u32; bc:u32; bf:u32; bx:u32; be:u32 }
+fn __liza_group_outcome(p:u32,c:u32,f:u32,x:u32,e:u32)->Result<GroupRun,GroupError>:pure {
+    result=GroupRun(p,c,f,x)
+    if e==0 {return Ok(result)}
+    if e==1 {return Err(GroupError.Busy)}
+    if e==2 {return Err(GroupError.InvalidConfig)}
+    if e==3 {return Err(GroupError.StartupFailed)}
+    return Err(GroupError.Faulted(result))
+}
+fn groups.run_pair(a:GroupConfig,b:GroupConfig)->GroupPairRun:io,alloc {
+    raw=__liza_group_run_pair(a.managed_budget,a.process_budget,a.stack_bytes,a.service_stack_bytes,a.reactor_budget,a.reactor_capacity,a.slots,a.operation_ms,a.shutdown_ms,b.managed_budget,b.process_budget,b.stack_bytes,b.service_stack_bytes,b.reactor_budget,b.reactor_capacity,b.slots,b.operation_ms,b.shutdown_ms)
+    return GroupPairRun(__liza_group_outcome(raw.ap,raw.ac,raw.af,raw.ax,raw.ae),__liza_group_outcome(raw.bp,raw.bc,raw.bf,raw.bx,raw.be))
+}

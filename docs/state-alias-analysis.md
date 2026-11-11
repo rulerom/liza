@@ -152,8 +152,8 @@ macOS-приёмку. Новые оптимизации в production не вк�
 устранения guards на основании инвариантов. Следующие изменения должны иметь
 отдельный контракт и проверяемый эффект, без ослабления traps или приоритета Gateway.
 
-[Воспроизведение](https://github.com/rulerom/liza/tree/perf-state-alias/benchmarks/state),
-[отчёт](https://github.com/rulerom/liza/blob/perf-state-alias/benchmarks/state/results/apple-m4-llvm23/report.json),
-[исходники, IR, assembly, binaries и журналы](https://github.com/rulerom/liza/blob/perf-state-alias/benchmarks/state/results/apple-m4-llvm23/evidence.tar.gz),
-[хеши](https://github.com/rulerom/liza/blob/perf-state-alias/benchmarks/state/results/apple-m4-llvm23/manifest.json).
+[Воспроизведение](https://github.com/rulerom/liza/tree/1ed81f2efc639dc700231ab973d7be13e84e4d4b/benchmarks/state),
+[отчёт](https://github.com/rulerom/liza/blob/1ed81f2efc639dc700231ab973d7be13e84e4d4b/benchmarks/state/results/apple-m4-llvm23/report.json),
+[исходники, IR, assembly, binaries и журналы](https://github.com/rulerom/liza/blob/1ed81f2efc639dc700231ab973d7be13e84e4d4b/benchmarks/state/results/apple-m4-llvm23/evidence.tar.gz),
+[хеши](https://github.com/rulerom/liza/blob/1ed81f2efc639dc700231ab973d7be13e84e4d4b/benchmarks/state/results/apple-m4-llvm23/manifest.json).
 Compiler/stdlib snapshot — `899855a`; исторические отчёты P0/P1 не изменены.

@@ -105,6 +105,6 @@ PYTHONPATH=. python benchmarks/guards/accept_production.py \
 Эта проверка Mach-O выполняется на macOS с тем же Clang/target, что P3. LLVM major
 version сама по себе не гарантирует совпадения кода при другой patch-версии.
 
-[Локальная приёмка и хеши](https://github.com/rulerom/liza/tree/field-forwarding/benchmarks/guards/results/production-macos).
+[Локальная приёмка и хеши](https://github.com/rulerom/liza/tree/90c9c2f0eab565397db00ceb4a89cf27116c5bc2/benchmarks/guards/results/production-macos).
 R0/VN0 для Network Gateway сохраняют стратегический приоритет; интеграция не добавляет
 новые возможности borrowing, циклический анализ или общую range analysis.

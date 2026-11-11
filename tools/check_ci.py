@@ -39,8 +39,11 @@ def selected(workflows, paths, event='pull_request', branch='feature/example'):
 # These expectations are independent of the actual YAML filter lists.
 COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline',
             'verified-relay-r1', 'verified-relay-r2b', 'verified-relay-r2c',
-            'aggregate-lowering', 'mutable-borrow', 'sg3-api'}
+            'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload'}
 CASES = [
+    (['benchmarks/sg4-fanout/adapter.c'], {'sg4-workload'}),
+    (['benchmarks/sg4-dual/adapter.c'], {'sg4-workload'}),
+    (['examples/apps/rtp/packet.liza'], {'test', 'docs', 'editor', 'sg4-workload'}),
     (['docs/basics.md'], {'docs'}),
     (['experiments/scoped_channel/channel.c'], {'scoped-channel-probe'}),
     (['experiments/reactor_wakeup/probe.c'], {'reactor-wakeup-probe', 'notification-refinement', 'sg0-probe', 'sg1-probe', 'reactor-sources', 'sg2-runtime'}),
@@ -62,6 +65,12 @@ CASES = [
     (['tests/test_proxy_lifecycle.py'], {'test'}),
     (['tests/test_sg2.py'], {'test', 'sg2-runtime'}),
     (['tests/test_sg3.py'], {'test', 'sg3-api'}),
+    (['tests/test_sg4_groups.py'], {'test', 'sg3-api'}),
+    (['tests/native/sg4_groups.c'], {'test', 'sg3-api'}),
+    (['examples/workers/udp_groups.liza'], {'test', 'docs', 'editor', 'sg3-api'}),
+    (['tests/test_sg4_udp.py'], {'test', 'sg3-api'}),
+    (['tests/fixtures/sg4_udp.c'], {'test', 'editor', 'sg3-api'}),
+    (['examples/workers/udp_group.liza'], {'test', 'docs', 'editor', 'sg3-api'}),
     (['tests/fixtures/sg3_faults.c'], {'test', 'editor', 'sg3-api'}),
     (['examples/workers/reactor_group.liza'], {'test', 'docs', 'editor', 'sg3-api'}),
     (['tests/native/sg2_runner.c'], {'test', 'sg2-runtime'}),

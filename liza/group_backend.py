@@ -20,8 +20,24 @@ def external(fn, lines, types, module):
             lines.append(f'  %r{i} = insertvalue {raw} {base}, i32 %v{i}, {i}')
         lines.extend([f'  %r4 = insertvalue {raw} %r3, i32 %code, 4', f'  ret {raw} %r4', '}'])
         return True
+    if name == '__liza_group_run_pair':
+        raw = types['__liza_GroupPairRaw']
+        abi = (['i64']*5+['i32']*4)*2
+        params = [f'{t} %p{i}' for i,t in enumerate(abi)]
+        lines.extend([f'declare void @liza_rt_group_run_pair({", ".join(abi+["ptr"]*5)})',
+                      f'define internal {raw} @liza_{name}({", ".join(params)}) {{',
+                      '  %out = alloca [10 x i32]'])
+        args = params + [f'ptr @liza_{n}' for n in module.group_pair_entries] + ['ptr %out']
+        lines.append(f'  call void @liza_rt_group_run_pair({", ".join(args)})')
+        for i in range(10):
+            lines.extend([f'  %o{i} = getelementptr [10 x i32], ptr %out, i32 0, i32 {i}',
+                          f'  %v{i} = load i32, ptr %o{i}'])
+            base = 'zeroinitializer' if i == 0 else f'%r{i-1}'
+            lines.append(f'  %r{i} = insertvalue {raw} {base}, i32 %v{i}, {i}')
+        lines.extend([f'  ret {raw} %r9', '}'])
+        return True
     operation = name.removeprefix('__liza_group_').removeprefix('groups.')
-    if operation in ('send','listen','next','stop','stopping','busy'):
+    if operation in ('send','listen','next','stop','stopping','busy','udp_bind','udp_port'):
         params=[f'{types[t]} %p{i}' for i,(_,t) in enumerate(fn.params)]
         abi=[types[t] for _,t in fn.params]
         ret=types[fn.result_type]
@@ -30,6 +46,9 @@ def external(fn, lines, types, module):
                       f'  %result = call {ret} @liza_rt_group_{operation}({", ".join(params)})',
                       f'  ret {ret} %result', '}'])
         return True
+    if operation in ('udp_receive','udp_send'):
+        from .net_backend import external as net_external
+        return net_external(fn, lines, types)
     from .reactor_backend import external as reactor_external
     generated=[]
     reactor_external(fn, generated, types)
