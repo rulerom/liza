@@ -1,0 +1,63 @@
+// RFC 6455 accept proof only. SHA-1 here is not an authentication API.
+fn alphabet(n:u32)->u8 {
+    if n<26 {return u8(n+65)}
+    if n<52 {return u8(n-26+97)}
+    if n<62 {return u8(n-52+48)}
+    if n==62 {return 43};return 47
+}
+fn base64(data:View<u8>)->[u8;28] {
+    var out:[u8;28]=[61;28]
+    var i:u32=0;var pos:u32=0
+    while i<data.len && i<20 {
+        a=u32(data[i]);var b:u32=0;var c:u32=0
+        if i+1<data.len {b=u32(data[i+1])}
+        if i+2<data.len {c=u32(data[i+2])}
+        out[pos]=alphabet(a>>2)
+        out[pos+1]=alphabet(((a&3)<<4)|(b>>4))
+        if i+1<data.len {out[pos+2]=alphabet(((b&15)<<2)|(c>>6))}
+        if i+2<data.len {out[pos+3]=alphabet(c&63)}
+        i=i+3;pos=pos+4
+    }
+    return out
+}
+fn rol(x:u32,n:u32)->u32 {return (x<<n)|(x>>(32-n))}
+pub fn accept(key:[u8;24])->[u8;28] {
+    guid:[u8;36]=[50,53,56,69,65,70,65,53,45,69,57,49,52,45,52,55,68,65,45,57,53,67,65,45,67,53,65,66,48,68,67,56,53,66,49,49]
+    var input:[u8;128]=[0;128]
+    var i:u32=0
+    while i<24 {input[i]=key[i];i=i+1}
+    i=0;while i<36 {input[24+i]=guid[i];i=i+1}
+    input[60]=128;input[126]=1;input[127]=224
+    var h:[u32;5]=[1732584193,4023233417,2562383102,271733878,3285377520]
+    var block:u32=0
+    while block<2 {
+        var w:[u32;80]=[0;80]
+        i=0
+        while i<16 {
+            p=block*64+i*4
+            w[i]=(u32(input[p])<<24)|(u32(input[p+1])<<16)|(u32(input[p+2])<<8)|u32(input[p+3]);i=i+1
+        }
+        while i<80 {w[i]=rol(w[i-3]^w[i-8]^w[i-14]^w[i-16],1);i=i+1}
+        var a=h[0];var b=h[1];var c=h[2];var d=h[3];var e=h[4]
+        i=0
+        while i<80 {
+            var f:u32=0;var k:u32=0
+            if i<20 {f=(b&c)|((b^4294967295)&d);k=1518500249}
+            else if i<40 {f=b^c^d;k=1859775393}
+            else if i<60 {f=(b&c)|(b&d)|(c&d);k=2400959708}
+            else {f=b^c^d;k=3395469782}
+            temp=rol(a,5) +% f +% e +% k +% w[i]
+            e=d;d=c;c=rol(b,30);b=a;a=temp;i=i+1
+        }
+        h[0]=h[0] +% a;h[1]=h[1] +% b;h[2]=h[2] +% c;h[3]=h[3] +% d;h[4]=h[4] +% e
+        block=block+1
+    }
+    var digest:[u8;20]=[0;20];i=0
+    while i<20 {digest[i]=u8.wrap(h[i/4]>>(24-(i%4)*8));i=i+1}
+    return base64(view digest[0..20])
+}
+
+pub fn key(nonce:[u8;16])->[u8;24] {
+    encoded=base64(view nonce[0..16]);var out:[u8;24]=[0;24];var i:u32=0
+    while i<24 {out[i]=encoded[i];i=i+1};return out
+}

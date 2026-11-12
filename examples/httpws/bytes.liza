@@ -1,0 +1,24 @@
+// Fixed caller-owned wire storage; no allocation inside protocol functions.
+pub struct Wire {pub data:[u8;8192];pub len:u32}
+pub fn empty()->Wire {return Wire([0;8192],0)}
+pub fn put(borrow mut out:Wire,byte:u8)->bool {
+    if out.len==8192 {return false}
+    out.data[out.len]=byte;out.len=out.len+1;return true
+}
+pub fn append(borrow mut out:Wire,data:View<u8>)->bool {
+    if data.len>8192-out.len {return false}
+    var i:u32=0
+    while i<data.len {out.data[out.len+i]=data[i];i=i+1}
+    out.len=out.len+data.len;return true
+}
+pub fn lower(b:u8)->u8 {if b>=65 && b<=90 {return b+32};return b}
+pub fn equal(data:View<u8>,start:u32,end:u32,word:View<u8>,fold:bool)->bool {
+    if start>end || end>data.len || end-start!=word.len {return false}
+    var i:u32=0
+    while i<word.len {
+        var a=data[start+i];var b=word[i]
+        if fold {a=lower(a);b=lower(b)}
+        if a!=b {return false};i=i+1
+    }
+    return true
+}

@@ -8,7 +8,11 @@ def external(fn, lines, types):
     handle = '' if group else 'i64 %handle, '
     handle_abi = '' if group else 'i64, '
     udp_prefix = 'liza_rt_group_' if group else 'liza_rt_net_'
-    if name in ('net.udp_receive','groups.udp_receive'):
+    if name == '__liza_net_random':
+        lines.extend(['declare i64 @liza_rt_net_random()',
+            'define internal i64 @liza___liza_net_random() {',
+            '  %r = call i64 @liza_rt_net_random()', '  ret i64 %r', '}'])
+    elif name in ('net.udp_receive','groups.udp_receive'):
         result=types[fn.result_type]
         status=types[product_args(fn.result_type)[1]]
         error=types['UdpError']

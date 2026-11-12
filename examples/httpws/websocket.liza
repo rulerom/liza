@@ -1,0 +1,102 @@
+import httpws.bytes
+pub enum Error { Protocol; TooLarge; InvalidUtf8; Closed }
+pub struct State {
+    header:[u8;10];have:u32;want:u32;length:u32;received:u32;opcode:u8;fin:bool;active:u8;closed:bool;
+    pub message:[u8;4096];pub size:u32;pub control:[u8;125];pub control_size:u32;
+    encoding:Utf8StreamState
+}
+pub fn create()->State {return State([0;10],0,2,0,0,0,false,0,false,[0;4096],0,[0;125],0,utf8_stream.create())}
+fn close_valid(data:View<u8>)->bool {
+    if data.len==0 {return true};if data.len==1 {return false}
+    code=u32(data[0])*256+u32(data[1])
+    if !((code>=1000 && code<=1014 && code!=1004 && code!=1005 && code!=1006 && code!=1010)||(code>=3000 && code<=4999)) {return false}
+    var encoding=utf8_stream.create();var i:u32=2
+    while i<data.len {encoding=utf8_stream.feed_byte(encoding,data[i]);i=i+1}
+    match utf8_stream.finish(encoding) {Ok(n)=>{return true} Err(e)=>{return false}}
+}
+fn complete(borrow mut s:State)->Result<u32,Error> {
+    s.have=0;s.want=2
+    if s.opcode>=8 {
+        if s.opcode==8 {
+            control=s.control
+            if !close_valid(view control[0..s.control_size]) {return Err(Error.Protocol)}
+            s.closed=true
+        }
+        return Ok(u32(s.opcode))
+    }
+    if !s.fin {return Ok(0)}
+    result=u32(s.active)
+    if result==1 {match utf8_stream.finish(s.encoding) {Ok(n)=>{} Err(e)=>{return Err(Error.InvalidUtf8)}}}
+    s.active=0;return Ok(result)
+}
+// One byte at a time, preserving fragmented text UTF-8 across control frames.
+// Events: 0=incomplete, 1=text, 2=binary, 8=close, 9=ping, 10=pong.
+// After Err the caller must abandon the connection; no automatic resynchronization.
+pub fn feed(borrow mut s:State,byte:u8)->Result<u32,Error> {
+    if s.closed {return Err(Error.Closed)}
+    if s.have<s.want {
+        s.header[s.have]=byte;s.have=s.have+1
+        if s.have==2 {
+            first=s.header[0];second=s.header[1]
+            if (first&112)!=0 || (second&128)!=0 {return Err(Error.Protocol)}
+            s.opcode=first&15;s.fin=(first&128)!=0
+            if !(s.opcode==0 || s.opcode==1 || s.opcode==2 || s.opcode==8 || s.opcode==9 || s.opcode==10) {return Err(Error.Protocol)}
+            if s.opcode>=8 && (!s.fin || (second&127)>125) {return Err(Error.Protocol)}
+            if s.opcode==0 && s.active==0 {return Err(Error.Protocol)}
+            if (s.opcode==1 || s.opcode==2) && s.active!=0 {return Err(Error.Protocol)}
+            if s.opcode==1 || s.opcode==2 {s.active=s.opcode;s.size=0;s.encoding=utf8_stream.create()}
+            s.control_size=0
+            s.want=2
+            if (second&127)==126 {s.want=4}
+            if (second&127)==127 {s.want=10}
+        }
+        if s.have<s.want {return Ok(0)}
+        var length=u64(s.header[1]&127)
+        if s.want>2 {
+            length=0;var i:u32=2
+            while i<s.want {length=(length<<8)|u64(s.header[i]);i=i+1}
+            if (s.want==4 && length<126)||(s.want==10 && (length<65536 || (s.header[2]&128)!=0)) {return Err(Error.Protocol)}
+        }
+        if length>4096 {return Err(Error.TooLarge)}
+        if s.opcode<8 && length>u64(4096-s.size) {return Err(Error.TooLarge)}
+        s.length=u32(length);s.received=0
+        if s.length==0 {return complete(borrow mut s)}
+        return Ok(0)
+    }
+    if s.opcode>=8 {s.control[s.control_size]=byte;s.control_size=s.control_size+1}
+    else {
+        s.message[s.size]=byte;s.size=s.size+1
+        if s.active==1 {
+            s.encoding=utf8_stream.feed_byte(s.encoding,byte)
+            match utf8_stream.status(s.encoding) {None=>{} Some(e)=>{return Err(Error.InvalidUtf8)}}
+        }
+    }
+    s.received=s.received+1
+    if s.received==s.length {return complete(borrow mut s)}
+    return Ok(0)
+}
+pub fn finish(s:State)->Result<u32,Error> {
+    if !s.closed {return Err(Error.Closed)};return Ok(0)
+}
+// Client frames always masked. The transport must supply a fresh OS random mask.
+pub fn frame(opcode:u8,data:View<u8>,mask:u32)->Result<httpws.bytes.Wire,Error> {
+    if !(opcode==1 || opcode==2 || opcode==8 || opcode==9 || opcode==10) {return Err(Error.Protocol)}
+    if data.len>4096 || (opcode>=8 && data.len>125) {return Err(Error.TooLarge)}
+    if opcode==8 && !close_valid(data) {return Err(Error.Protocol)}
+    if opcode==1 {
+        var enc=utf8_stream.create();enc=utf8_stream.feed(enc,data)
+        match utf8_stream.finish(enc) {Ok(n)=>{} Err(e)=>{return Err(Error.InvalidUtf8)}}
+    }
+    var out=httpws.bytes.empty()
+    a=httpws.bytes.put(borrow mut out,128|opcode)
+    if data.len<126 {b=httpws.bytes.put(borrow mut out,128|u8(data.len))}
+    else {
+        b=httpws.bytes.put(borrow mut out,254)
+        c=httpws.bytes.put(borrow mut out,u8.wrap(data.len>>8))
+        d=httpws.bytes.put(borrow mut out,u8.wrap(data.len))
+    }
+    key:[u8;4]=[u8.wrap(mask>>24),u8.wrap(mask>>16),u8.wrap(mask>>8),u8.wrap(mask)]
+    e=httpws.bytes.append(borrow mut out,view key[0..4]);var i:u32=0
+    while i<data.len {n=httpws.bytes.put(borrow mut out,data[i]^key[i%4]);i=i+1}
+    return Ok(out)
+}
