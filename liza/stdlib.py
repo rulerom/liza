@@ -179,6 +179,7 @@ def link_flags(module):
     if worker_names: libraries.append('workers')
     if channel_names: libraries.append('channels')
     if group_names: libraries.append('sg3')
+    if '__liza_net_random' in names: libraries.append('random')
     if net_names or group_names: libraries.append('net')
     if reactor_names or group_names: libraries.append('reactor')
     if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')

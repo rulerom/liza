@@ -9,7 +9,9 @@ import subprocess
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 
+from liza.frontend import Parser
 from liza.modules import load_program
 from liza.ir import lower
 from liza.backend import llvm
@@ -33,7 +35,7 @@ def build(entry, root, opt, project_root=None, reactor_stub=None, net_stub=None)
     if reactor_stub:
         flags = [str(reactor_stub) if Path(f).name in ('reactor_posix.c', 'reactor_windows.c') else f for f in flags]
     if net_stub:
-        flags = [str(net_stub) if Path(f).name in ('net_posix.c', 'net_windows.c') else f for f in flags]
+        flags = [str(net_stub) if Path(f).name in ('random_posix.c', 'random_windows.c') else f for f in flags]
     built = subprocess.run(['clang', '-Wno-override-module', '-O' + opt,
                             str(ir), *flags, '-o', str(exe)],
                            capture_output=True, timeout=120)
@@ -77,6 +79,20 @@ class HttpWs(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.temp.cleanup()
+
+    def test_entropy_linkage_is_opt_in(self):
+        plain = lower(Parser('''fn main()->u32:io {
+match net.listen(0) {Err(e)=>{return 1} Ok(s)=>{
+closed=net.close_listener(move s);return 0}}}''').parse())
+        entropy = lower(Parser('''fn main()->u32:io {
+match net.random_u32() {Err(e)=>{return 1} Ok(n)=>{return 0}}}''').parse())
+        with patch('sys.platform', 'win32'):
+            old_flags = link_flags(plain)
+            new_flags = link_flags(entropy)
+        self.assertNotIn('-lbcrypt', old_flags)
+        self.assertFalse(any('random_windows.c' in f for f in old_flags))
+        self.assertIn('-lbcrypt', new_flags)
+        self.assertTrue(any('random_windows.c' in f for f in new_flags))
 
     def session(self, exe, peer, expected=0, stdout=b'', websocket=True):
         errors = []
@@ -211,7 +227,7 @@ class HttpWs(unittest.TestCase):
         import sys
         root = self.root / 'entropy'
         root.mkdir()
-        runtime = ROOT / 'liza/runtime' / ('net_windows.c' if sys.platform == 'win32' else 'net_posix.c')
+        runtime = ROOT / 'liza/runtime' / ('random_windows.c' if sys.platform == 'win32' else 'random_posix.c')
         stub = root / 'entropy.c'
         stub.write_text('#define liza_rt_net_random real_random\n#include "' + runtime.as_posix() + '"\n'
                         '#undef liza_rt_net_random\n'
