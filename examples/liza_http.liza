@@ -1,0 +1,26 @@
+import httpws.client
+import httpws.bytes
+import apps.proxy.config
+// Bounded HTTP/1.1 GET; print a Content-Length or connection-close body.
+fn main()->u32:io,alloc {
+    if cli.count()!=3 {e=console.errln("Usage: liza-http IPv4:port /path (4KiB body, 10s deadline)");return 2}
+    var address=net.ipv4(127,0,0,1,80)
+    var host=httpws.bytes.empty();var target=httpws.bytes.empty()
+    match cli.arg(1) {
+        None=>{return 2}
+        Some(arg)=>{
+            match apps.proxy.config.endpoint(arg) {Err(e)=>{return 2} Ok(a)=>{address=a}}
+            var i:u32=0
+            while i<64 {match cli.ascii_at(arg,i) {None=>{return 2} Some(b)=>{if b==0 {break};n=httpws.bytes.put(borrow mut host,b)}};i=i+1}
+        }
+    }
+    match cli.arg(2) {
+        None=>{return 2}
+        Some(arg)=>{
+            var i:u32=0
+            while i<64 {match cli.ascii_at(arg,i) {None=>{return 2} Some(b)=>{if b==0 {break};n=httpws.bytes.put(borrow mut target,b)}};i=i+1}
+        }
+    }
+    h=host.data;t=target.data
+    return httpws.client.get(address,view h[0..host.len],view t[0..target.len],10000)
+}

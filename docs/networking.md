@@ -13,6 +13,7 @@ description: "Как выбрать UDP, TCP, Reactor, scoped-группы ил�
 | Один UDP endpoint, последовательная обработка | `net.udp_*`, owned buffer и явное закрытие | [UDP](udp.md) |
 | Один TCP-клиент или базовый echo | Move-only сокеты и частичные I/O | [TCP](tcp.md) |
 | Несколько TCP-соединений в одном потоке | Reactor, readiness и bounded capacity | [Reactor](reactor.md) |
+| Первый HTTP GET или ws:// клиент | Протоколы на Liza поверх Reactor, IPv4 и явные лимиты | [HTTP и WebSocket](http-websocket.md) |
 | Сетевой consumer с командами и управляемым shutdown | `groups.run`, скрытый consumer-owned Reactor | [Scoped-группы](scoped-groups.md) |
 | Два независимых сетевых владельца | `groups.run_pair`, отдельные endpoints, ресурсы и join lanes | [Scoped-группы](scoped-groups.md#two-groups) |
 | Несколько изолированных функций с scalar входом/результатом | `workers.run(1..8)` и локальные ресурсы | [Workers](scoped-workers.md) |

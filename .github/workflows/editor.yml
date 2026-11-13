@@ -33,7 +33,7 @@ jobs:
           node-version: '22'
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.12'
       - run: npm ci --prefix editors/tree-sitter-liza
       - run: npm run generate --prefix editors/tree-sitter-liza
       - run: git diff --exit-code -- editors/tree-sitter-liza/src

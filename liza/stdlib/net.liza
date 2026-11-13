@@ -1,5 +1,11 @@
 // Blocking loopback TCP. Handles are opaque linear resources.
 enum NetError { AddressInUse; PermissionDenied; Interrupted; WouldBlock; Disconnected; InvalidRange; Other }
+// Fresh OS entropy for protocol nonces and masks. No deterministic fallback.
+fn net.random_u32()->Result<u32,NetError>:io {
+    raw=__liza_net_random()
+    if raw>>32==0 {return Ok(u32.wrap(raw))}
+    return Err(__liza_net_error(u32(raw>>32)))
+}
 struct __liza_NetDatagram { handle:net.DatagramSocket; error:u32 }
 struct __liza_NetListener { handle:net.Listener; error:u32 }
 struct __liza_NetStream { handle:net.Stream; error:u32 }

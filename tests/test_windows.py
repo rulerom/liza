@@ -26,7 +26,7 @@ class WindowsNative(unittest.TestCase):
         ctypes.windll.kernel32.SetErrorMode(cls.old_mode)
 
     def test_examples_and_exe_names(self):
-        expected={'answer':42,'conditions':42}
+        expected={'answer':42,'conditions':42,'liza_http':2,'liza_ws':2}
         for opt in ('0','2'):
             for source in sorted(Path('examples').glob('*.liza')):
                 with self.subTest(source=source,opt=opt),tempfile.TemporaryDirectory() as d:

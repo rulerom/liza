@@ -1,0 +1,27 @@
+import httpws.client
+import httpws.bytes
+import apps.proxy.config
+// One text request, then receive messages until peer close or total deadline.
+fn main()->u32:io,alloc {
+    if cli.count()!=3 {e=console.errln("Usage: liza-ws IPv4:port /path (ws, 4KiB messages, 10s deadline)");return 2}
+    var address=net.ipv4(127,0,0,1,80)
+    var host=httpws.bytes.empty();var target=httpws.bytes.empty()
+    match cli.arg(1) {
+        None=>{return 2}
+        Some(arg)=>{
+            match apps.proxy.config.endpoint(arg) {Err(e)=>{return 2} Ok(a)=>{address=a}}
+            var i:u32=0
+            while i<64 {match cli.ascii_at(arg,i) {None=>{return 2} Some(b)=>{if b==0 {break};n=httpws.bytes.put(borrow mut host,b)}};i=i+1}
+        }
+    }
+    match cli.arg(2) {
+        None=>{return 2}
+        Some(arg)=>{
+            var i:u32=0
+            while i<64 {match cli.ascii_at(arg,i) {None=>{return 2} Some(b)=>{if b==0 {break};n=httpws.bytes.put(borrow mut target,b)}};i=i+1}
+        }
+    }
+    message:[u8;10]=[104,101,108,108,111,32,76,105,122,97]
+    h=host.data;t=target.data
+    return httpws.client.run(address,view h[0..host.len],view t[0..target.len],view message[0..10],10000)
+}

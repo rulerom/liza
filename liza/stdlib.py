@@ -95,6 +95,7 @@ def attach(program):
     ])
     from .types import product_type
     net_externals = [
+        ('__liza_net_random',[],'u64',[]),
         ('__liza_net_udp_bind',['u32','u16'],'__liza_NetDatagram',[]),
         ('__liza_net_udp_port',['net.DatagramSocket'],'u64',[0]),
         ('__liza_net_udp_close',['net.DatagramSocket'],'u32',[]),
@@ -178,13 +179,14 @@ def link_flags(module):
     if worker_names: libraries.append('workers')
     if channel_names: libraries.append('channels')
     if group_names: libraries.append('sg3')
+    if '__liza_net_random' in names: libraries.append('random')
     if net_names or group_names: libraries.append('net')
     if reactor_names or group_names: libraries.append('reactor')
     if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if channel_names or group_names: files.append(str(Path(__file__).parent/'runtime'/'scoped_channel_core.c'))
     if sys.platform == 'win32':
-        return files + (['-lws2_32'] if net_names or group_names else [])
+        return files + (['-lws2_32'] if net_names or group_names else []) + (['-lbcrypt'] if '__liza_net_random' in names else [])
     if sys.platform not in ('darwin','linux'):
         raise ValueError('console runtime currently supports Linux, macOS and Windows only')
     return files + ['-pthread']

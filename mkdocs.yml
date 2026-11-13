@@ -137,6 +137,7 @@ nav:
       - UDP: udp.md
       - TCP: tcp.md
       - Reactor: reactor.md
+      - HTTP и WebSocket: http-websocket.md
       - Scoped-группы: scoped-groups.md
       - Изолированные workers: scoped-workers.md
       - Scoped-канал u32: scoped-channels.md
