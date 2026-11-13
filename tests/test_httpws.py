@@ -179,6 +179,10 @@ match net.random_u32() {Err(e)=>{return 1} Ok(n)=>{return 0}}}''').parse())
         root.mkdir()
         for opt in ('0', '2'):
             exe = build(EXAMPLES / 'liza_http.liza', root, opt, EXAMPLES)
+            usage = subprocess.run([str(exe)], capture_output=True, timeout=5)
+            self.assertEqual(usage.returncode, 2)
+            self.assertEqual(usage.stdout, b'')
+            self.assertIn(b'Usage:', usage.stderr)
             cases = [
                 (b'HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello', 0, b'hello'),
                 (b'HTTP/1.1 404 Missing\r\n\r\nmissing', 0, b'missing'),
@@ -192,6 +196,58 @@ match net.random_u32() {Err(e)=>{return 1} Ok(n)=>{return 0}}}''').parse())
                 def peer(conn, unused, response=response):
                     conn.sendall(response)
                 self.session(exe, peer, expected=code, stdout=body, websocket=False)
+
+    def test_ws_cli_requires_arguments(self):
+        for exe in self.executables:
+            usage = subprocess.run([str(exe)], capture_output=True, timeout=5)
+            self.assertEqual(usage.returncode, 2)
+            self.assertEqual(usage.stdout, b'')
+            self.assertIn(b'Usage:', usage.stderr)
+
+    def test_deadline_during_buffered_processing(self):
+        import sys
+        root = self.root / 'processing'
+        root.mkdir()
+        runtime = ROOT / 'liza/runtime' / ('reactor_windows.c' if sys.platform == 'win32' else 'reactor_posix.c')
+        stub = root / 'clock.c'
+        header = b'HTTP/1.1 200 OK\r\nContent-Length: 600\r\n\r\n'
+        response = header + b'x' * 600
+        # A full readable chunk is fixed at the native read boundary: TCP packet
+        # boundaries and host scheduling cannot make this test pass accidentally.
+        # Time expires on the second clock observation during active parsing.
+        stub.write_text('#define liza_rt_reactor_clock real_clock\n'
+                        '#define liza_rt_reactor_read real_read\n#include "' + runtime.as_posix() + '"\n'
+                        '#undef liza_rt_reactor_clock\n#undef liza_rt_reactor_read\n'
+                        'static unsigned delivered,checks;\n'
+                        'uint32_t liza_rt_reactor_clock(uint64_t*out){'
+                        '*out=delivered && ++checks>=2?20000:1000;return 0;}\n'
+                        'uint64_t liza_rt_reactor_read(reactor*r,uint64_t o,uint64_t g,uint64_t s,'
+                        'uint8_t*d,uint32_t n,uint32_t a,uint32_t c){'
+                        'static const uint8_t wire[]={' + ','.join(map(str, response)) + '};'
+                        'if(delivered || a || c<sizeof(wire) || n<c)abort();'
+                        'uint8_t wake;if(real_read(r,o,g,s,&wake,1,0,1)!=1)abort();'
+                        'memcpy(d,wire,sizeof(wire));delivered=1;return sizeof(wire);}\n')
+
+        def peer(conn, unused):
+            conn.sendall(b'!')  # real readiness; read contents come from the fixture
+            self.assertEqual(conn.recv(1), b'')
+
+        mutant = root / 'mutant'
+        mutant.mkdir()
+        shutil.copytree(EXAMPLES / 'httpws', mutant / 'httpws')
+        (mutant / 'apps/proxy').mkdir(parents=True)
+        shutil.copy(EXAMPLES / 'apps/proxy/config.liza', mutant / 'apps/proxy/config.liza')
+        entry = mutant / 'client.liza'
+        entry.write_text((EXAMPLES / 'liza_http.liza').read_text())
+        code = mutant / 'httpws/client.liza'
+        code.write_text(code.read_text().replace('if batch==0 {', 'if false {'))
+        for opt in ('0', '2'):
+            exe = build(EXAMPLES / 'liza_http.liza', root, opt, EXAMPLES, reactor_stub=stub)
+            self.session(exe, peer, expected=5, stdout=b'x' * (256-len(header)), websocket=False)
+            # Negative control: old wait-only observation processes the entire
+            # buffered body and incorrectly reports success. The oracle rejects it.
+            bad = build(entry, mutant, opt, reactor_stub=stub)
+            self.session(bad, peer, expected=0, stdout=b'x' * 600, websocket=False)
 
     def test_deadline_and_forced_short_writes(self):
         import sys

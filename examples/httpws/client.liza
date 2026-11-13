@@ -24,11 +24,24 @@ fn exchange(r:net.Reactor,id:net.Connection,storage:memory.Buffer<u8>,request:ht
     var count:u32=0;var cursor:u32=0
     var head=httpws.bytes.empty();var parser=httpws.websocket.create()
     var body_size:u32=0;var expected_size:Option<u32> =None
+    var batch:u32=0
     while status==0 {
-        if closed && pending.len==0 {break}
+        if closed && pending.len==0 {
+            match net.monotonic_ms() {Err(e)=>{status=3} Ok(now)=>{if now>=deadline {status=5}}}
+            break
+        }
         // Keep unread bytes across partial writes and control replies. This bounds
         // output to one frame without losing coalesced input or allocating a queue.
         if connected && pending.len==0 && cursor<count {
+            // Active input processing must not defer the deadline until poll.
+            // At most 256 input bytes are parsed between clock observations.
+            if batch==0 {
+                match net.monotonic_ms() {
+                    Err(e)=>{status=3;break}
+                    Ok(now)=>{if now>=deadline {status=5;break}}
+                }
+            }
+            batch=(batch+1)%256
             var byte:u8=0
             {data=memory.view(input);byte=data[cursor]}
             cursor=cursor+1
@@ -103,7 +116,7 @@ fn exchange(r:net.Reactor,id:net.Connection,storage:memory.Buffer<u8>,request:ht
                         }
                     } else if pending.len==0 && cursor==count && (flags&5)!=0 {
                         (next,result)=net.reactor_read(r,id,move input,0,4096);input=move next
-                        match result {Err(e)=>{if !retry(e) {status=3}} Ok(n)=>{count=n;cursor=0;if n==0 {
+                        match result {Err(e)=>{if !retry(e) {status=3}} Ok(n)=>{count=n;cursor=0;batch=0;if n==0 {
                             if !websocket && upgraded {match expected_size {None=>{closed=true} Some(size)=>{status=4}}}
                             else {status=4}
                         }}}
