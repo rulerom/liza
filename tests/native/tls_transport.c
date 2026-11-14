@@ -1,5 +1,6 @@
 /* TLS-A conformance caller. Only this test loop knows about Reactor/socket I/O. */
-#ifndef _WIN32
+#if defined(__linux__)
+#define _DEFAULT_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include <stdio.h>
