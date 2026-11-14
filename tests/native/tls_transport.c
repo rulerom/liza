@@ -29,7 +29,8 @@ static void memory_test(const char *ca,const char *cert,const char *key,int vers
     CHECK(SSL_CTX_use_PrivateKey_file(ctx,key,SSL_FILETYPE_PEM)==1);
     SSL *server=SSL_new(ctx);CHECK(server);SSL_set_accept_state(server);
     BIO *internal=NULL,*wire=NULL;CHECK(BIO_new_bio_pair(&internal,65536,&wire,65536));SSL_set_bio(server,internal,internal);
-    char peer_name[]="localhost";char *ca_copy=malloc(strlen(ca)+1);CHECK(ca_copy);strcpy(ca_copy,ca);
+    char peer_name[]="localhost";size_t ca_size=strlen(ca)+1;
+    char *ca_copy=malloc(ca_size);CHECK(ca_copy);memcpy(ca_copy,ca,ca_size);
     liza_tls *t=NULL;CHECK(liza_tls_create(ca_copy,peer_name,1,1000000,&t)==LIZA_TLS_OK);
     memset(peer_name,'x',sizeof(peer_name)-1);memset(ca_copy,'x',strlen(ca_copy));free(ca_copy);
     int client_done=0,server_done=0;

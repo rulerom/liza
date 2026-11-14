@@ -121,3 +121,16 @@ Workflow `TLS-A transport` содержит Linux/macOS/Windows matrix.
 TLS-B должен добавить публичный owned TLS transport, системные trust roots и
 композицию с HTTP/WS без переписывания parser. DNS, chunked, CAN и scoped groups
 не являются частью TLS-A.
+
+Обязательные свойства TLS-B:
+
+- Resource budget отдельно отражает управляемую память и native allocations;
+  `liza_tls_managed_bytes()` не становится полным лимитом памяти сессии.
+- Move-only session запрещает copy, double destroy и use-after-move на уровне
+  языка; для этого нужны отрицательные compiler tests, а не только C contract.
+- Typed Result различает transport failure, verification failure, deadline и
+  штатное TLS-закрытие. WANT отражает требуемый прогресс, а не безусловный poll.
+- Внутренние данные TLS обрабатываются до ожидания нового kernel event.
+- Graceful close подтверждается только после завершения TLS shutdown и передачи
+  последних ciphertext bytes в TCP. Это две отдельные стадии; они не обещают
+  прикладного подтверждения получения сервером.
