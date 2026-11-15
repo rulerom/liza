@@ -170,7 +170,7 @@ class Parser:
         self.tokens = lex(source, filename)
         self.index = 0
         self.generic_scope = {}
-        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"ReactorError", "FrameError", "NetError", "IoError", "FileError", "MemoryError", "FileCreateError", "FileWriteError", "Utf8ErrorKind", "Utf8StreamErrorKind", "JsonErrorKind", "ChannelError", "GroupError", "GroupPublication", "GroupEvent"}
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"TlsState", "TlsOutcome", "TlsError", "ReactorError", "FrameError", "NetError", "IoError", "FileError", "MemoryError", "FileCreateError", "FileWriteError", "Utf8ErrorKind", "Utf8StreamErrorKind", "JsonErrorKind", "ChannelError", "GroupError", "GroupPublication", "GroupEvent"}
 
     @property
     def current(self):
@@ -429,6 +429,7 @@ class Parser:
         functions.uses_workers = any(t.text == 'workers' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
         functions.uses_json = any(t.text in ('JsonState','JsonError','JsonErrorKind') or (t.text == 'json' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_framing = any(t.text in ('FrameState','FrameStep','FrameError') or (t.text == 'framing' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
+        functions.uses_tls = any(t.text in ('TlsState','TlsStep','TlsError','TlsOutcome','TlsRead') or (t.text == 'tls' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_net = any(t.text in ('NetError','ReactorError') or (t.text == 'net' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_cli = any(t.text in ('Arg', 'Path') or (t.text == 'cli' and self.tokens[i+1].text == '.')
                                  for i,t in enumerate(self.tokens[:-1]))

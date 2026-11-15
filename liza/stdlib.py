@@ -6,6 +6,9 @@ from .frontend import Parser, Function, Token, Program, Expr
 
 def attach(program):
     libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net', 'framing', 'json') if getattr(program, 'uses_'+name, False)]
+    if getattr(program,'uses_tls',False):
+        if 'net' not in libraries: libraries.append('net')
+        libraries.append('tls')
     if 'json' in libraries and 'utf8_stream' not in libraries:
         libraries.insert(0,'utf8_stream')
     if 'json' in libraries:
@@ -35,7 +38,7 @@ def attach(program):
             fn.module = '__liza_framing'
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
             fn.module = '__liza_utf8_stream'
-        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_create_at','net.reactor_close')) or fn.name.text in ('net.accept','net.local_port','net.write','net.udp_port','net.udp_send','file.read_chunk', 'file.write_chunk', 'file.flush'):
+        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_create_at','net.reactor_close')) or (fn.name.text.startswith('tls.') and fn.name.text not in ('tls.create','tls.create_with_ca','tls.destroy','tls.managed_bytes')) or fn.name.text in ('net.accept','net.local_port','net.write','net.udp_port','net.udp_send','file.read_chunk', 'file.write_chunk', 'file.flush'):
             fn.borrowed_params = [0]
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
@@ -152,6 +155,15 @@ def attach(program):
             group_externals.append((n.replace('__liza_reactor_','__liza_group_'),params[1:],result,[],effect))
         if n == 'net.reactor_read':
             group_externals.append(('groups.read',params[1:],result,[],effect))
+    tls_externals = [
+        ('__liza_tls_create',['View<u8>','View<u8>','u32','u64','u64','u64'],'__liza_TlsCreate',[], 'io,alloc'),
+        ('__liza_tls_step',['u32','tls.Session','View<u8>','u32','u32','u64'],'__liza_TlsRaw',[1], 'io'),
+        ('__liza_tls_read',['tls.Session','memory.Buffer<u8>','u32','u32','u64'],product_type('memory.Buffer<u8>','__liza_TlsRaw'),[0], 'io'),
+        ('__liza_tls_drain',['tls.Session','memory.Buffer<u8>','u32','u32','u64'],product_type('memory.Buffer<u8>','__liza_TlsRaw'),[0], 'io'),
+        ('__liza_tls_destroy',['tls.Session'],'u32',[], 'io,alloc'),
+        ('tls.managed_bytes',[],'u64',[], 'pure'),
+    ]
+    reactor_externals += tls_externals
     reactor_externals += group_externals
     externals.extend(Function(Token(n,1,1),[(Token('p'+str(i),1,1),t) for i,t in enumerate(params)],[],result,effect,borrowed_params=borrowed)
                      for n,params,result,borrowed,effect in reactor_externals)
@@ -175,7 +187,8 @@ def link_flags(module):
     channel_names = {n for n in names if n.startswith('channels.') or n == '__liza_channels_run'}
     group_names = {n for n in names if n.startswith(('groups.', '__liza_group_'))}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
-    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names-group_names else []) + (['file'] if names & file_names else [])
+    tls_names = {n for n in names if n.startswith('__liza_tls_') or n=='tls.managed_bytes'}
+    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names-group_names-tls_names else []) + (['file'] if names & file_names else [])
     if worker_names: libraries.append('workers')
     if channel_names: libraries.append('channels')
     if group_names: libraries.append('sg3')
@@ -185,8 +198,13 @@ def link_flags(module):
     if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if channel_names or group_names: files.append(str(Path(__file__).parent/'runtime'/'scoped_channel_core.c'))
+    tls_flags = []
+    if tls_names:
+        from .tls_backend import link_flags as tls_link_flags
+        tls_flags = tls_link_flags()
+        files += [str(Path(__file__).parent/'runtime'/name) for name in ('tls_openssl.c','tls_binding.c')]
     if sys.platform == 'win32':
-        return files + (['-lws2_32'] if net_names or group_names else []) + (['-lbcrypt'] if '__liza_net_random' in names else [])
+        return files + tls_flags + (['-lws2_32'] if net_names or group_names else []) + (['-lbcrypt'] if '__liza_net_random' in names else [])
     if sys.platform not in ('darwin','linux'):
         raise ValueError('console runtime currently supports Linux, macOS and Windows only')
-    return files + ['-pthread']
+    return files + tls_flags + ['-pthread']

@@ -1,0 +1,155 @@
+import httpws.bytes
+import httpws.crypto
+import httpws.http
+import httpws.protocol
+fn retry(e:ReactorError)->bool {
+    match e {ReactorError.Interrupted=>{return true} ReactorError.WouldBlock=>{return true}
+    ReactorError.AddressInUse=>{return false} ReactorError.PermissionDenied=>{return false}
+    ReactorError.Disconnected=>{return false} ReactorError.InvalidRange=>{return false}
+    ReactorError.Other=>{return false} ReactorError.InvalidCapacity=>{return false}
+    ReactorError.Full=>{return false} ReactorError.InvalidConnection=>{return false}
+    ReactorError.Exhausted=>{return false} ReactorError.OutOfMemory=>{return false}}
+}
+fn state_number(state:TlsState)->u32 {
+    match state {TlsState.Handshake=>{return 0} TlsState.Open=>{return 1} TlsState.Closing=>{return 2} TlsState.Done=>{return 3} TlsState.Dead=>{return 4} TlsState.Unavailable=>{return 5}}
+}
+fn closed(outcome:TlsOutcome)->bool {match outcome {TlsOutcome.Progress=>{return false} TlsOutcome.Want=>{return false} TlsOutcome.Closed=>{return true}}}
+// Three disjoint 4KiB spans: ciphertext in, ciphertext out, plaintext.
+// WANT describes TLS demand, not an unconditional instruction to poll the OS.
+fn exchange(session:tls.Session,r:net.Reactor,id:net.Connection,storage:memory.Buffer<u8>,request:httpws.bytes.Wire,proof:[u8;28],message:View<u8>,deadline:u64,websocket:bool)->Result<u32,TlsError>:io,alloc {
+    var input=move storage
+    var app=httpws.protocol.create(request,proof,websocket)
+    var failure:Option<TlsError> =None
+    var connected=false;var state:u32=0;var done=false
+    var incoming:u32=0;var fed:u32=0;var outgoing:u32=0;var sent:u32=0
+    var plaintext:u32=0;var cursor:u32=0;var tcp_eof=false;var write_blocked=false;var plaintext_blocked=false;var work_since_poll:u32=0
+    while !done {
+        var now:u64=0
+        match net.monotonic_ms() {Err(e)=>{failure=Some(TlsError.Transport(e));break} Ok(n)=>{now=n}}
+        if now>=deadline {failure=Some(TlsError.Deadline);break}
+        var progress=false
+        if !connected {match net.reactor_finish_connect(r,id) {
+            Err(e)=>{if !retry(e) {failure=Some(TlsError.Transport(e));break}}
+            Ok(ready)=>{connected=ready;progress=ready}
+        }}
+        if connected {
+            if state==0 {
+                match tls.handshake(session,now) {Err(e)=>{failure=Some(e);break} Ok(step)=>{if state_number(step.state)!=state {progress=true};state=state_number(step.state)}}
+            } else if state==1 {
+                if app.pending.len!=0 {
+                    // Retry the same plaintext only after draining BIO output.
+                    if !plaintext_blocked {
+                        wire=app.pending.data
+                        var amount=app.pending.len-app.sent;if amount>4096 {amount=4096}
+                        match tls.write(session,view wire[0..app.pending.len],app.sent,amount,now) {
+                            Err(e)=>{failure=Some(e);break}
+                            Ok(step)=>{state=state_number(step.state);if step.count==0 && (step.wants&2)!=0 {plaintext_blocked=true};if step.count!=0 {progress=true;app.sent=app.sent+step.count;if app.sent==app.pending.len {app.pending.len=0;app.sent=0}}}
+                        }
+                    }
+                } else if cursor<plaintext {
+                    var byte:u8=0;{data=memory.view(input);byte=data[8192+cursor]}
+                    cursor=cursor+1;progress=true
+                    code=httpws.protocol.feed(borrow mut app,byte,message)
+                    if code!=0 {if code==3 {failure=Some(TlsError.Output)} else {failure=Some(TlsError.Protocol(0))};break}
+                } else if !app.closed {
+                    (next,result)=tls.read(session,move input,8192,4096,now);input=move next
+                    match result {
+                        Err(e)=>{failure=Some(e);break}
+                        Ok(step)=>{state=state_number(step.state);plaintext=step.count;cursor=0;if step.count!=0 {progress=true}
+                            if closed(step.outcome) {code=httpws.protocol.eof(borrow mut app);if code!=0 {failure=Some(TlsError.Protocol(0));break};progress=true}
+                        }
+                    }
+                }
+                if app.closed && app.pending.len==0 {state=2;progress=true}
+            }
+            if state==2 && (!app.closed || app.pending.len!=0) {failure=Some(TlsError.Protocol(0));break}
+            if state==2 {
+                match tls.shutdown(session,now) {Err(e)=>{failure=Some(e);break} Ok(step)=>{if state_number(step.state)!=state {progress=true};state=state_number(step.state)}}
+            }
+            // Feed retained TCP input, including partial BIO acceptance.
+            if fed<incoming {
+                {data=memory.view(input);match tls.feed(session,data,fed,incoming-fed,now) {
+                    Err(e)=>{failure=Some(e)} Ok(step)=>{fed=fed+step.count;if step.count!=0 {progress=true}}
+                }}
+                match failure {Some(e)=>{break} None=>{}}
+            }
+            if outgoing==0 {
+                (next,result)=tls.drain(session,move input,4096,4096,now);input=move next
+                match result {Err(e)=>{failure=Some(e);break} Ok(step)=>{outgoing=step.count;sent=0;if outgoing!=0 {plaintext_blocked=false;progress=true}}}
+            }
+            if outgoing!=0 && !write_blocked {
+                {data=memory.view(input);match net.reactor_write(r,id,data,4096+sent,outgoing-sent) {
+                    Err(e)=>{if !retry(e) {failure=Some(TlsError.Transport(e))} else {write_blocked=true}}
+                    Ok(n)=>{if n==0 {failure=Some(TlsError.Transport(ReactorError.Disconnected))} else {sent=sent+n;progress=true;if sent==outgoing {outgoing=0;sent=0}}}
+                }}
+                match failure {Some(e)=>{break} None=>{}}
+            }
+            // Done alone is insufficient: drain once more after the final TCP write.
+            if state==3 && outgoing==0 {
+                (next,result)=tls.drain(session,move input,4096,4096,now);input=move next
+                match result {Err(e)=>{failure=Some(e);break} Ok(step)=>{outgoing=step.count;sent=0;if outgoing==0 {done=true;break};progress=true}}
+            }
+            if fed==incoming && !tcp_eof && state!=3 {
+                (next,result)=net.reactor_read(r,id,move input,0,4096);input=move next
+                match result {
+                    Err(e)=>{if !retry(e) {failure=Some(TlsError.Transport(e));break}}
+                    Ok(n)=>{incoming=n;fed=0;if n!=0 {progress=true} else {tcp_eof=true;progress=true;match tls.eof(session,now) {Err(e)=>{failure=Some(e);break} Ok(step)=>{}}}}
+                }
+            }
+        }
+        // Input progress is independent of TCP write permission. A blocked
+        // writer must observe readiness before retrying, even during parsing.
+        if progress && write_blocked {work_since_poll=work_since_poll+1}
+        if !progress || (write_blocked && work_since_poll>=256) {
+            work_since_poll=0
+            var interest:u32=0
+            if fed==incoming && !tcp_eof && state!=3 {interest=1}
+            if outgoing!=0 {interest=interest|2}
+            if !connected {interest=3}
+            match net.reactor_interest(r,id,interest) {Err(e)=>{failure=Some(TlsError.Transport(e));break} Ok(n)=>{}}
+            var wait_ms:u32=0;if !progress {wait_ms=u32(deadline-now)}
+            match net.reactor_poll(r,wait_ms) {Err(e)=>{if !retry(e) {failure=Some(TlsError.Transport(e));break}} Ok(n)=>{}}
+            if write_blocked {match net.reactor_ready(r,id) {Err(e)=>{failure=Some(TlsError.Transport(e));break} Ok(flags)=>{if (flags&6)!=0 {write_blocked=false}}}}
+        }
+    }
+    if done {match net.monotonic_ms() {Err(e)=>{failure=Some(TlsError.Transport(e))} Ok(now)=>{if now>=deadline {failure=Some(TlsError.Deadline)}}}}
+    released=memory.release(move input)
+    match tls.destroy(move session) {Err(e)=>{failure=Some(e)} Ok(n)=>{}}
+    match net.reactor_close(move r) {Err(e)=>{failure=Some(TlsError.Transport(e))} Ok(n)=>{}}
+    match failure {Some(e)=>{return Err(e)} None=>{return Ok(0)}}
+}
+fn start(session:tls.Session,address:net.Address,request:httpws.bytes.Wire,proof:[u8;28],message:View<u8>,deadline:u64,websocket:bool)->Result<u32,TlsError>:io,alloc {
+    match net.reactor_create(0,1) {
+        Err(e)=>{d=tls.destroy(move session);return Err(TlsError.Transport(e))}
+        Ok(r)=>{
+            match net.reactor_stop_accepting(r) {Err(e)=>{c=net.reactor_close(move r);d=tls.destroy(move session);return Err(TlsError.Transport(e))} Ok(n)=>{}}
+            match net.reactor_connect_at(r,address) {
+                Err(e)=>{c=net.reactor_close(move r);d=tls.destroy(move session);return Err(TlsError.Transport(e))}
+                Ok(id)=>{match memory.create(12288) {
+                    Err(e)=>{c=net.reactor_close(move r);d=tls.destroy(move session);return Err(TlsError.OutOfMemory)}
+                    Ok(region)=>{match memory.alloc<u8>(region,12288,0) {
+                        Err(e)=>{f=memory.close(move region);c=net.reactor_close(move r);d=tls.destroy(move session);return Err(TlsError.OutOfMemory)}
+                        Ok(input)=>{result=exchange(move session,move r,id,move input,request,proof,message,deadline,websocket);f=memory.close(move region);return result}
+                    }}
+                }}
+            }
+        }
+    }
+}
+pub fn run(address:net.Address,host:View<u8>,target:View<u8>,message:View<u8>,peer:View<u8>,ca:View<u8>,custom:bool,timeout_ms:u32,websocket:bool)->Result<u32,TlsError>:io,alloc {
+    if timeout_ms==0 || timeout_ms>2147483647 {return Err(TlsError.Invalid)}
+    var now:u64=0;match net.monotonic_ms() {Err(e)=>{return Err(TlsError.Transport(e))} Ok(n)=>{now=n}}
+    deadline=now+u64(timeout_ms)
+    var request=httpws.bytes.empty();var proof:[u8;28]=[0;28]
+    if websocket {
+        var nonce:[u8;16]=[0;16];var i:u32=0
+        while i<4 {match net.random_u32() {Err(e)=>{return Err(TlsError.Configuration)} Ok(n)=>{nonce[i*4]=u8.wrap(n>>24);nonce[i*4+1]=u8.wrap(n>>16);nonce[i*4+2]=u8.wrap(n>>8);nonce[i*4+3]=u8.wrap(n)}};i=i+1}
+        key=httpws.crypto.key(nonce);proof=httpws.crypto.accept(key)
+        match httpws.http.request(host,target,key) {Err(e)=>{return Err(TlsError.Invalid)} Ok(w)=>{request=w}}
+    } else {match httpws.http.get(host,target) {Err(e)=>{return Err(TlsError.Invalid)} Ok(w)=>{request=w}}}
+    if custom {
+        match tls.create_with_ca(peer,ca,tls.managed_bytes(),now,deadline) {Err(e)=>{return Err(e)} Ok(session)=>{return start(move session,address,request,proof,message,deadline,websocket)}}
+    } else {
+        match tls.create(peer,tls.managed_bytes(),now,deadline) {Err(e)=>{return Err(e)} Ok(session)=>{return start(move session,address,request,proof,message,deadline,websocket)}}
+    }
+}

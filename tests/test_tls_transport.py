@@ -36,12 +36,8 @@ class TlsTransport(unittest.TestCase):
             raise RuntimeError('OpenSSL CLI required for local test certificates')
         if cls.prefix:
             os.environ['PATH'] = str(cls.prefix/'bin') + os.pathsep + os.environ.get('PATH', '')
-        if cls.prefix and sys.platform == 'win32':
-            flags = ['-I'+str(cls.prefix/'include'), str(cls.prefix/'lib/libssl.lib'), str(cls.prefix/'lib/libcrypto.lib')]
-        elif cls.prefix:
-            flags = ['-I'+str(cls.prefix/'include'), '-L'+str(cls.prefix/'lib'), '-Wl,-rpath,'+str(cls.prefix/'lib'), '-lssl', '-lcrypto']
-        else:
-            flags = subprocess.check_output(['pkg-config', '--cflags', '--libs', 'openssl'], text=True).split()
+        from liza.tls_backend import link_flags
+        flags = link_flags()
         (cls.root/'req.cnf').write_text('[req]\ndistinguished_name=dn\n[dn]\nCN=Liza fixture\n')
         cls.command('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=Liza TLS Test CA', '-addext', 'basicConstraints=critical,CA:TRUE', '-addext', 'keyUsage=critical,keyCertSign,cRLSign', '-days', '2', '-keyout', 'ca.key', '-out', 'ca.pem')
         cls.command('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=Unrelated CA', '-addext', 'basicConstraints=critical,CA:TRUE', '-addext', 'keyUsage=critical,keyCertSign,cRLSign', '-days', '2', '-keyout', 'other.key', '-out', 'other.pem')

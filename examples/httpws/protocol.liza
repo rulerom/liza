@@ -1,0 +1,75 @@
+import httpws.bytes
+import httpws.http
+import httpws.websocket
+pub struct State {
+    pub pending:httpws.bytes.Wire;pub sent:u32;pub closed:bool
+    upgraded:bool;head:httpws.bytes.Wire;parser:httpws.websocket.State;
+    body_size:u32;expected_size:u32;known_size:bool;proof:[u8;28];websocket:bool
+}
+pub fn create(request:httpws.bytes.Wire,proof:[u8;28],websocket:bool)->State {
+    return State(request,0,false,false,httpws.bytes.empty(),httpws.websocket.create(),0,0,false,proof,websocket)
+}
+fn masked(opcode:u8,data:View<u8>)->Result<httpws.bytes.Wire,u32>:io {
+    match net.random_u32() {
+        Err(e)=>{return Err(3)}
+        Ok(mask)=>{match httpws.websocket.frame(opcode,data,mask) {Err(e)=>{return Err(4)} Ok(w)=>{return Ok(w)}}}
+    }
+}
+pub fn feed(borrow mut p:State,byte:u8,message:View<u8>)->u32:io {
+    var status:u32=0
+            if !p.upgraded {
+                if p.head.len==8192 {status=4} else {p.head.data[p.head.len]=byte;p.head.len=p.head.len+1}
+                if p.head.len>=4 {
+                    n=p.head.len
+                    if p.head.data[n-4]==13 && p.head.data[n-3]==10 && p.head.data[n-2]==13 && p.head.data[n-1]==10 {
+                        header=p.head.data
+                        if p.websocket {match httpws.http.upgrade(view header[0..n],p.proof) {
+                            Err(e)=>{status=4}
+                            Ok(value)=>{match value {None=>{status=4} Some(h)=>{p.upgraded=true}}}
+                        }
+                        if status==0 {match masked(1,message) {Err(e)=>{status=e} Ok(w)=>{p.pending=w;p.sent=0}}}
+                        } else {
+                            match httpws.http.response(view header[0..n]) {
+                                Err(e)=>{status=4}
+                                Ok(value)=>{match value {None=>{status=4} Some(h)=>{
+                                    match httpws.http.body_length(view header[0..n],h) {
+                                        Err(e)=>{status=4}
+                                        Ok(length)=>{p.upgraded=true;match length {None=>{} Some(size)=>{p.known_size=true;p.expected_size=size;if size==0 {p.closed=true}}}}
+                                    }
+                                }}}
+                            }
+                        }
+                    }
+                }
+            } else if !p.websocket {
+                if p.body_size==4096 {status=4}
+                else {
+                    p.body_size=p.body_size+1
+                    single:[u8;1]=[byte]
+                    match console.write_bytes(view single[0..1]) {Ok(n)=>{} Err(e)=>{status=3}}
+                    if p.known_size && p.body_size==p.expected_size {p.closed=true}
+                }
+            } else {
+                var parser=p.parser
+                event_result=httpws.websocket.feed(borrow mut parser,byte);p.parser=parser
+                match event_result {
+                    Err(e)=>{status=4}
+                    Ok(event)=>{
+                        if event==1 || event==2 {
+                            body=p.parser.message
+                            match console.write_bytes(view body[0..p.parser.size]) {Ok(n)=>{} Err(e)=>{status=3}}
+                        }
+                        if event==9 || event==8 {
+                            control=p.parser.control;var opcode:u8=10
+                            if event==8 {opcode=8;p.closed=true}
+                            match masked(opcode,view control[0..p.parser.control_size]) {Err(e)=>{status=e} Ok(w)=>{p.pending=w;p.sent=0}}
+                        }
+                    }
+                }
+            }
+    return status
+}
+pub fn eof(borrow mut p:State)->u32 {
+    if !p.websocket && p.upgraded && !p.known_size {p.closed=true;return 0}
+    return 4
+}

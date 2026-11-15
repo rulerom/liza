@@ -19,11 +19,13 @@ typedef pthread_t tls_thread;
 #define TLS_SELF() pthread_self()
 #define TLS_SAME(a,b) pthread_equal(a,b)
 #endif
+#include "tls_trust.h"
 struct liza_tls {
     SSL_CTX *ctx; SSL *ssl; BIO *wire;
     tls_thread owner;
+    char peer[254];
     uint64_t deadline,last_now;
-    uint32_t state,failed,eof,pending_write;
+    uint32_t state,failed,eof,pending_write,custom;
     uint8_t write_buffer[LIZA_TLS_PLAIN_CAP],read_buffer[LIZA_TLS_PLAIN_CAP];
 };
 size_t liza_tls_managed_bytes(void) {return sizeof(liza_tls)+2*LIZA_TLS_WIRE_CAP;}
@@ -67,15 +69,33 @@ uint32_t liza_tls_destroy(liza_tls *t) {
     SSL_free(t->ssl);BIO_free(t->wire);SSL_CTX_free(t->ctx);
     OPENSSL_cleanse(t,sizeof(*t));free(t);return LIZA_TLS_OK;
 }
-uint32_t liza_tls_create(const char *ca,const char *peer,uint64_t now,uint64_t deadline,liza_tls **out) {
+#if defined(__APPLE__) || defined(_WIN32)
+static int system_verify(X509_STORE_CTX *store,void *arg) {
+    liza_tls *t=arg;
+    if(t->custom && X509_verify_cert(store)!=1)return 0;
+    X509 *leaf=X509_STORE_CTX_get0_cert(store);
+    if(!leaf){X509_STORE_CTX_set_error(store,X509_V_ERR_CERT_REJECTED);return 0;}
+    ASN1_OCTET_STRING *ip=a2i_IPADDRESS(t->peer);
+    int identity=ip?X509_check_ip(leaf,ASN1_STRING_get0_data(ip),(size_t)ASN1_STRING_length(ip),0):
+        X509_check_host(leaf,t->peer,0,X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS|X509_CHECK_FLAG_NEVER_CHECK_SUBJECT,NULL);
+    int mismatch=ip?X509_V_ERR_IP_ADDRESS_MISMATCH:X509_V_ERR_HOSTNAME_MISMATCH;
+    if(ip)ASN1_OCTET_STRING_free(ip);
+    if(identity!=1){X509_STORE_CTX_set_error(store,mismatch);return 0;}
+    int ok=liza_tls_os_chain(store,t->peer,t->custom?SSL_CTX_get_cert_store(t->ctx):NULL);
+    X509_STORE_CTX_set_error(store,ok?X509_V_OK:X509_V_ERR_CERT_REJECTED);return ok;
+}
+#endif
+static uint32_t create(const char *ca,const char *peer,uint64_t now,uint64_t deadline,liza_tls **out) {
     if(!out)return LIZA_TLS_INVALID;
     *out=NULL;
-    if(!ca || !*ca || !peer || !*peer || strlen(peer)>253 || now>=deadline)return LIZA_TLS_INVALID;
+    if((ca && !*ca) || !peer || !*peer || strlen(peer)>253 || now>=deadline)return LIZA_TLS_INVALID;
     /* ASCII DNS name or literal IP only. No embedded authority/URI components. */
     for(const unsigned char *p=(const unsigned char *)peer;*p;p++)
         if(!((*p>='a'&&*p<='z')||(*p>='A'&&*p<='Z')||(*p>='0'&&*p<='9')||*p=='.'||*p=='-'||*p==':'))return LIZA_TLS_INVALID;
     liza_tls *t=calloc(1,sizeof(*t));if(!t)return LIZA_TLS_NOMEM;
+    t->custom=ca!=NULL;
     t->owner=TLS_SELF();t->deadline=deadline;t->last_now=now;
+    memcpy(t->peer,peer,strlen(peer)+1);
     t->ctx=SSL_CTX_new(TLS_client_method());
     if(!t->ctx){liza_tls_destroy(t);return LIZA_TLS_NOMEM;}
     SSL_CTX_set_verify(t->ctx,SSL_VERIFY_PEER,NULL);
@@ -83,9 +103,14 @@ uint32_t liza_tls_create(const char *ca,const char *peer,uint64_t now,uint64_t d
     SSL_CTX_set_session_cache_mode(t->ctx,SSL_SESS_CACHE_OFF);
     if(!SSL_CTX_set_min_proto_version(t->ctx,TLS1_2_VERSION) ||
        !SSL_CTX_set_max_proto_version(t->ctx,TLS1_3_VERSION) ||
-       !SSL_CTX_load_verify_locations(t->ctx,ca,NULL)) {
+       (ca && !SSL_CTX_load_verify_locations(t->ctx,ca,NULL))) {
         liza_tls_destroy(t);return LIZA_TLS_FAILED;
     }
+#if defined(__APPLE__) || defined(_WIN32)
+    SSL_CTX_set_cert_verify_callback(t->ctx,system_verify,t);
+#else
+    if(!ca&&!SSL_CTX_set_default_verify_paths(t->ctx)){liza_tls_destroy(t);return LIZA_TLS_FAILED;}
+#endif
     t->ssl=SSL_new(t->ctx);if(!t->ssl){liza_tls_destroy(t);return LIZA_TLS_NOMEM;}
     SSL_set_max_cert_list(t->ssl,65536);
     SSL_set_hostflags(t->ssl,X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS|X509_CHECK_FLAG_NEVER_CHECK_SUBJECT);
@@ -161,4 +186,12 @@ liza_tls_result liza_tls_eof(liza_tls *t,uint64_t now) {
     uint32_t code=guard(t,now);if(code)return denied(t,code);
     if(t->eof)return result(t,LIZA_TLS_INVALID,0,0);
     BIO_shutdown_wr(t->wire);t->eof=1;return result(t,LIZA_TLS_OK,0,0);
+}
+
+uint32_t liza_tls_create(const char *ca,const char *peer,uint64_t now,uint64_t deadline,liza_tls **out) {
+    if(!ca){if(out)*out=NULL;return LIZA_TLS_INVALID;}
+    return create(ca,peer,now,deadline,out);
+}
+uint32_t liza_tls_create_system(const char *peer,uint64_t now,uint64_t deadline,liza_tls **out) {
+    return create(NULL,peer,now,deadline,out);
 }
