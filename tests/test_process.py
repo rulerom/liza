@@ -161,3 +161,5 @@ return 0'''
             self.assertEqual(built.returncode,0,built.stderr)
             run=subprocess.run([str(exe),str(self.child)],capture_output=True,timeout=15)
             self.assertEqual(run.returncode,0,(opt,run.stdout,run.stderr))
+            if sys.platform=="win32" and run.stderr:
+                print(run.stderr.decode(errors="replace"),end="")

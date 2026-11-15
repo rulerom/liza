@@ -49,7 +49,18 @@ int main(int argc,char **argv) {
     int result=0;void *children[8]={0};uint32_t error=0,kind=0,code=0;
 #ifdef _WIN32
     wchar_t native_path[32768];MultiByteToWideChar(CP_UTF8,0,argv[1],-1,native_path,32768);
-    const wchar_t *path=native_path;DWORD before,after;GetProcessHandleCount(GetCurrentProcess(),&before);
+    const wchar_t *path=native_path;DWORD before,after;
+    /* Independent raw WinAPI warm-up precedes all adapter measurements. The
+       first failed CreateProcess can initialize persistent compatibility state. */
+    DWORD raw_before,raw_after;GetProcessHandleCount(GetCurrentProcess(),&raw_before);
+    STARTUPINFOW startup={0};startup.cb=sizeof(startup);PROCESS_INFORMATION info={0};
+    wchar_t command_line[]=L"\"Z:\\liza-does-not-exist\\child.exe\"";
+    if(CreateProcessW(L"Z:\\liza-does-not-exist\\child.exe",command_line,0,0,FALSE,0,0,0,&startup,&info)) {
+        TerminateProcess(info.hProcess,137);WaitForSingleObject(info.hProcess,INFINITE);CloseHandle(info.hThread);CloseHandle(info.hProcess);
+    }
+    GetProcessHandleCount(GetCurrentProcess(),&raw_after);
+    fprintf(stderr,"raw CreateProcess failure warm-up: %lu -> %lu\n",(unsigned long)raw_before,(unsigned long)raw_after);
+    GetProcessHandleCount(GetCurrentProcess(),&before);
 #else
     const char *path=argv[1];
 #endif
