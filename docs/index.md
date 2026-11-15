@@ -10,8 +10,8 @@ hide:
   <p class="liza-eyebrow">LIZA · ЭКСПЕРИМЕНТАЛЬНЫЙ ЯЗЫК</p>
   <h1>Сетевые сервисы.<br>Явные ресурсы. Проверяемые свойства.</h1>
   <p class="liza-definition">Liza — экспериментальный системный язык для сетевой инфраструктуры: прокси, шлюзов и протокольных сервисов. Он сочетает определённую семантику, явное управление ресурсами и инструменты проверки отдельных свойств программ.</p>
-  <p class="liza-lead"><strong>Сегодня:</strong> нативные TCP-прокси и Message Router, UDP API, scoped-группы и RTP fanout с одним или двумя независимыми сетевыми владельцами.</p>
-  <p class="liza-lead"><strong>В разработке:</strong> дальнейшие измерения реальных приложений и расширение проверяемого фрагмента. Язык и его API ещё могут меняться.</p>
+  <p class="liza-lead"><strong>Сегодня:</strong> нативные TCP-прокси и Message Router, HTTP/WS на Liza, HTTPS/WSS с проверкой сервера, scoped-группы и RTP fanout с одним или двумя независимыми сетевыми владельцами.</p>
+  <p class="liza-lead"><strong>Следующий этап:</strong> минимальный WSS-клиент VideoGrace CAN, измерения реальных приложений и расширение проверяемого фрагмента. Язык и его API ещё могут меняться.</p>
   <div class="liza-actions">
     <a class="liza-button liza-button-primary" href="getting-started.html">Написать первую программу</a>
     <a class="liza-button" href="network-gateway.html">Verified Network Gateway</a>
@@ -154,7 +154,7 @@ build\hello.exe
 | Алгоритмы с локальным состоянием | `var`, SSA, `if`, `while`, `break`, `continue`, функции и ранний `return` |
 | Составные данные и доступ | Структуры, массивы, `copy`/`move`, `borrow`, ограниченный `borrow mut` и локальные readonly views |
 | Ожидаемые ошибки | `enum`, исчерпывающий `match`, `Option<T>`, `Result<T,E>` |
-| Сетевые приложения | TCP, ограниченный reactor и блокирующий IPv4 UDP; обработка ошибок через `Result` |
+| Сетевые приложения | TCP/UDP, Reactor, HTTP/WS, HTTPS/WSS и scoped-группы; явные лимиты и результаты ошибок |
 
 Один из работающих примеров — **парсер RTP-заголовка**: он принимает
 `View<u8>`, проверяет длину, версию, CSRC, расширение и padding, затем возвращает
@@ -167,9 +167,14 @@ build\hello.exe
   тайм-ауты и ограниченное завершение. [TCP Proxy Operations](tcp-proxy-operations.md).
 - **Message Router:** ограниченные очереди и маршрутизация между клиентами.
   [Message Router](message-router.md).
-- **UDP и RTP:** блокирующие IPv4-датаграммы, проверка RTP и экспериментальная
-  рассылка без явного копирования пакета в коде приложения. Это локальный
-  однопоточный прототип, а не готовый медиасервер. [Исходник и ограничения RTP fanout](https://github.com/rulerom/liza/tree/main/examples/apps/rtp).
+- **HTTP/WS и HTTPS/WSS:** протоколы на Liza, общий parser, частичный I/O,
+  move-only TLS session и обязательная проверка сервера. Есть Linux/macOS/Windows
+  приёмка; DNS, chunked и CAN пока отсутствуют. [HTTP/WS](http-websocket.md) ·
+  [TLS и команды запуска](tls-transport.md).
+- **UDP и RTP:** standalone UDP и consumer-owned endpoint в Reactor,
+  проверка RTP, single/dual fanout workloads с сохранёнными измерениями.
+  Это экспериментальные приложения, а не готовый медиасервер.
+  [Измерения и ограничения](sg4-b2-dual-owners.md).
 - **Текст и данные:** ограниченные буферы, UTF-8 и потоковая проверка и
   форматирование JSON. [JSON](json.md).
 
@@ -189,7 +194,12 @@ fanout. Для них важны backpressure, корректное заверш
 создать собственные регион и reactor.
 Рутины, передача сетевых ресурсов между потоками и общий изменяемый state
 пока не поддерживаются. Liza остаётся экспериментальным проектом и ещё не
-предлагает готовый стек HTTP/TLS или зрелую экосистему сетевых библиотек.
+предлагает универсальную production HTTP/TLS-библиотеку или зрелую экосистему
+сетевых библиотек. Реализованные клиенты имеют явные ограничения.
+
+Ближайшее приложение — [минимальный клиент VideoGrace CAN](roadmap.md#can-client)
+поверх WSS: один запрос, коррелированный ответ, timeout и освобождение ресурсов.
+Это следующий этап, а не уже доступная возможность.
 
 *Liza is an experimental systems language for network infrastructure, with
 well-defined semantics, explicit resource management and tools for checking

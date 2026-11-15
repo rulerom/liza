@@ -7,7 +7,9 @@ description: "Milestones Liza: от первого вычислительног�
 **Состояние реализации:** нативные сетевые приложения, эксплуатационный срез
 TCP Proxy Operations, ресурсные структуры, `borrow` / `borrow mut`, локальные
 subviews, владеющий UTF-8 String, StringBuilder и потоковые JSON check/format,
-а также native workers и scoped-сеть с одним или двумя независимыми owners.
+а также native workers, scoped-сеть с одним или двумя независимыми owners,
+HTTP/WS на Liza и HTTPS/WSS с обязательной проверкой сервера.
+Ближайшее приложение — [CAN-клиент поверх WSS](roadmap.md#can-client), пока не реализован.
 Следующий основной рубеж — воспроизводимый [Verified Network Gateway](network-gateway.md).
 
 Номера 0.0.x ниже обозначают исторические этапы, а не единую версию всех
@@ -227,6 +229,18 @@ Move-only listener/stream и региональный буфер позволя�
 с соединениями reactor. Полное копирование предшествует Accepted; очереди
 ограничены, старый ID не адресует нового клиента того же слота. PR #7 слит,
 платформенный CI пройден. Core, Semantic IR и runtime для Router не менялись.
+
+## HTTP/WS и TLS-A/B — реализованы
+
+[HTTP/1.1 и WebSocket](http-websocket.md) реализованы на Liza (PR #89).
+[TLS-A/B](tls-transport.md) добавили OpenSSL transport и move-only session
+(PR #90–91), обязательную проверку цепочки и DNS/IP SAN, системное доверие,
+HTTPS/WSS и graceful close. Протокольный код общий для plain и secure клиентов.
+
+Приёмка Linux/macOS/Windows включает заполнение обоих BIO, 800 ping и три
+отрицательные мутации I/O scheduling. Это проверка выбранного контракта,
+а не полная верификация OpenSSL, runtime или готового сервиса. DNS, chunked,
+CAN и TLS в scoped-ролях не входят в реализованный срез.
 
 ## Дальнейшие рубежи
 
