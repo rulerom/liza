@@ -114,6 +114,17 @@ int main(int argc,char **argv) {
         if(missing_before!=missing_after)fprintf(stderr,"missing %d: %lu -> %lu\n",repeat,(unsigned long)missing_before,(unsigned long)missing_after);
 #endif
     }
+    children[0]=liza_rt_process_spawn(path,1,(const uint8_t*)"exit\0000\0",7,0,0,&error);CHECK(children[0],22);
+#ifdef _WIN32
+    CHECK(WaitForSingleObject(((Child*)children[0])->process,INFINITE)==WAIT_OBJECT_0,23);
+#else
+    siginfo_t observed;
+    CHECK(waitid(P_PID,((Child*)children[0])->pid,&observed,WEXITED|WNOWAIT)==0,23);
+#endif
+    CHECK(liza_rt_process_op(children[0],2)==0,24);
+    CHECK(liza_rt_process_close(children[0])==7,25); /* Signal is not a wait receipt. */
+    CHECK(liza_rt_process_poll(children[0],1,&kind,&code)==0&&kind==1&&code==0,26);
+    CHECK(liza_rt_process_close(children[0])==0,27);children[0]=0;
     for(int repeat=0;repeat<25;repeat++) {
 #ifdef _WIN32
         DWORD cycle_before,cycle_spawned,cycle_closed;

@@ -86,7 +86,10 @@ uint32_t liza_rt_process_poll(void *handle,uint32_t block,uint32_t *kind,uint32_
 uint32_t liza_rt_process_op(void *handle,uint32_t op) {
     Child *c=handle;if(!c)return 3;if(c->owner!=GetCurrentThreadId())return 8;
     if(op!=1&&op!=2)return 3;
-    uint32_t kind,code,error=liza_rt_process_poll(c,0,&kind,&code);if(error||kind)return error;
+    if(c->kind)return 0;
+    DWORD state=WaitForSingleObject(c->process,0);
+    if(state==WAIT_OBJECT_0)return 0;
+    if(state!=WAIT_TIMEOUT)return error_code(GetLastError());
     if(op==1)return 10; /* No portable, process-local analogue of SIGTERM. */
     if(TerminateProcess(c->process,137))return 0;
     return error_code(GetLastError());

@@ -71,9 +71,9 @@ uint32_t liza_rt_process_op(void *handle,uint32_t op) {
     if(!c)return 3;
     if(!pthread_equal(c->owner,pthread_self()))return 8;
     if(op!=1&&op!=2)return 3;
-    uint32_t kind,code,error=liza_rt_process_poll(c,0,&kind,&code);
-    if(error)return error;
-    if(kind)return 0; /* Already reaped: never signal a recycled PID. */
+    if(c->kind)return 0; /* Already reaped: never signal a recycled PID. */
+    /* An unreaped child retains its PID even after exit. Only the explicit
+       wait operations may reap and publish an exit receipt. */
     if(kill(c->pid,op==1?SIGTERM:SIGKILL)==0||errno==ESRCH)return 0;
     return error_code(errno);
 }
