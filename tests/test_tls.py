@@ -45,6 +45,15 @@ class TlsOwnership(unittest.TestCase):
                 with self.assertRaises((CompileError, ValueError)):
                     self.program(body)
 
+    def test_tls_is_not_an_implicit_worker_capability(self):
+        from test_sg3 import program
+        operation='p:[u8;1]=[120];match tls.create(view p[0..1],100000,1,1000) {Err(e)=>{return 1} Ok(s)=>{d=tls.destroy(move s);return 0}}'
+        sources=[program(consumer=operation),
+                 'fn worker(id:u32)->u32:io,alloc {'+operation+'}\nfn main()->u32:io {r=workers.run(1);return 0}']
+        for source in sources:
+            with self.assertRaisesRegex((CompileError,ValueError),'unaudited external'):
+                lower(Parser(source).parse())
+
     def test_plain_program_does_not_link_openssl(self):
         from liza.stdlib import link_flags
         plain=lower(Parser('fn main()->u32{return 0}').parse())
@@ -80,6 +89,23 @@ class TlsClients(unittest.TestCase):
             for opt in ('0', '2'):
                 folder = cls.root/(mode+opt);folder.mkdir()
                 cls.clients[mode,opt] = build(ROOT/f'examples/apps/liza_{mode}.liza', folder, opt, ROOT/'examples')
+
+    def test_creation_error_categories_and_abortive_cleanup(self):
+        root=self.root/'errors';root.mkdir()
+        entry=root/'main.liza'
+        source='fn category(e:TlsError)->u32 {\nmatch e {TlsError.Invalid=>{return 3} TlsError.ManagedBudget=>{return 8} TlsError.OutOfMemory=>{return 7} TlsError.WrongThread=>{return 6} TlsError.Configuration=>{return 4} TlsError.Verification(c)=>{return 9} TlsError.Deadline=>{return 5} TlsError.Protocol(c)=>{return 10} TlsError.Transport(t)=>{return 11} TlsError.Output=>{return 12}}}\nfn main()->u32:io,alloc {\np:[u8;9]=[108,111,99,97,108,104,111,115,116]\n'
+        cases=[('tls.create(view p[0..9],0,1,1000)',8),
+               ('tls.create(view p[0..9],tls.managed_bytes(),1000,1000)',5),
+               ('tls.create(view p[0..0],tls.managed_bytes(),1,1000)',3),
+               ('tls.create_with_ca(view p[0..9],view p[0..9],tls.managed_bytes(),1,1000)',4)]
+        for call,expected in cases:
+            source+='{match '+call+' {Err(e)=>{if category(e)!='+str(expected)+' {return 1}} Ok(s)=>{d=tls.destroy(move s);return 2}}}\n'
+        source+='match tls.create(view p[0..9],tls.managed_bytes(),1,1000) {Err(e)=>{return 3} Ok(s)=>{d=tls.destroy(move s);return 0}}}'
+        entry.write_text(source)
+        for opt in ('0','2'):
+            exe=build(entry,root,opt)
+            run=subprocess.run([str(exe)],cwd=self.root,capture_output=True,timeout=5)
+            self.assertEqual(run.returncode,0,run.stderr)
 
     def test_short_ciphertext_io_and_deadline(self):
         root=self.root/'short';root.mkdir()
@@ -178,6 +204,11 @@ class TlsClients(unittest.TestCase):
             self.assertEqual(client_frame(conn),(8,b'\x03\xe8'))
         for opt in ('0','2'):
             self.assertEqual(self.session('wss',opt,websocket).stdout,b'hi')
+
+    def test_tls_close_does_not_complete_an_unfinished_protocol(self):
+        for opt in ('0','2'):
+            for mode in ('https','wss'):
+                self.session(mode,opt,lambda conn:None,expected=4)
 
     def test_premature_http_body_is_failure(self):
         def short(conn):

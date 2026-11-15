@@ -59,6 +59,7 @@ fn exchange(session:tls.Session,r:net.Reactor,id:net.Connection,storage:memory.B
                 }
                 if app.closed && app.pending.len==0 {state=2;progress=true}
             }
+            if state==2 && (!app.closed || app.pending.len!=0) {failure=Some(TlsError.Protocol(0));break}
             if state==2 {
                 match tls.shutdown(session,now) {Err(e)=>{failure=Some(e);break} Ok(step)=>{if state_number(step.state)!=state {progress=true};state=state_number(step.state)}}
             }
