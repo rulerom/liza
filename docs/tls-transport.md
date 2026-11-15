@@ -184,10 +184,12 @@ DNS, chunked, CAN, TLS server, session pooling, HTTP/2 и интеграция �
 а не универсальная production HTTPS-библиотека.
 
 Adversarial backpressure-приёмка использует реальные TLS/TCP и управляемую
-инъекцию неготовности записи: 400 различных ping одновременно заполняют BIO
+инъекцию неготовности записи: 800 различных ping одновременно заполняют BIO
 исходящими pong. Проверяются точное содержимое и порядок всех ответов,
 сохранение ciphertext при partial writes, два периода `WouldBlock` (включая
 shutdown), входной TLS progress во время блокировки и отсутствие TCP retry
-без writable readiness / plaintext retry без BIO drain. Обе отрицательные
+без writable readiness / plaintext retry без BIO drain. При заполненном
+входном BIO и удерживаемом TCP input ожидание readable отключается; отдельная
+мутация проверяет отсутствие spin на этом уровне. Все три отрицательные
 мутации отклоняются при O0/O2. Это детерминированная проверка контракта I/O,
 а не измерение физической пропускной способности TCP.

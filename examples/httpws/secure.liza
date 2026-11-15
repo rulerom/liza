@@ -102,7 +102,10 @@ fn exchange(session:tls.Session,r:net.Reactor,id:net.Connection,storage:memory.B
         if progress && write_blocked {work_since_poll=work_since_poll+1}
         if !progress || (write_blocked && work_since_poll>=256) {
             work_since_poll=0
-            var interest:u32=1;if !connected || outgoing!=0 {interest=3}
+            var interest:u32=0
+            if fed==incoming && !tcp_eof && state!=3 {interest=1}
+            if outgoing!=0 {interest=interest|2}
+            if !connected {interest=3}
             match net.reactor_interest(r,id,interest) {Err(e)=>{failure=Some(TlsError.Transport(e));break} Ok(n)=>{}}
             var wait_ms:u32=0;if !progress {wait_ms=u32(deadline-now)}
             match net.reactor_poll(r,wait_ms) {Err(e)=>{if !retry(e) {failure=Some(TlsError.Transport(e));break}} Ok(n)=>{}}

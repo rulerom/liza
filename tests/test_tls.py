@@ -141,7 +141,7 @@ class TlsClients(unittest.TestCase):
         from liza.stdlib import link_flags as original_flags
         def flags(module):
             return [str(engine) if Path(f).name=='tls_openssl.c' else f for f in original_flags(module)]
-        payloads=[i.to_bytes(2,'big')+bytes([i%251])*123 for i in range(400)]
+        payloads=[i.to_bytes(2,'big')+bytes([i%251])*123 for i in range(800)]
         def peer(conn):
             request=self.request(conn)
             key=next(line.split(b':',1)[1].strip() for line in request.split(b'\r\n') if line.lower().startswith(b'sec-websocket-key:'))
@@ -156,12 +156,14 @@ class TlsClients(unittest.TestCase):
                 self.clients['pressure',opt]=build(ROOT/'examples/apps/liza_wss.liza',root,opt,ROOT/'examples',reactor_stub=reactor)
             run=self.session('pressure',opt,peer,version=ssl.TLSVersion.TLSv1_2)
             self.assertRegex(run.stderr,rb'TLS_BP blocked=2 bio_full=[1-9][0-9]* concurrent_reads=[1-9][0-9]* closing=1 violations=0')
+            self.assertIn(b'input_full=1',run.stderr)
             print('pressure O'+opt+': '+run.stderr.decode().strip(),flush=True)
             # The same oracle must reject both retry bugs, not just pass a
             # cooperative socket schedule that never reaches the relevant state.
             for label,before,after,expected,diagnostic in (
                 ('tcp','if outgoing!=0 && !write_blocked {','if outgoing!=0 {',3,b'write retry before writable readiness'),
-                ('bio','if !plaintext_blocked {','if true {',2,b'plaintext retry before BIO drain')):
+                ('bio','if !plaintext_blocked {','if true {',2,b'plaintext retry before BIO drain'),
+                ('read','if fed==incoming && !tcp_eof && state!=3 {interest=1}','if true {interest=1}',3,b'read readiness with full TLS input')):
                 mutant=root/(label+opt);mutant.mkdir()
                 shutil.copytree(ROOT/'examples/httpws',mutant/'httpws')
                 (mutant/'apps/proxy').mkdir(parents=True)
