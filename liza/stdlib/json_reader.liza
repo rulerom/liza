@@ -1,0 +1,237 @@
+// Typed, bounded access over an immutable owned document; no DOM or escaped views.
+enum JsonAccessError {Missing;WrongType;InvalidUnicode;TooLarge;Syntax;DuplicateKey;NumberOutOfRange;InvalidDocument;IndexOutOfRange}
+enum JsonKind {Null;Bool;Number;String;Object;Array}
+struct JsonDone {}
+struct JsonLimits {document_bytes:u32;depth:u32;result_bytes:u32}
+struct JsonDocument {storage:memory.Buffer<u8>;length:u32;start:u32;end:u32;result_limit:u32;valid:bool}
+struct JsonRead {document:JsonDocument;result:Result<JsonDone,JsonAccessError>}
+struct JsonDecoded {document:JsonDocument;buffer:memory.Buffer<u8>;result:Result<u32,JsonAccessError>}
+struct __liza_JsonChar {value:u32;next:u32}
+struct __liza_JsonInteger {negative:bool;magnitude:u64}
+fn __liza_json_ws(data:View<u8>,start:u32,end:u32)->u32 {
+    var i=start;while i<end {if !__liza_json_space(data[i]) {break};i=i+1};return i
+}
+// These scanners are private and operate only after the existing validator succeeds.
+fn __liza_json_string_end(data:View<u8>,start:u32,end:u32)->u32 {
+    var i=start+1;while i<end {if data[i]==34 {return i+1};if data[i]==92 {i=i+1};i=i+1};return end
+}
+fn __liza_json_value_end(data:View<u8>,start:u32,end:u32)->u32 {
+    if data[start]==34 {return __liza_json_string_end(data,start,end)}
+    if data[start]==123 || data[start]==91 {
+        var level:u32=1;var i=start+1
+        while i<end {
+            b=data[i]
+            if b==34 {i=__liza_json_string_end(data,i,end)} else {
+                if b==123 || b==91 {level=level+1}
+                if b==125 || b==93 {level=level-1;if level==0 {return i+1}}
+                i=i+1
+            }
+        };return end
+    }
+    var i=start;while i<end {b=data[i];if __liza_json_space(b)||b==44||b==93||b==125 {break};i=i+1};return i
+}
+fn __liza_json_raw_char(data:View<u8>,start:u32)->__liza_JsonChar {
+    b=u32(data[start]);if b<128 {return __liza_JsonChar(b,start+1)}
+    if b<224 {return __liza_JsonChar((b-192)*64+u32(data[start+1])-128,start+2)}
+    if b<240 {return __liza_JsonChar((b-224)*4096+(u32(data[start+1])-128)*64+u32(data[start+2])-128,start+3)}
+    return __liza_JsonChar((b-240)*262144+(u32(data[start+1])-128)*4096+(u32(data[start+2])-128)*64+u32(data[start+3])-128,start+4)
+}
+fn __liza_json_hex4(data:View<u8>,start:u32)->u32 {
+    var n:u32=0;var i:u32=0;while i<4 {n=n*16+__liza_json_hex(data[start+i]);i=i+1};return n
+}
+fn __liza_json_char(data:View<u8>,start:u32)->__liza_JsonChar {
+    if data[start]!=92 {return __liza_json_raw_char(data,start)}
+    b=data[start+1]
+    if b==34||b==92||b==47 {return __liza_JsonChar(u32(b),start+2)}
+    if b==98 {return __liza_JsonChar(8,start+2)}
+    if b==102 {return __liza_JsonChar(12,start+2)}
+    if b==110 {return __liza_JsonChar(10,start+2)}
+    if b==114 {return __liza_JsonChar(13,start+2)}
+    if b==116 {return __liza_JsonChar(9,start+2)}
+    high=__liza_json_hex4(data,start+2)
+    if high>=55296&&high<=56319 {
+        low=__liza_json_hex4(data,start+8)
+        return __liza_JsonChar(65536+(high-55296)*1024+low-56320,start+12)
+    }
+    return __liza_JsonChar(high,start+6)
+}
+fn __liza_json_keys_equal(data:View<u8>,a:u32,b:u32,end:u32)->bool {
+    ae=__liza_json_string_end(data,a,end)-1;be=__liza_json_string_end(data,b,end)-1
+    var i=a+1;var j=b+1
+    while i<ae&&j<be {x=__liza_json_char(data,i);y=__liza_json_char(data,j);if x.value!=y.value {return false};i=x.next;j=y.next}
+    return i==ae&&j==be
+}
+fn __liza_json_key_equal(data:View<u8>,start:u32,end:u32,key:View<u8>)->bool {
+    stop=__liza_json_string_end(data,start,end)-1;var i=start+1;var j:u32=0
+    while i<stop&&j<key.len {a=__liza_json_char(data,i);b=__liza_json_raw_char(key,j);if a.value!=b.value {return false};i=a.next;j=b.next}
+    return i==stop&&j==key.len
+}
+// Full duplicate check includes nested objects and escaped key spellings.
+fn __liza_json_walk(data:View<u8>,start:u32,end:u32,level:u32,limit:u32)->Result<JsonDone,JsonAccessError> {
+    b=data[start];if b!=123&&b!=91 {return Ok(JsonDone())}
+    if level>=limit {return Err(JsonAccessError.TooLarge)}
+    var i=__liza_json_ws(data,start+1,end)
+    while i<end-1 {
+        if b==123 {
+            var previous=__liza_json_ws(data,start+1,end)
+            while previous<i {
+                if __liza_json_keys_equal(data,previous,i,end) {return Err(JsonAccessError.DuplicateKey)}
+                colon=__liza_json_ws(data,__liza_json_string_end(data,previous,end),end)
+                value=__liza_json_ws(data,colon+1,end)
+                previous=__liza_json_ws(data,__liza_json_value_end(data,value,end),end)
+                if data[previous]==44 {previous=__liza_json_ws(data,previous+1,end)}
+            }
+            colon=__liza_json_ws(data,__liza_json_string_end(data,i,end),end)
+            i=__liza_json_ws(data,colon+1,end)
+        }
+        stop=__liza_json_value_end(data,i,end)
+        match __liza_json_walk(data,i,stop,level+1,limit) {Err(e)=>{return Err(e)} Ok(done)=>{}}
+        i=__liza_json_ws(data,stop,end)
+        if i<end-1 {i=__liza_json_ws(data,i+1,end)}
+    }
+    return Ok(JsonDone())
+}
+fn __liza_json_access_error(error:JsonError)->JsonAccessError {
+    match error.kind {
+        JsonErrorKind.InvalidUtf8=>{return JsonAccessError.InvalidUnicode}
+        JsonErrorKind.InvalidEscape=>{return JsonAccessError.InvalidUnicode}
+        JsonErrorKind.InvalidSurrogate=>{return JsonAccessError.InvalidUnicode}
+        JsonErrorKind.DepthLimit=>{return JsonAccessError.TooLarge}
+        JsonErrorKind.SizeOverflow=>{return JsonAccessError.TooLarge}
+        JsonErrorKind.Syntax=>{return JsonAccessError.Syntax}
+        JsonErrorKind.InvalidNumber=>{return JsonAccessError.Syntax}
+        JsonErrorKind.UnexpectedEof=>{return JsonAccessError.Syntax}
+    }
+}
+fn json.parse(storage:memory.Buffer<u8>,length:u32,limits:JsonLimits)->JsonRead {
+    if length>memory.len(storage)||length>limits.document_bytes||limits.depth==0||limits.depth>64 {
+        return JsonRead(JsonDocument(move storage,length,0,0,limits.result_bytes,false),Err(JsonAccessError.TooLarge))
+    }
+    var result:Result<JsonDone,JsonAccessError> =Ok(JsonDone());var start:u32=0;var end:u32=0
+    {bytes=memory.view(storage);data=view bytes[0..length]
+        match json.finish(json.feed(json.create(),data)) {
+            Err(e)=>{result=Err(__liza_json_access_error(e))}
+            Ok(n)=>{start=__liza_json_ws(data,0,length);end=__liza_json_value_end(data,start,length);result=__liza_json_walk(data,start,end,0,limits.depth)}
+        }
+    }
+    var valid=false;match result {Ok(n)=>{valid=true} Err(e)=>{}}
+    return JsonRead(JsonDocument(move storage,length,start,end,limits.result_bytes,valid),result)
+}
+fn json.root(document:JsonDocument)->JsonDocument {
+    (storage,length,start,end,limit,valid)=move document
+    var first:u32=0;var last:u32=0
+    if valid {data=memory.view(storage);first=__liza_json_ws(data,0,length);last=__liza_json_value_end(data,first,length)}
+    return JsonDocument(move storage,length,first,last,limit,valid)
+}
+fn json.kind(borrow document:JsonDocument)->Result<JsonKind,JsonAccessError> {
+    if !document.valid {return Err(JsonAccessError.InvalidDocument)}
+    data=memory.view(document.storage);b=data[document.start]
+    if b==110 {return Ok(JsonKind.Null)}
+    if b==116||b==102 {return Ok(JsonKind.Bool)}
+    if b==34 {return Ok(JsonKind.String)}
+    if b==123 {return Ok(JsonKind.Object)}
+    if b==91 {return Ok(JsonKind.Array)}
+    return Ok(JsonKind.Number)
+}
+fn json.field(document:JsonDocument,key:View<u8>)->JsonRead {
+    (storage,length,start,end,limit,valid)=move document
+    var result:Result<JsonDone,JsonAccessError> =Err(JsonAccessError.Missing)
+    var first=start;var last=end
+    if !valid {result=Err(JsonAccessError.InvalidDocument)} else {
+        match utf8.validate(key) {
+            Err(e)=>{result=Err(JsonAccessError.InvalidUnicode)}
+            Ok(n)=>{
+                data=memory.view(storage)
+                if data[start]!=123 {result=Err(JsonAccessError.WrongType)} else {
+                    var i=__liza_json_ws(data,start+1,end)
+                    while i<end-1 {
+                        colon=__liza_json_ws(data,__liza_json_string_end(data,i,end),end)
+                        value=__liza_json_ws(data,colon+1,end);stop=__liza_json_value_end(data,value,end)
+                        if __liza_json_key_equal(data,i,end,key) {first=value;last=stop;result=Ok(JsonDone());break}
+                        i=__liza_json_ws(data,stop,end);if i<end-1 {i=__liza_json_ws(data,i+1,end)}
+                    }
+                }
+            }
+        }
+    }
+    return JsonRead(JsonDocument(move storage,length,first,last,limit,valid),result)
+}
+fn json.read_bool(borrow document:JsonDocument)->Result<bool,JsonAccessError> {
+    if !document.valid {return Err(JsonAccessError.InvalidDocument)}
+    data=memory.view(document.storage);b=data[document.start]
+    if b==116 {return Ok(true)};if b==102 {return Ok(false)};return Err(JsonAccessError.WrongType)
+}
+fn __liza_json_integer(data:View<u8>,start:u32,end:u32)->Result<__liza_JsonInteger,JsonAccessError> {
+    var i=start;var negative=false;if data[i]==45 {negative=true;i=i+1}
+    if data[i]<48||data[i]>57 {return Err(JsonAccessError.WrongType)}
+    var scan=i;while scan<end {if data[scan]<48||data[scan]>57 {return Err(JsonAccessError.WrongType)};scan=scan+1}
+    var n:u64=0
+    while i<end {
+        b=data[i];if b<48||b>57 {return Err(JsonAccessError.WrongType)}
+        digit=u64(b-48)
+        if n>(18446744073709551615-digit)/10 {return Err(JsonAccessError.NumberOutOfRange)}
+        n=n*10+digit;i=i+1
+    }
+    return Ok(__liza_JsonInteger(negative,n))
+}
+fn json.read_u64(borrow document:JsonDocument)->Result<u64,JsonAccessError> {
+    if !document.valid {return Err(JsonAccessError.InvalidDocument)}
+    data=memory.view(document.storage)
+    match __liza_json_integer(data,document.start,document.end) {
+        Err(e)=>{return Err(e)} Ok(n)=>{if n.negative&&n.magnitude!=0 {return Err(JsonAccessError.NumberOutOfRange)};return Ok(n.magnitude)}
+    }
+}
+fn json.read_i64(borrow document:JsonDocument)->Result<i64,JsonAccessError> {
+    if !document.valid {return Err(JsonAccessError.InvalidDocument)}
+    data=memory.view(document.storage)
+    match __liza_json_integer(data,document.start,document.end) {
+        Err(e)=>{return Err(e)} Ok(n)=>{
+            if n.negative {if n.magnitude>9223372036854775808 {return Err(JsonAccessError.NumberOutOfRange)};if n.magnitude==9223372036854775808 {return Ok(-9223372036854775807-1)};return Ok(-i64(n.magnitude))}
+            if n.magnitude>9223372036854775807 {return Err(JsonAccessError.NumberOutOfRange)};return Ok(i64(n.magnitude))
+        }
+    }
+}
+fn json.array_length(borrow document:JsonDocument)->Result<u32,JsonAccessError> {
+    if !document.valid {return Err(JsonAccessError.InvalidDocument)}
+    data=memory.view(document.storage);if data[document.start]!=91 {return Err(JsonAccessError.WrongType)}
+    var i=__liza_json_ws(data,document.start+1,document.end);var count:u32=0
+    while i<document.end-1 {count=count+1;i=__liza_json_ws(data,__liza_json_value_end(data,i,document.end),document.end);if i<document.end-1 {i=__liza_json_ws(data,i+1,document.end)}}
+    return Ok(count)
+}
+fn json.index(document:JsonDocument,index:u32)->JsonRead {
+    (storage,length,start,end,limit,valid)=move document
+    var first=start;var last=end;var result:Result<JsonDone,JsonAccessError> =Err(JsonAccessError.IndexOutOfRange)
+    if !valid {result=Err(JsonAccessError.InvalidDocument)} else {
+        data=memory.view(storage)
+        if data[start]!=91 {result=Err(JsonAccessError.WrongType)} else {
+            var i=__liza_json_ws(data,start+1,end);var item:u32=0
+            while i<end-1 {
+                stop=__liza_json_value_end(data,i,end)
+                if item==index {first=i;last=stop;result=Ok(JsonDone());break}
+                item=item+1;i=__liza_json_ws(data,stop,end);if i<end-1 {i=__liza_json_ws(data,i+1,end)}
+            }
+        }
+    }
+    return JsonRead(JsonDocument(move storage,length,first,last,limit,valid),result)
+}
+fn __liza_json_utf8_size(cp:u32)->u32 {if cp<128 {return 1};if cp<2048 {return 2};if cp<65536 {return 3};return 4}
+fn __liza_json_put_cp(storage:memory.Buffer<u8>,start:u32,cp:u32)->memory.Buffer<u8> {
+    var out=move storage
+    if cp<128 {return memory.set(move out,start,u8(cp))}
+    if cp<2048 {out=memory.set(move out,start,u8(192+cp/64));return memory.set(move out,start+1,u8(128+cp%64))}
+    if cp<65536 {out=memory.set(move out,start,u8(224+cp/4096));out=memory.set(move out,start+1,u8(128+(cp/64)%64));return memory.set(move out,start+2,u8(128+cp%64))}
+    out=memory.set(move out,start,u8(240+cp/262144));out=memory.set(move out,start+1,u8(128+(cp/4096)%64));out=memory.set(move out,start+2,u8(128+(cp/64)%64));return memory.set(move out,start+3,u8(128+cp%64))
+}
+fn json.decode_string(document:JsonDocument,output:memory.Buffer<u8>)->JsonDecoded {
+    (storage,length,start,end,limit,valid)=move document
+    if !valid {return JsonDecoded(JsonDocument(move storage,length,start,end,limit,valid),move output,Err(JsonAccessError.InvalidDocument))}
+    var count:u32=0;var is_string=false
+    {data=memory.view(storage);is_string=data[start]==34;if is_string {var i=start+1;while i<end-1 {cp=__liza_json_char(data,i);count=count+__liza_json_utf8_size(cp.value);i=cp.next}}}
+    if !is_string {return JsonDecoded(JsonDocument(move storage,length,start,end,limit,valid),move output,Err(JsonAccessError.WrongType))}
+    if count>limit||count>memory.len(output) {return JsonDecoded(JsonDocument(move storage,length,start,end,limit,valid),move output,Err(JsonAccessError.TooLarge))}
+    var out=move output
+    {data=memory.view(storage);var i=start+1;var written:u32=0;while i<end-1 {cp=__liza_json_char(data,i);out=__liza_json_put_cp(move out,written,cp.value);written=written+__liza_json_utf8_size(cp.value);i=cp.next}}
+    return JsonDecoded(JsonDocument(move storage,length,start,end,limit,valid),move out,Ok(count))
+}
+fn json.into_buffer(document:JsonDocument)->memory.Buffer<u8> {(storage,length,start,end,limit,valid)=move document;return move storage}
+fn json.release(document:JsonDocument)->u32 {(storage,length,start,end,limit,valid)=move document;return memory.release(move storage)}

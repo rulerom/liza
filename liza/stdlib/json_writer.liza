@@ -1,0 +1,141 @@
+// Owned bounded builder. Each operation preflights grammar, UTF-8 and capacity.
+struct JsonWriter {storage:memory.Buffer<u8>;length:u32;limit:u32;max_depth:u32;depth:u32;stack:[u8;64];starts:[u32;64];root:bool;valid:bool}
+struct JsonWritten {writer:JsonWriter;result:Result<JsonDone,JsonAccessError>}
+struct JsonOutput {buffer:memory.Buffer<u8>;length:u32;result:Result<JsonDone,JsonAccessError>}
+fn json.writer(storage:memory.Buffer<u8>,max_output:u32,max_depth:u32)->JsonWritten {
+    var valid=max_output<=memory.len(storage)&&max_depth>=1&&max_depth<=64
+    var result:Result<JsonDone,JsonAccessError> =Ok(JsonDone());if !valid {result=Err(JsonAccessError.TooLarge)}
+    return JsonWritten(JsonWriter(move storage,0,max_output,max_depth,0,[0;64],[0;64],false,valid),result)
+}
+struct __liza_JsonWriterInfo {length:u32;limit:u32;depth:u32;max_depth:u32;state:u8;valid:bool}
+fn __liza_json_writer_info(borrow writer:JsonWriter)->__liza_JsonWriterInfo {
+    var state:u8=0;if writer.depth!=0 {state=writer.stack[writer.depth-1]}
+    return __liza_JsonWriterInfo(writer.length,writer.limit,writer.depth,writer.max_depth,state,writer.valid)
+}
+fn json.writer_length(borrow writer:JsonWriter)->u32 {return writer.length}
+// States: object key/end=1, value=2, next key/end=3; array first=4, next=5.
+fn __liza_json_writer_prefix(borrow writer:JsonWriter)->Result<u32,JsonAccessError> {
+    if !writer.valid {return Err(JsonAccessError.InvalidDocument)}
+    if writer.depth==0 {if writer.root {return Err(JsonAccessError.Syntax)};return Ok(0)}
+    state=writer.stack[writer.depth-1]
+    if state==2||state==4 {return Ok(0)};if state==5 {return Ok(1)};return Err(JsonAccessError.WrongType)
+}
+fn __liza_json_quote_size(data:View<u8>)->Result<u64,JsonAccessError> {
+    match utf8.validate(data) {Err(e)=>{return Err(JsonAccessError.InvalidUnicode)} Ok(n)=>{}}
+    var count:u64=2;var i:u32=0
+    while i<data.len {b=data[i];if b<32 {count=count+6} else if b==34||b==92 {count=count+2} else {count=count+1};i=i+1}
+    return Ok(count)
+}
+fn __liza_json_hex_digit(n:u8)->u8 {if n<10 {return n+48};return n+87}
+fn __liza_json_quote(storage:memory.Buffer<u8>,start:u32,data:View<u8>)->memory.Buffer<u8> {
+    var out=memory.set(move storage,start,34);var at=start+1;var i:u32=0
+    while i<data.len {
+        b=data[i]
+        if b<32 {
+            out=memory.set(move out,at,92);out=memory.set(move out,at+1,117);out=memory.set(move out,at+2,48);out=memory.set(move out,at+3,48)
+            out=memory.set(move out,at+4,__liza_json_hex_digit(b/16));out=memory.set(move out,at+5,__liza_json_hex_digit(b%16));at=at+6
+        } else if b==34||b==92 {out=memory.set(move out,at,92);out=memory.set(move out,at+1,b);at=at+2}
+        else {out=memory.set(move out,at,b);at=at+1}
+        i=i+1
+    }
+    return memory.set(move out,at,34)
+}
+fn __liza_json_writer_emit(writer:JsonWriter,data:View<u8>,quoted:bool,prefix:u32,count:u32)->JsonWriter {
+    (initial,length,limit,max_depth,depth,initial_stack,starts,root,valid)=move writer
+    var storage=move initial;var stack=initial_stack
+    if prefix!=0 {storage=memory.set(move storage,length,44)}
+    if depth!=0 {if stack[depth-1]==2 {stack[depth-1]=3} else {stack[depth-1]=5}}
+    if quoted {storage=__liza_json_quote(move storage,length+prefix,data)} else {var i:u32=0;while i<data.len {storage=memory.set(move storage,length+prefix+i,data[i]);i=i+1}}
+    return JsonWriter(move storage,length+prefix+count,limit,max_depth,depth,stack,starts,true,valid)
+}
+fn __liza_json_writer_value(writer:JsonWriter,data:View<u8>,quoted:bool)->JsonWritten {
+    info=__liza_json_writer_info(writer)
+    var count=u64(data.len)
+    if quoted {match __liza_json_quote_size(data) {Err(e)=>{return JsonWritten(move writer,Err(e))} Ok(n)=>{count=n}}}
+    match __liza_json_writer_prefix(writer) {
+        Err(e)=>{return JsonWritten(move writer,Err(e))}
+        Ok(prefix)=>{if count+u64(prefix)>u64(info.limit-info.length) {return JsonWritten(move writer,Err(JsonAccessError.TooLarge))};return JsonWritten(__liza_json_writer_emit(move writer,data,quoted,prefix,u32(count)),Ok(JsonDone()))}
+    }
+}
+fn json.write_string(writer:JsonWriter,value:View<u8>)->JsonWritten {return __liza_json_writer_value(move writer,value,true)}
+fn json.write_null(writer:JsonWriter)->JsonWritten {data:[u8;4]=[110,117,108,108];return __liza_json_writer_value(move writer,view data[0..4],false)}
+fn json.write_bool(writer:JsonWriter,value:bool)->JsonWritten {
+    if value {data:[u8;4]=[116,114,117,101];return __liza_json_writer_value(move writer,view data[0..4],false)}
+    data:[u8;5]=[102,97,108,115,101];return __liza_json_writer_value(move writer,view data[0..5],false)
+}
+fn __liza_json_write_number(writer:JsonWriter,value:u64,negative:bool)->JsonWritten {
+    var digits:[u8;21]=[0;21];var end:u32=21;var n=value
+    while true {end=end-1;digits[end]=u8(n%10)+48;n=n/10;if n==0 {break}}
+    if negative {end=end-1;digits[end]=45}
+    return __liza_json_writer_value(move writer,view digits[end..21],false)
+}
+fn json.write_u64(writer:JsonWriter,value:u64)->JsonWritten {return __liza_json_write_number(move writer,value,false)}
+fn json.write_i64(writer:JsonWriter,value:i64)->JsonWritten {
+    if value<0 {return __liza_json_write_number(move writer,u64(-(value+1))+1,true)}
+    return __liza_json_write_number(move writer,u64(value),false)
+}
+fn __liza_json_writer_key_exists(borrow writer:JsonWriter,key:View<u8>)->bool {
+    data=memory.view(writer.storage);var i=writer.starts[writer.depth-1]+1
+    while i<writer.length {
+        if __liza_json_key_equal(data,i,writer.length,key) {return true}
+        colon=__liza_json_string_end(data,i,writer.length)
+        i=__liza_json_value_end(data,colon+1,writer.length)
+        if i<writer.length {i=i+1}
+    }
+    return false
+}
+fn json.key(writer:JsonWriter,key:View<u8>)->JsonWritten {
+    info=__liza_json_writer_info(writer)
+    if !info.valid {return JsonWritten(move writer,Err(JsonAccessError.InvalidDocument))}
+    if info.depth==0 {return JsonWritten(move writer,Err(JsonAccessError.WrongType))}
+    state=info.state
+    if state!=1&&state!=3 {return JsonWritten(move writer,Err(JsonAccessError.WrongType))}
+    var count:u64=0
+    match __liza_json_quote_size(key) {Err(e)=>{return JsonWritten(move writer,Err(e))} Ok(n)=>{count=n}}
+    if __liza_json_writer_key_exists(writer,key) {return JsonWritten(move writer,Err(JsonAccessError.DuplicateKey))}
+    var prefix:u32=0;if state==3 {prefix=1}
+    if count+u64(prefix)+1>u64(info.limit-info.length) {return JsonWritten(move writer,Err(JsonAccessError.TooLarge))}
+    (initial,length,limit,max_depth,depth,initial_stack,starts,root,valid)=move writer
+    var storage=move initial;var stack=initial_stack
+    if prefix!=0 {storage=memory.set(move storage,length,44)}
+    storage=__liza_json_quote(move storage,length+prefix,key)
+    storage=memory.set(move storage,length+prefix+u32(count),58);stack[depth-1]=2
+    return JsonWritten(JsonWriter(move storage,length+prefix+u32(count)+1,limit,max_depth,depth,stack,starts,root,valid),Ok(JsonDone()))
+}
+fn __liza_json_writer_open(writer:JsonWriter,object:bool)->JsonWritten {
+    info=__liza_json_writer_info(writer)
+    match __liza_json_writer_prefix(writer) {
+        Err(e)=>{return JsonWritten(move writer,Err(e))}
+        Ok(prefix)=>{
+            if info.depth>=info.max_depth||u64(prefix)+1>u64(info.limit-info.length) {return JsonWritten(move writer,Err(JsonAccessError.TooLarge))}
+            position=info.length+prefix;var byte:u8=91;var state:u8=4;if object {byte=123;state=1}
+            data:[u8;1]=[byte];emitted=__liza_json_writer_emit(move writer,view data[0..1],false,prefix,1)
+            (storage,length,limit,max_depth,depth,initial_stack,initial_starts,root,valid)=move emitted
+            var stack=initial_stack;var starts=initial_starts;stack[depth]=state;starts[depth]=position
+            return JsonWritten(JsonWriter(move storage,length,limit,max_depth,depth+1,stack,starts,root,valid),Ok(JsonDone()))
+        }
+    }
+}
+fn json.begin_object(writer:JsonWriter)->JsonWritten {return __liza_json_writer_open(move writer,true)}
+fn json.begin_array(writer:JsonWriter)->JsonWritten {return __liza_json_writer_open(move writer,false)}
+fn __liza_json_writer_close(writer:JsonWriter,object:bool)->JsonWritten {
+    info=__liza_json_writer_info(writer)
+    if !info.valid {return JsonWritten(move writer,Err(JsonAccessError.InvalidDocument))}
+    if info.depth==0 {return JsonWritten(move writer,Err(JsonAccessError.WrongType))}
+    state=info.state
+    if object {if state!=1&&state!=3 {return JsonWritten(move writer,Err(JsonAccessError.WrongType))}}
+    else {if state!=4&&state!=5 {return JsonWritten(move writer,Err(JsonAccessError.WrongType))}}
+    if info.length==info.limit {return JsonWritten(move writer,Err(JsonAccessError.TooLarge))}
+    (initial,length,limit,max_depth,depth,stack,starts,root,valid)=move writer
+    var byte:u8=93;if object {byte=125}
+    storage=memory.set(move initial,length,byte)
+    return JsonWritten(JsonWriter(move storage,length+1,limit,max_depth,depth-1,stack,starts,root,valid),Ok(JsonDone()))
+}
+fn json.end_object(writer:JsonWriter)->JsonWritten {return __liza_json_writer_close(move writer,true)}
+fn json.end_array(writer:JsonWriter)->JsonWritten {return __liza_json_writer_close(move writer,false)}
+fn json.finish_writer(writer:JsonWriter)->JsonOutput {
+    (storage,length,limit,max_depth,depth,stack,starts,root,valid)=move writer
+    if !valid {return JsonOutput(move storage,length,Err(JsonAccessError.InvalidDocument))}
+    if depth!=0||!root {return JsonOutput(move storage,length,Err(JsonAccessError.Syntax))}
+    return JsonOutput(move storage,length,Ok(JsonDone()))
+}

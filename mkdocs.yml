@@ -128,6 +128,7 @@ nav:
       - Владеющий String: owned-string.md
       - StringBuilder: string-builder.md
       - Потоковый JSON: json.md
+      - JSON Reader/Writer: json-access.md
       - JSON tokenizer (контракт): json-tokenizer.md
       - Линейные результаты и Vec: bounded-vec.md
       - Явный рост Vec: vec-reserve.md

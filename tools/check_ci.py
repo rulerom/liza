@@ -39,8 +39,12 @@ def selected(workflows, paths, event='pull_request', branch='feature/example'):
 # These expectations are independent of the actual YAML filter lists.
 COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline',
             'verified-relay-r1', 'verified-relay-r2b', 'verified-relay-r2c',
-            'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload', 'http-ws', 'tls-transport'}
+            'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload', 'http-ws', 'tls-transport', 'json-access'}
 CASES = [
+    (['tests/test_json_access.py'], {'test', 'json-access'}),
+    (['tests/fixtures/can_examples.json'], {'test', 'editor', 'json-access'}),
+    (['tests/fixtures/json_access.liza'], {'test', 'editor', 'json-access'}),
+    (['examples/json_access.liza'], {'test', 'editor', 'docs', 'json-access'}),
     (['benchmarks/sg4-fanout/adapter.c'], {'sg4-workload'}),
     (['benchmarks/sg4-dual/adapter.c'], {'sg4-workload'}),
     (['examples/apps/rtp/packet.liza'], {'test', 'docs', 'editor', 'sg4-workload'}),
