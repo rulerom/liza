@@ -141,6 +141,17 @@ match process.spawn(executable,command) {{Err(e)=>{{return 4}} Ok(child)=>{{
             program=source('match process.spawn(executable,command) {Err(e)=>{return 3} Ok(child)=>{'+body+'}}')
             with self.subTest(body=body),self.assertRaises(CompileError):lower(Parser(program).parse())
 
+    def test_command_limits_and_invalid_bytes_before_spawn(self):
+        invalid=[b'\x00',b'\xff',b'a'*1025]
+        body=''
+        for i,data in enumerate(invalid):
+            body+='bad%d:[u8;%d]=%s;match process.argument(command,view bad%d[0..%d]) {Ok(unexpected)=>{return 3} Err(e)=>{}}\n' % (i,len(data),array(data),i,len(data))
+        body+='''var i:u32=0;empty:[u8;0]=[]
+while i<32 {match process.argument(command,view empty[0..0]) {Err(e)=>{return 4} Ok(next)=>{command=next}};i=i+1}
+match process.argument(command,view empty[0..0]) {Ok(next)=>{return 5} Err(e)=>{}}
+return 0'''
+        self.run_program(source(body))
+
     def test_native_admission_signal_wait_failures_and_reaping(self):
         for opt in ('0','2'):
             exe=self.root/('ownership'+opt+('.exe' if sys.platform=='win32' else ''))
