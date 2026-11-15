@@ -17,8 +17,15 @@ typedef struct {
     char *argv[34],*envp[257];
     uint32_t env_used,env_count;
 } Launch;
+static size_t key_length(const char *s) {
+#ifdef _WIN32
+    /* Preserve Windows hidden drive-current-directory keys such as =C:. */
+    if(s[0]=='=')return 1+strcspn(s+1,"=");
+#endif
+    return strcspn(s,"=");
+}
 static int same_key(const char *a,const char *b) {
-    size_t an=strcspn(a,"="),bn=strcspn(b,"=");
+    size_t an=key_length(a),bn=key_length(b);
     if(an!=bn)return 0;
     for(size_t i=0;i<an;i++) {
         unsigned char x=a[i],y=b[i];

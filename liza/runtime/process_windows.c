@@ -22,7 +22,13 @@ static uint32_t quoted(wchar_t *out,uint32_t *at,const wchar_t *s) {
     slashes*=2;while(slashes--)APPEND(L'\\');APPEND(L'"');out[*at]=0;return 0;
 #undef APPEND
 }
-static int env_compare(const void *a,const void *b) {return _wcsicmp(*(wchar_t *const*)a,*(wchar_t *const*)b);}
+static int env_compare(const void *a,const void *b) {
+    const wchar_t *x=*(wchar_t *const*)a,*y=*(wchar_t *const*)b;
+    int xn=(int)(x[0]==L'='?1+wcscspn(x+1,L"="):wcscspn(x,L"="));
+    int yn=(int)(y[0]==L'='?1+wcscspn(y+1,L"="):wcscspn(y,L"="));
+    int order=CompareStringOrdinal(x,xn,y,yn,TRUE);
+    return order==CSTR_LESS_THAN?-1:order==CSTR_GREATER_THAN?1:0;
+}
 void *liza_rt_process_spawn(const wchar_t *path,uint32_t inherit,const uint8_t *args,uint32_t an,const uint8_t *env,uint32_t en,uint32_t *error) {
     *error=0;
     if(!path||!((path[0]&&path[1]==L':'&&(path[2]==L'\\'||path[2]==L'/'))||(path[0]==L'\\'&&path[1]==L'\\'))) {*error=3;return 0;}

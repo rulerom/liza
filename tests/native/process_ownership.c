@@ -18,7 +18,22 @@ static pid_t injected_wait(pid_t p,int *s,int flags) {if(fail_wait) {fail_wait=0
 #undef kill
 #undef waitpid
 #else
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+static int fail_signal,fail_wait;
+static BOOL injected_terminate(HANDLE p,UINT code) {
+    if(fail_signal) {fail_signal=0;SetLastError(ERROR_ACCESS_DENIED);return FALSE;}
+    return TerminateProcess(p,code);
+}
+static DWORD injected_wait(HANDLE p,DWORD delay) {
+    if(fail_wait) {fail_wait=0;SetLastError(ERROR_INVALID_HANDLE);return WAIT_FAILED;}
+    return WaitForSingleObject(p,delay);
+}
+#define TerminateProcess injected_terminate
+#define WaitForSingleObject injected_wait
 #include "process_windows.c"
+#undef TerminateProcess
+#undef WaitForSingleObject
 #endif
 static uint32_t foreign_poll,foreign_kill,foreign_close;
 #ifdef _WIN32
@@ -56,6 +71,9 @@ int main(int argc,char **argv) {
     CHECK(liza_rt_process_op(children[0],1)==0,10);
 #else
     CHECK(liza_rt_process_op(children[0],1)==10,10);
+    fail_signal=1;CHECK(liza_rt_process_op(children[0],2)==2,7);
+    CHECK(liza_rt_process_poll(children[0],0,&kind,&code)==0&&kind==0,8);
+    fail_wait=1;CHECK(liza_rt_process_poll(children[0],1,&kind,&code)==11,9);
 #endif
     CHECK(liza_rt_process_op(children[0],2)==0,11);
     CHECK(liza_rt_process_poll(children[0],1,&kind,&code)==0&&kind!=0,12);
@@ -65,6 +83,10 @@ int main(int argc,char **argv) {
     int calls=signal_calls;CHECK(liza_rt_process_op(children[0],2)==0&&signal_calls==calls,14);
 #endif
     CHECK(liza_rt_process_close(children[0])==0,15);children[0]=0;
+#ifdef _WIN32
+    DWORD steady_before,steady_after;
+    GetProcessHandleCount(GetCurrentProcess(),&steady_before);
+#endif
     /* Both startup failure and completed close release admission. */
 #ifdef _WIN32
     const wchar_t *missing=L"Z:\\liza-does-not-exist\\child.exe";
@@ -79,6 +101,10 @@ int main(int argc,char **argv) {
         CHECK(liza_rt_process_poll(children[0],1,&kind,&code)==0&&kind==1&&code==0,18);
         CHECK(liza_rt_process_close(children[0])==0,19);children[0]=0;
     }
+#ifdef _WIN32
+    GetProcessHandleCount(GetCurrentProcess(),&steady_after);
+    CHECK(steady_before==steady_after,21);
+#endif
 cleanup:
     for(int i=0;i<8;i++)if(children[i]) {
         liza_rt_process_op(children[i],2);
@@ -86,7 +112,13 @@ cleanup:
         liza_rt_process_close(children[i]);
     }
 #ifdef _WIN32
-    GetProcessHandleCount(GetCurrentProcess(),&after);if(!result&&before!=after)result=17;
+    GetProcessHandleCount(GetCurrentProcess(),&after);
+    /* The first spawn can initialize process-wide Windows/CRT handles. Compare
+       steady-state reuse above, and require all 7 remaining Child handle pairs
+       to disappear during cleanup, rather than accepting a per-child leak. */
+    if(!result&&after+14!=steady_after) {
+        fprintf(stderr,"handles: initial=%lu steady=%lu final=%lu\n",(unsigned long)before,(unsigned long)steady_after,(unsigned long)after);result=17;
+    }
 #endif
     return result;
 }

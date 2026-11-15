@@ -114,8 +114,8 @@ python3 -m unittest discover -s tests -p test_process.py -v
 Пример без дополнительных аргументов ждёт ребёнка и возвращает его exit code;
 тестовый fixture отдельно упражняет argv/env, stop marker и Reactor polling.
 Native harness проверяет admission, wrong-thread ошибки, reap/отсутствие zombie
-на POSIX и отсутствие роста handles на Windows. На POSIX инъекции ошибок
-сигнала и wait показывают сохранение владельца после отказа.
+на POSIX и отсутствие роста handles на Windows после инициализации. Инъекции
+ошибок terminate/kill и wait показывают сохранение владельца после отказа.
 O0/O2 проверяются отдельно; платформенная матрица — Linux/macOS/Windows.
 
 Область гарантий — прямой дочерний процесс и контролируемые выходы программы.
