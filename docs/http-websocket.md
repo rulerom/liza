@@ -10,7 +10,9 @@ HTTP parsing, Upgrade, WebSocket framing, masking и проверка сообщ
 и новый узкий вызов `net.random_u32()` для nonce и масок.
 
 Это первый экспериментальный клиент. Он работает с числовым IPv4 endpoint,
-без DNS и TLS; `https://` и `wss://` пока не поддерживаются. Приложения используют
+без DNS lookup. Примеры ниже явно используют plain HTTP/WS. Для HTTPS/WSS
+уже есть [TLS transport](tls-transport.md) с проверкой сервера и общим
+HTTP/WebSocket parser; TLS-криптографию выполняет OpenSSL 3. Приложения используют
 явный Reactor в одном потоке, а не scoped-группу. CAN ещё не реализован.
 
 ## Сборка

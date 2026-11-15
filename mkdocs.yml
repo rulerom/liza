@@ -138,7 +138,7 @@ nav:
       - TCP: tcp.md
       - Reactor: reactor.md
       - HTTP и WebSocket: http-websocket.md
-      - TLS transport: tls-transport.md
+      - HTTPS/WSS и TLS: tls-transport.md
       - Scoped-группы: scoped-groups.md
       - Изолированные workers: scoped-workers.md
       - Scoped-канал u32: scoped-channels.md
