@@ -1,13 +1,12 @@
 ---
-description: "Порядок переноса VideoGrace agents: Recorder, Summarizer, затем медиасервисы; общая CAN-модель и отдельная граница inference."
+description: "Порядок переноса VideoGrace agents: Recorder через native process, затем RTP Translator после C++/CAN-референса; существующие Python-сервисы сохраняются."
 ---
 
 # VideoGrace agents: orchestration и inference
 
-Первичная цель — перенос управляющей логики агентов на Liza с сохранением
-реальных контрактов VideoGrace. Удаление Python из агента и удаление Python
-из исполнения моделей — разные результаты. Python backend может оставаться
-отдельным компонентом; это ещё не означает отсутствие Python во всём deployment.
+Текущая цель — новый Recorder Agent на Liza, управляющий существующим native
+Recorder как внешним процессом. Действующие Python-сервисы, модели и их поставку
+не меняем. Перенос Summarizer, Transcriber и SpeechTranslator отложен.
 
 ## Порядок работ
 
@@ -16,17 +15,21 @@ description: "Порядок переноса VideoGrace agents: Recorder, Summa
    heartbeat и остановка по stop/cancel/disconnect.
 3. Recorder production finalization: отчёт, Storage, подтверждённые finalizing и
    artifact_ready, завершение и условное удаление локальных файлов.
-4. Summarizer: прикладной CAN/control клиент, получение транскрипта конкретного
-   сеанса, вызов выбранного backend и подтверждённая публикация результата в чат.
-5. Transcriber и Translator: отдельные аудиты медиатранспорта и inference,
-   затем узкие рабочие срезы. Их взаимный порядок пока не закреплён.
+4. RTP Translator — только после появления вынесенного в C++ сервиса с CAN,
+   который будет референсом wire-контракта, параметров и жизненного цикла.
+   До этого не выбираем его CAN envelope и не реализуем предполагаемую замену.
+
+RTP Translator в этом плане — будущий сетевой сервис по C++-референсу; его
+не следует отождествлять с текущим Python SpeechTranslator и его AI backend.
+Части CAN извлекаются по реальному повторению в приложениях. Общий inference
+framework, модельный IPC, pipes и SG5 не становятся зависимостями Recorder.
 
 На момент фиксации плана [CAN Echo Worker #94](https://github.com/rulerom/liza/pull/94)
 и [Process API #95](https://github.com/rulerom/liza/pull/95) представлены отдельными
 PR. Echo прошёл положительный live-обмен с demo; Process API имеет платформенную
 приёмку. Это не означает готовность Recorder Agent или переноса всех сервисов.
 
-## Что установлено по исходникам VideoGrace
+## Справочный аудит отложенных сервисов
 
 Аудит 16 ноября 2026: `VIP/examples/06-recorder`, `VIP/examples/09-summarizer`,
 `Services/Transcriber/transcriber.py`, `Services/SpeechTranslator/translator.py`.
@@ -83,7 +86,7 @@ timeout и cancel, идентичность запроса и запрет пу�
 Передача транскрипта внешнему провайдеру требует явной конфигурации оператора;
 не следует менять действующий локальный режим на внешний API по умолчанию.
 
-Первая HTTP-версия Summarizer должна обслуживать CAN, пока ожидает модель,
+Если перенос Summarizer будет возобновлён, его HTTP-версия должна обслуживать CAN, пока ожидает модель,
 поддерживать необходимые POST/headers/body и объявленные размеры ответов.
 Текущие экспериментальные HTTP/JSON-клиенты с малыми буферами нельзя объявлять
 готовым LLM-клиентом без этого расширения. Получение транскрипта и подтверждение

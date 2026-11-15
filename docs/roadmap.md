@@ -46,7 +46,8 @@ DNS, chunked, HTTP/2, новые workers и расширение TLS runtime н�
 ## Стратегические приоритеты: Verified Network Gateway
 
 Прикладной [план переноса агентов VideoGrace](videograce-agents.md) задаёт
-последовательность Recorder → Summarizer, затем отдельные медиасервисы.
+последовательность Recorder через внешний native process → RTP Translator
+после появления C++/CAN-референса. Существующие Python-сервисы пока сохраняются.
 Общий CAN lifecycle выделяется по мере переноса; orchestration и inference
 моделей рассматриваются отдельно. Этот план не расширяет объём Process API
 и не запускает SG5.
