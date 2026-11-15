@@ -15,6 +15,9 @@ python3 -m liza build examples/apps/liza_json.liza --project-root examples -o bu
 в исходный файл: shell обнулит его до запуска программы. CLI usage также
 напоминает, что вывод потоковый и при ошибке может остаться неполным.
 
+Типизированное чтение полей, Unicode decoding и сборка документов описаны
+отдельно: [bounded JSON Reader/Writer](json-access.md).
+
 ## Профиль входа
 
 Основа — [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259).

@@ -16,13 +16,20 @@ description: "Ближайшее приложение — CAN-клиент по�
 TLS-B слит в main: move-only session, проверка сервера и backpressure прошли
 Linux/macOS/Windows. Следующая работа использует этот транспорт в приложении.
 
+[Общий JSON Reader/Writer](json-access.md) предоставляет типы и кодирование;
+can.* отвечает за обязательные поля, варианты сообщений и протокольные инварианты.
+
 Первый CAN-клиент пока **не реализован**. Его минимальный контракт:
 
 1. Подключение к известному IPv4 endpoint через WSS с проверкой заданного
    DNS-имени сертификата; числовой TCP-адрес не подменяет TLS identity.
-2. Одна JSON-команда и один ответ с проверкой корреляционного идентификатора.
-   Envelope, поля и ошибки берутся из действующего протокола VideoGrace;
-   их нужно сверить с CanManager и сервером до реализации.
+2. Регистрация hello/hello_ok, heartbeat, одно назначение example.echo,
+   job_ack и терминальный job_event; идентичность — connection generation, job_id
+   и assignment_id.
+   [Опубликованный CAN-контракт](https://videograce.ru/doc/developer/protocol/can/)
+   задаёт hello/heartbeat и назначения с job_id/assignment_id. Ближайший worker —
+   example.echo: задание выдаёт сервер; общего ACK на job_ack/job_event нет.
+   request_id относится к control, а не ко всем исходящим событиям.
 3. Определённые результаты timeout, закрытия соединения и ошибки протокола.
 4. Освобождение Buffer, Region, TLS session и Reactor на всех возвращающихся
    путях; успех после завершённого протокола и graceful TLS/TCP close.

@@ -1,0 +1,28 @@
+name: Bounded JSON reader and writer
+on:
+  pull_request:
+    paths: ['liza/**', 'tests/test_json*.py', 'tests/fixtures/json_access.liza', 'tests/fixtures/can_examples.json', 'examples/json_access.liza', '.github/workflows/json-access.yml']
+  push:
+    branches: [main]
+    paths: ['liza/**', 'tests/test_json*.py', 'tests/fixtures/json_access.liza', 'tests/fixtures/can_examples.json', 'examples/json_access.liza', '.github/workflows/json-access.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  access:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: clang --version
+      - run: python -m unittest discover -s tests -p 'test_json*.py' -v

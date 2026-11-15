@@ -1,0 +1,46 @@
+// json.* owns the source; selected byte ranges never escape JsonDocument.
+fn accepted(result:Result<JsonDone,JsonAccessError>)->bool {
+    match result {Ok(done)=>{return true} Err(e)=>{return false}}
+}
+fn inspect(document:JsonDocument,output:memory.Buffer<u8>,initial:u32)->u32:io {
+    var current=move document;var out=move output;var status=initial
+    name:[u8;4]=[110,97,109,101]
+    if status==0 {
+        (selected,result)=json.field(move current,view name[0..4]);current=move selected
+        if !accepted(result) {status=1}
+    }
+    if status==0 {
+        (selected,decoded,result)=json.decode_string(move current,move out)
+        current=move selected;out=move decoded
+        match result {
+            Err(e)=>{status=2}
+            Ok(length)=>{bytes=memory.view(out);match console.write_bytes(view bytes[0..length]) {Ok(n)=>{} Err(e)=>{status=3}}}
+        }
+    }
+    current=json.root(move current)
+    count:[u8;5]=[99,111,117,110,116]
+    if status==0 {
+        (selected,result)=json.field(move current,view count[0..5]);current=move selected
+        if !accepted(result) {status=4}
+    }
+    if status==0 {match json.read_u64(current) {Err(e)=>{status=5} Ok(n)=>{if n!=42 {status=6}}}}
+    released=json.release(move current);freed=memory.release(move out)
+    return status
+}
+fn main()->u32:io,alloc {
+    source:[u8;31]=[123,34,92,117,48,48,54,101,97,109,101,34,58,34,76,105,122,97,34,44,34,99,111,117,110,116,34,58,52,50,125]
+    match memory.create(256) {Err(e)=>{return 7} Ok(region)=>{
+        var status:u32=0
+        match memory.alloc<u8>(region,31,0) {Err(e)=>{status=8} Ok(initial)=>{
+            var storage=move initial;var i:u32=0
+            while i<31 {storage=memory.set(move storage,i,source[i]);i=i+1}
+            (document,result)=json.parse(move storage,31,JsonLimits(128,8,32))
+            var initial_status:u32=0;if !accepted(result) {initial_status=9}
+            match memory.alloc<u8>(region,32,0) {
+                Err(e)=>{released=json.release(move document);status=10}
+                Ok(output)=>{status=inspect(move document,move output,initial_status)}
+            }
+        }}
+        closed=memory.close(move region);return status
+    }}
+}

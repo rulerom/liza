@@ -1,0 +1,85 @@
+fn error_code(error:JsonAccessError)->u32 {
+    match error {JsonAccessError.Missing=>{return 1} JsonAccessError.WrongType=>{return 2} JsonAccessError.InvalidUnicode=>{return 3} JsonAccessError.TooLarge=>{return 4} JsonAccessError.Syntax=>{return 5} JsonAccessError.DuplicateKey=>{return 6} JsonAccessError.NumberOutOfRange=>{return 7} JsonAccessError.InvalidDocument=>{return 8} JsonAccessError.IndexOutOfRange=>{return 9}}
+}
+fn word(data:View<u8>,at:u32)->u32 {return u32(data[at])|(u32(data[at+1])<<8)|(u32(data[at+2])<<16)|(u32(data[at+3])<<24)}
+fn number(data:View<u8>,at:u32)->u64 {return u64(word(data,at))|(u64(word(data,at+4))<<32)}
+fn kind_code(kind:JsonKind)->u32 {match kind {JsonKind.Null=>{return 0} JsonKind.Bool=>{return 1} JsonKind.Number=>{return 2} JsonKind.String=>{return 3} JsonKind.Object=>{return 4} JsonKind.Array=>{return 5}}}
+fn reader_owned(document:JsonDocument,output:memory.Buffer<u8>,path:View<u8>,expected:View<u8>,mode:u32,want:u64,initial:u32)->u32 {
+    var current=move document;var out=move output;var status=initial;var at:u32=0
+    var root_kind:u32=99;if initial==0 {match json.kind(current) {Err(e)=>{status=113} Ok(k)=>{root_kind=kind_code(k)}}}
+    while status==0&&at<path.len {
+        command=path[at];size=word(path,at+1);at=at+5
+        if command==0 {(next,result)=json.field(move current,view path[at..at+size]);current=move next;at=at+size;match result {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        else {(next,result)=json.index(move current,size);current=move next;match result {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+    }
+    if status==0 {
+        if mode==1 {match json.kind(current) {Err(e)=>{status=error_code(e)} Ok(k)=>{if u64(kind_code(k))!=want {status=100}}}}
+        if mode==2 {match json.read_bool(current) {Err(e)=>{status=error_code(e)} Ok(b)=>{if b!=(want!=0) {status=101}}}}
+        if mode==3 {match json.read_u64(current) {Err(e)=>{status=error_code(e)} Ok(n)=>{if n!=want {status=102}}}}
+        if mode==4 {match json.read_i64(current) {Err(e)=>{status=error_code(e)} Ok(n)=>{if n!=i64.wrap(want) {status=103}}}}
+        if mode==5 {match json.array_length(current) {Err(e)=>{status=error_code(e)} Ok(n)=>{if u64(n)!=want {status=104}}}}
+        if mode==6 {
+            (next,decoded,result)=json.decode_string(move current,move out);current=move next;out=move decoded
+            match result {
+                Err(e)=>{status=error_code(e);bytes=memory.view(out);var i:u32=0;while i<bytes.len {if bytes[i]!=255 {status=105};i=i+1}}
+                Ok(count)=>{if count!=expected.len {status=106} else {bytes=memory.view(out);var i:u32=0;while i<count {if bytes[i]!=expected[i] {status=107};i=i+1};while i<bytes.len {if bytes[i]!=255 {status=108};i=i+1}}}
+            }
+        }
+    }
+    if mode==7 {match json.kind(current) {Err(e)=>{status=error_code(e)} Ok(k)=>{status=114}}}
+    // Returning to root is another consuming transition, never an escaped span.
+    current=json.root(move current)
+    if initial==0 {match json.kind(current) {Err(e)=>{status=115} Ok(k)=>{if kind_code(k)!=root_kind {status=116}}}}
+    f=json.release(move current);g=memory.release(move out);return status
+}
+fn reader(data:View<u8>,path:View<u8>,expected:View<u8>,mode:u32,doc_limit:u32,depth:u32,result_limit:u32,capacity:u32,want:u64)->u32:alloc {
+    match memory.create(u64(data.len)+u64(capacity)+64) {Err(e)=>{return 110} Ok(region)=>{
+        var status:u32=0
+        match memory.alloc<u8>(region,data.len,255) {Err(e)=>{status=111} Ok(initial)=>{
+            var storage=move initial;var i:u32=0;while i<data.len {storage=memory.set(move storage,i,data[i]);i=i+1}
+            (document,result)=json.parse(move storage,data.len,JsonLimits(doc_limit,depth,result_limit))
+            var initial_status:u32=0;match result {Ok(done)=>{} Err(e)=>{initial_status=error_code(e)}}
+            match memory.alloc<u8>(region,capacity,255) {
+                Err(e)=>{f=json.release(move document);status=112}
+                Ok(output)=>{status=reader_owned(move document,move output,path,expected,mode,want,initial_status)}
+            }
+        }}
+        c=memory.close(move region);return status
+    }}
+}
+fn writer_owned(storage:memory.Buffer<u8>,program:View<u8>,expected:View<u8>,limit:u32,depth:u32)->u32 {
+    (initial,result)=json.writer(move storage,limit,depth);var writer=move initial;var status:u32=0
+    match result {Ok(done)=>{} Err(e)=>{status=error_code(e)}}
+    var at:u32=0
+    while status==0&&at<program.len {
+        command=program[at];size=word(program,at+1);at=at+5
+        if command==0 {(next,res)=json.begin_object(move writer);writer=move next;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        if command==1 {(next,res)=json.end_object(move writer);writer=move next;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        if command==2 {(next,res)=json.begin_array(move writer);writer=move next;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        if command==3 {(next,res)=json.end_array(move writer);writer=move next;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        if command==4 {(next,res)=json.key(move writer,view program[at..at+size]);writer=move next;at=at+size;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        if command==5 {(next,res)=json.write_string(move writer,view program[at..at+size]);writer=move next;at=at+size;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        if command==6 {(next,res)=json.write_bool(move writer,size!=0);writer=move next;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        if command==7 {(next,res)=json.write_null(move writer);writer=move next;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        if command==8 {n=number(program,at);at=at+8;(next,res)=json.write_u64(move writer,n);writer=move next;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+        if command==9 {n=number(program,at);at=at+8;(next,res)=json.write_i64(move writer,i64.wrap(n));writer=move next;match res {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+    }
+    observed=json.writer_length(writer)
+    (out,count,finished)=json.finish_writer(move writer)
+    if count!=observed {status=120}
+    if status==0 {match finished {Ok(done)=>{} Err(e)=>{status=error_code(e)}}}
+    if count!=expected.len {status=121} else {
+        bytes=memory.view(out);var i:u32=0;while i<count {if bytes[i]!=expected[i] {status=122};i=i+1}
+        while i<bytes.len {if bytes[i]!=255 {status=123};i=i+1}
+    }
+    f=memory.release(move out);return status
+}
+fn probe(data:View<u8>,path:View<u8>,expected:View<u8>,mode:u32,doc_limit:u32,depth:u32,result_limit:u32,capacity:u32,want:u64)->u32:alloc {
+    if mode<10 {return reader(data,path,expected,mode,doc_limit,depth,result_limit,capacity,want)}
+    match memory.create(u64(capacity)) {Err(e)=>{return 130} Ok(region)=>{
+        var status:u32=0
+        match memory.alloc<u8>(region,capacity,255) {Err(e)=>{status=131} Ok(storage)=>{status=writer_owned(move storage,data,expected,result_limit,depth)}}
+        c=memory.close(move region);return status
+    }}
+}
+fn main()->u32 {return 0}

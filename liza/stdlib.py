@@ -11,8 +11,10 @@ def attach(program):
         libraries.append('tls')
     if 'json' in libraries and 'utf8_stream' not in libraries:
         libraries.insert(0,'utf8_stream')
-    if 'json' in libraries:
-        libraries.append('json_mut')
+    if 'json' in libraries: libraries.append('json_mut')
+    if getattr(program,'uses_json_access',False):
+        if 'utf8' not in libraries: libraries.append('utf8')
+        libraries.extend(['json_reader','json_writer'])
     uses_workers = getattr(program, 'uses_workers', False)
     uses_channels = getattr(program, 'uses_channels', False)
     uses_group = getattr(program, 'uses_groups', False)
@@ -25,7 +27,7 @@ def attach(program):
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
                                for name in libraries), internal=True).parse()
     for structure in library.structs:
-        if structure.name.text == 'JsonState':
+        if structure.name.text in ('JsonState','JsonDocument','JsonWriter'):
             structure.module = '__liza_json'
         if structure.name.text == 'Utf8StreamState':
             structure.module = '__liza_utf8_stream'

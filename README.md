@@ -224,6 +224,15 @@ python3 -m liza build examples/apps/liza_json.liza --project-root examples -o bu
 
 [Контракт и ограничения](https://liza.rulerom.com/json.html).
 
+Для типизированного доступа есть [bounded JSON Reader/Writer](docs/json-access.md):
+owned document с приватными диапазонами, decoded-key lookup, строгие дубликаты,
+целые числа, Unicode decoding и безопасное кодирование в переданный Buffer.
+CAN schema остаётся прикладным слоем.
+
+```sh
+python3 -m liza run examples/json_access.liza -O 2
+```
+
 ## liza-text · 0.0.24
 
 Первое CLI-приложение: `check`, `count`, `info` для произвольного пути к файлу.

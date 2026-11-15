@@ -1,0 +1,243 @@
+{
+  "description": "Independent illustrative CAN messages; IDs and credentials are fictitious.",
+  "assignment_protocol": 1,
+  "examples": [
+    {
+      "name": "01-hello",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "hello",
+        "token": "<CAN_SERVICE_TOKEN>",
+        "node_id": "example-worker-01",
+        "role": "worker",
+        "version": "my-worker/0.1",
+        "capabilities": [
+          "example.echo"
+        ],
+        "max_concurrent_jobs": 1,
+        "assignment_protocol": 1
+      }
+    },
+    {
+      "name": "02-hello_ok",
+      "direction": "server-to-worker",
+      "message": {
+        "type": "hello_ok",
+        "node_id": "example-worker-01",
+        "role": "worker",
+        "server_time": 1794700000000,
+        "heartbeat_ms": 10000,
+        "max_concurrent_jobs": 1,
+        "assignment_protocol": 1,
+        "lease_timeout_ms": 90000
+      }
+    },
+    {
+      "name": "03-heartbeat",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "heartbeat",
+        "load": {
+          "jobs": 1,
+          "time": 1794700010000
+        }
+      }
+    },
+    {
+      "name": "04-heartbeat_ok",
+      "direction": "server-to-worker",
+      "message": {
+        "type": "heartbeat_ok",
+        "server_time": 1794700010002
+      }
+    },
+    {
+      "name": "05-job",
+      "direction": "server-to-worker",
+      "message": {
+        "type": "job",
+        "job_id": "example-job-001",
+        "assignment_id": "assignment-001",
+        "job_type": "example.echo",
+        "server_time": 1794700020000,
+        "payload": {
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "name": "06-job_ack",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "job_ack",
+        "job_id": "example-job-001",
+        "assignment_id": "assignment-001",
+        "status": "accepted"
+      }
+    },
+    {
+      "name": "07-job_event",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "job_event",
+        "job_id": "example-job-001",
+        "assignment_id": "assignment-001",
+        "status": "running",
+        "message": "Processing",
+        "data": {
+          "stage": "compute"
+        }
+      }
+    },
+    {
+      "name": "08-job_event",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "job_event",
+        "job_id": "example-job-001",
+        "assignment_id": "assignment-001",
+        "status": "completed",
+        "data": {
+          "echo": "Hello"
+        }
+      }
+    },
+    {
+      "name": "09-job_event",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "job_event",
+        "job_id": "example-job-001",
+        "assignment_id": "assignment-001",
+        "status": "failed",
+        "message": "Unsupported payload"
+      }
+    },
+    {
+      "name": "10-job_cancel",
+      "direction": "server-to-worker",
+      "message": {
+        "type": "job_cancel",
+        "job_id": "example-job-001",
+        "assignment_id": "assignment-001",
+        "job_type": "example.echo",
+        "reason": "cancelled_by_api",
+        "server_time": 1794700030000
+      }
+    },
+    {
+      "name": "11-job_event",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "job_event",
+        "job_id": "example-job-001",
+        "assignment_id": "assignment-001",
+        "status": "cancelled",
+        "message": "Stopped"
+      }
+    },
+    {
+      "name": "12-control",
+      "direction": "server-to-worker",
+      "message": {
+        "type": "control",
+        "request_id": "ctl-001",
+        "method": "rtc.endpoint.ice",
+        "expects_reply": false,
+        "params": {
+          "endpoint_id": "endpoint-001",
+          "candidate": "candidate:...",
+          "sdp_mid": "0",
+          "sdp_mline_index": 0
+        }
+      }
+    },
+    {
+      "name": "13-control_result",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "control_result",
+        "request_id": "ctl-001",
+        "ok": true,
+        "data": {}
+      }
+    },
+    {
+      "name": "14-control_result",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "control_result",
+        "request_id": "ctl-001",
+        "ok": false,
+        "error": "unsupported_control_method"
+      }
+    },
+    {
+      "name": "15-control_event",
+      "direction": "worker-to-server",
+      "message": {
+        "type": "control_event",
+        "method": "rtc.ice_candidate",
+        "data": {
+          "endpoint_id": "endpoint-001",
+          "peer_id": "remote-audio-101-42",
+          "conference_tag": "example",
+          "scope": "audio-subscribe",
+          "candidate": "candidate:...",
+          "sdp_mid": "0",
+          "sdp_mline_index": 0
+        }
+      }
+    },
+    {
+      "name": "16-job_event_ack",
+      "direction": "server-to-worker",
+      "message": {
+        "type": "job_event_ack",
+        "job_id": "recording-001",
+        "assignment_id": "assignment-002",
+        "status": "artifact_ready",
+        "ok": true
+      }
+    },
+    {
+      "name": "17-error",
+      "direction": "server-to-worker",
+      "message": {
+        "type": "error",
+        "code": "assignment_mismatch",
+        "message": "Event must reference the current assignment",
+        "server_time": 1794700040000
+      }
+    },
+    {
+      "name": "18-admin-request",
+      "direction": "admin-http-body",
+      "message": {
+        "job_type": "example.echo",
+        "target_node_id": "example-worker-01",
+        "target_role": "worker",
+        "required_capability": "example.echo",
+        "payload": {
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "name": "19-admin-request",
+      "direction": "admin-http-body",
+      "message": {
+        "job_id": "example-job-001",
+        "reason": "cancelled_by_api"
+      }
+    },
+    {
+      "name": "20-admin-request",
+      "direction": "admin-http-body",
+      "message": {
+        "node_id": "example-worker-01",
+        "action": "stale"
+      }
+    }
+  ]
+}
