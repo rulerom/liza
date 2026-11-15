@@ -1,0 +1,216 @@
+import can.text
+import can.words
+pub enum Error {Json(JsonAccessError);Missing(u32);WrongType(u32);TooLarge(u32);BadValue(u32)}
+pub struct Hello {pub node:can.text.Value;pub role:can.text.Value;pub token:can.text.Value;pub version:can.text.Value;pub max_jobs:u64;pub protocol:u64}
+pub struct Ready {pub node:can.text.Value;pub role:can.text.Value;pub server_time:u64;pub heartbeat_ms:u64;pub lease_ms:u64;pub max_jobs:u64;pub protocol:u64}
+pub struct Beat {pub jobs:u64}
+pub struct Assignment {pub job:can.text.Value;pub assignment:can.text.Value;pub operation:can.text.Value;pub text:can.text.Value;pub time:u64}
+pub struct Report {pub job:can.text.Value;pub assignment:can.text.Value;pub status:can.text.Value;pub text:can.text.Value}
+pub struct Cancel {pub job:can.text.Value;pub assignment:can.text.Value;pub reason:can.text.Value}
+pub struct Control {pub request:can.text.Value;pub method:can.text.Value;pub reply:bool}
+pub struct Failure {pub code:can.text.Value;pub message:can.text.Value}
+pub enum Message {Hello(Hello);Ready(Ready);Heartbeat(Beat);HeartbeatOk(u64);Job(Assignment);Ack(Report);Event(Report);Cancel(Cancel);Control(Control);Failure(Failure);Unknown(can.text.Value)}
+pub struct Parsed {pub buffer:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub result:Result<Message,Error>}
+struct Cursor {document:JsonDocument;scratch:memory.Buffer<u8>;error:Option<Error>}
+struct TextRead {cursor:Cursor;value:can.text.Value}
+struct NumberRead {cursor:Cursor;value:u64}
+struct BoolRead {cursor:Cursor;value:bool}
+fn key(id:u32)->can.text.Value {
+    if id==0 {return can.words.literal_type()}
+    if id==1 {return can.words.literal_node_id()}
+    if id==2 {return can.words.literal_role()}
+    if id==3 {return can.words.literal_version()}
+    if id==4 {return can.words.literal_token()}
+    if id==5 {return can.words.literal_max_concurrent_jobs()}
+    if id==6 {return can.words.literal_assignment_protocol()}
+    if id==7 {return can.words.literal_server_time()}
+    if id==8 {return can.words.literal_heartbeat_ms()}
+    if id==9 {return can.words.literal_lease_timeout_ms()}
+    if id==10 {return can.words.literal_job_id()}
+    if id==11 {return can.words.literal_assignment_id()}
+    if id==12 {return can.words.literal_job_type()}
+    if id==13 {return can.words.literal_payload()}
+    if id==14 {return can.words.literal_text()}
+    if id==15 {return can.words.literal_status()}
+    if id==16 {return can.words.literal_message()}
+    if id==17 {return can.words.literal_data()}
+    if id==18 {return can.words.literal_echo()}
+    if id==19 {return can.words.literal_reason()}
+    if id==20 {return can.words.literal_load()}
+    if id==21 {return can.words.literal_jobs()}
+    if id==22 {return can.words.literal_time()}
+    if id==23 {return can.words.literal_request_id()}
+    if id==24 {return can.words.literal_method()}
+    if id==25 {return can.words.literal_expects_reply()}
+    if id==26 {return can.words.literal_params()}
+    if id==27 {return can.words.literal_code()}
+    if id==28 {return can.words.literal_capabilities()}
+    if id==29 {return can.words.literal_ok()}
+    return can.text.empty()
+}
+fn locate(document:JsonDocument,id:u32,scope:u32)->JsonRead {
+    var current=json.root(move document)
+    if scope!=0 {
+        field=key(scope);data=field.bytes
+        (next54,result)=json.field(move current,view data[0..field.length]);current=move next54
+        match result {Err(e)=>{return JsonRead(move current,Err(e))} Ok(n)=>{}}
+    }
+    field=key(id);data=field.bytes;return json.field(move current,view data[0..field.length])
+}
+fn convert(error:JsonAccessError,id:u32,required:bool)->Option<Error> {
+    match error {JsonAccessError.Missing=>{if !required {return None};return Some(Error.Missing(id))}
+    JsonAccessError.WrongType=>{return Some(Error.WrongType(id))}
+    JsonAccessError.TooLarge=>{return Some(Error.TooLarge(id))}
+    JsonAccessError.Syntax=>{return Some(Error.Json(error))} JsonAccessError.DuplicateKey=>{return Some(Error.Json(error))}
+    JsonAccessError.InvalidUnicode=>{return Some(Error.Json(error))} JsonAccessError.NumberOutOfRange=>{return Some(Error.BadValue(id))}
+    JsonAccessError.InvalidDocument=>{return Some(Error.Json(error))} JsonAccessError.IndexOutOfRange=>{return Some(Error.BadValue(id))}}
+}
+fn text(cursor:Cursor,id:u32,scope:u32,required:bool,limit:u32)->TextRead {
+    (document,initial,error)=move cursor;var doc=move document;var scratch=move initial;var failure=error;var value=can.text.empty()
+    match failure {Some(e)=>{} None=>{
+        (next70,result)=locate(move doc,id,scope);doc=move next70
+        match result {Err(e)=>{failure=convert(e,id,required)} Ok(n)=>{
+            (next72,decoded,status)=json.decode_string(move doc,move scratch);doc=move next72;scratch=move decoded
+            match status {Err(e)=>{failure=convert(e,id,true)} Ok(length)=>{
+                if length>limit {failure=Some(Error.TooLarge(id))} else if required&&length==0&&id!=14 {failure=Some(Error.BadValue(id))} else {
+                    bytes=memory.view(scratch);match can.text.from_view(view bytes[0..length],limit) {Ok(v)=>{value=v} Err(e)=>{failure=Some(Error.BadValue(id))}}
+                }
+            }}
+        }}
+    }}
+    return TextRead(Cursor(move doc,move scratch,failure),value)
+}
+fn integer(cursor:Cursor,id:u32,scope:u32,required:bool,fallback:u64)->NumberRead {
+    (document,scratch,error)=move cursor;var doc=move document;var failure=error;var value=fallback
+    match failure {Some(e)=>{} None=>{
+        (next85,result)=locate(move doc,id,scope);doc=move next85
+        match result {Err(e)=>{failure=convert(e,id,required)} Ok(n)=>{match json.read_u64(doc) {Err(e)=>{failure=convert(e,id,true)} Ok(v)=>{value=v}}}}
+    }}
+    return NumberRead(Cursor(move doc,move scratch,failure),value)
+}
+fn boolean(cursor:Cursor,id:u32,required:bool)->BoolRead {
+    (document,scratch,error)=move cursor;var doc=move document;var failure=error;var value=false
+    match failure {Some(e)=>{} None=>{
+        (next93,result)=locate(move doc,id,0);doc=move next93
+        match result {Err(e)=>{failure=convert(e,id,required)} Ok(n)=>{match json.read_bool(doc) {Err(e)=>{failure=convert(e,id,true)} Ok(v)=>{value=v}}}}
+    }}
+    return BoolRead(Cursor(move doc,move scratch,failure),value)
+}
+fn is_object(kind:JsonKind)->bool {
+    match kind {JsonKind.Object=>{return true} JsonKind.Null=>{return false} JsonKind.Bool=>{return false} JsonKind.Number=>{return false} JsonKind.String=>{return false} JsonKind.Array=>{return false}}
+}
+fn object(cursor:Cursor,id:u32,required:bool)->Cursor {
+    (document,scratch,error)=move cursor;var doc=move document;var failure=error
+    match failure {
+        Some(e)=>{}
+        None=>{
+            (next106,result)=locate(move doc,id,0);doc=move next106
+            match result {
+                Err(e)=>{failure=convert(e,id,required)}
+                Ok(n)=>{match json.kind(doc) {Err(e)=>{failure=convert(e,id,true)} Ok(kind)=>{if !is_object(kind) {failure=Some(Error.WrongType(id))}}}}
+            }
+        }
+    }
+    return Cursor(move doc,move scratch,failure)
+}
+fn capabilities(cursor:Cursor)->Cursor {
+    (document,initial,error)=move cursor;var doc=move document;var scratch=move initial;var failure=error
+    match failure {Some(e)=>{} None=>{
+        (next118,result)=locate(move doc,28,0);doc=move next118
+        match result {Err(e)=>{failure=convert(e,28,false)} Ok(n)=>{
+            match json.array_length(doc) {Err(e)=>{failure=convert(e,28,true)} Ok(count)=>{
+                if count>8 {failure=Some(Error.TooLarge(28))} else {
+                    var i:u32=0;while i<count {
+                        (next123,selected)=locate(move doc,28,0);doc=move next123
+                        (next124,indexed)=json.index(move doc,i);doc=move next124
+                        (next125,decoded,status)=json.decode_string(move doc,move scratch);doc=move next125;scratch=move decoded
+                        match status {Err(e)=>{failure=convert(e,28,true)} Ok(length)=>{if length==0||length>128 {failure=Some(Error.BadValue(28))}}}
+                        i=i+1
+                    }
+                }
+            }}
+        }}
+    }}
+    return Cursor(move doc,move scratch,failure)
+}
+fn finish(cursor:Cursor,message:Message)->Parsed {
+    (document,scratch,error)=move cursor;buffer=json.into_buffer(move document)
+    match error {Some(e)=>{return Parsed(move buffer,move scratch,Err(e))} None=>{return Parsed(move buffer,move scratch,Ok(message))}}
+}
+// New worker profile: assignment identity is mandatory; unsupported types stay typed Unknown.
+pub fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Parsed {
+    (document,result)=json.parse(move buffer,length,JsonLimits(4096,16,1024))
+    var error:Option<Error> =None;match result {Ok(n)=>{} Err(e)=>{error=Some(Error.Json(e))}}
+    var cursor=Cursor(move document,move scratch,error)
+    (next144,kind)=text(move cursor,0,0,true,64);cursor=move next144
+    if can.text.equal(kind,can.words.literal_hello()) {
+        cursor=capabilities(move cursor)
+        (next147,node)=text(move cursor,1,0,true,128);cursor=move next147
+        (next148,role)=text(move cursor,2,0,true,128);cursor=move next148
+        (next149,token)=text(move cursor,4,0,false,512);cursor=move next149
+        (next150,version)=text(move cursor,3,0,false,64);cursor=move next150
+        (next151,slots)=integer(move cursor,5,0,false,1);cursor=move next151
+        (next152,protocol)=integer(move cursor,6,0,true,0);cursor=move next152
+        return finish(move cursor,Message.Hello(Hello(node,role,token,version,slots,protocol)))
+    }
+    if can.text.equal(kind,can.words.literal_hello_ok()) {
+        (next156,node)=text(move cursor,1,0,true,128);cursor=move next156
+        (next157,role)=text(move cursor,2,0,true,128);cursor=move next157
+        (next158,time)=integer(move cursor,7,0,true,0);cursor=move next158
+        (next159,heartbeat)=integer(move cursor,8,0,true,0);cursor=move next159
+        (next160,lease)=integer(move cursor,9,0,true,0);cursor=move next160
+        (next161,slots)=integer(move cursor,5,0,true,0);cursor=move next161
+        (next162,protocol)=integer(move cursor,6,0,true,0);cursor=move next162
+        return finish(move cursor,Message.Ready(Ready(node,role,time,heartbeat,lease,slots,protocol)))
+    }
+    if can.text.equal(kind,can.words.literal_heartbeat()) {
+        (next166,jobs)=integer(move cursor,21,20,false,0);cursor=move next166
+        return finish(move cursor,Message.Heartbeat(Beat(jobs)))
+    }
+    if can.text.equal(kind,can.words.literal_heartbeat_ok()) {
+        (next170,time)=integer(move cursor,7,0,true,0);cursor=move next170
+        return finish(move cursor,Message.HeartbeatOk(time))
+    }
+    if can.text.equal(kind,can.words.literal_job()) {
+        cursor=object(move cursor,13,true)
+        (next175,job)=text(move cursor,10,0,true,128);cursor=move next175
+        (next176,assignment)=text(move cursor,11,0,true,128);cursor=move next176
+        (next177,operation)=text(move cursor,12,0,true,128);cursor=move next177
+        (next178,time)=integer(move cursor,7,0,true,0);cursor=move next178
+        (next179,value)=text(move cursor,14,13,can.text.equal(operation,can.words.literal_example_echo()),512);cursor=move next179
+        return finish(move cursor,Message.Job(Assignment(job,assignment,operation,value,time)))
+    }
+    if can.text.equal(kind,can.words.literal_job_ack()) {
+        (next183,job)=text(move cursor,10,0,true,128);cursor=move next183
+        (next184,assignment)=text(move cursor,11,0,true,128);cursor=move next184
+        (next185,status)=text(move cursor,15,0,false,64);cursor=move next185
+        return finish(move cursor,Message.Ack(Report(job,assignment,status,can.text.empty())))
+    }
+    if can.text.equal(kind,can.words.literal_job_event()) {
+        cursor=object(move cursor,17,false)
+        (next190,job)=text(move cursor,10,0,true,128);cursor=move next190
+        (next191,assignment)=text(move cursor,11,0,true,128);cursor=move next191
+        (next192,status)=text(move cursor,15,0,true,64);cursor=move next192
+        (next193,value)=text(move cursor,18,17,false,512);cursor=move next193
+        return finish(move cursor,Message.Event(Report(job,assignment,status,value)))
+    }
+    if can.text.equal(kind,can.words.literal_job_cancel()) {
+        (next197,job)=text(move cursor,10,0,true,128);cursor=move next197
+        (next198,assignment)=text(move cursor,11,0,true,128);cursor=move next198
+        (next199,reason)=text(move cursor,19,0,false,256);cursor=move next199
+        return finish(move cursor,Message.Cancel(Cancel(job,assignment,reason)))
+    }
+    if can.text.equal(kind,can.words.literal_control()) {
+        cursor=object(move cursor,26,true)
+        (next204,request)=text(move cursor,23,0,true,128);cursor=move next204
+        (next205,method)=text(move cursor,24,0,true,128);cursor=move next205
+        (next206,reply)=boolean(move cursor,25,true);cursor=move next206
+        return finish(move cursor,Message.Control(Control(request,method,reply)))
+    }
+    if can.text.equal(kind,can.words.literal_error()) {
+        (next210,code)=text(move cursor,27,0,true,128);cursor=move next210
+        (next211,value)=text(move cursor,16,0,false,512);cursor=move next211
+        return finish(move cursor,Message.Failure(Failure(code,value)))
+    }
+    return finish(move cursor,Message.Unknown(kind))
+}

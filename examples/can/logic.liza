@@ -1,0 +1,71 @@
+import can.text
+import can.words
+import can.messages
+// Queue entries are snapshots, independent of the current computational slot.
+pub struct Output {pub kind:u32;pub node:can.text.Value;pub job:can.text.Value;pub assignment:can.text.Value;pub value:can.text.Value;pub request:can.text.Value;pub jobs:u64;pub generation:u64}
+pub struct State {pub generation:u64;pub node:can.text.Value;pub registered:bool;pub active:bool;pub active_generation:u64;pub job:can.text.Value;pub assignment:can.text.Value;pub value:can.text.Value;pub job_due:u64;pub heartbeat_due:u64;pub heartbeat_ms:u64;pub heartbeat_ack_due:u64;pub waiting_heartbeat:bool;pub failed:bool;pub policy:bool;pub queue:[Output;4];pub head:u32;pub count:u32;pub completed:u64;pub cancelled:u64}
+fn blank()->Output {return Output(0,can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),0,0)}
+fn enqueue(borrow mut state:State,output:Output)->bool {
+    if state.count==4 {state.failed=true;return false}
+    var queue=state.queue;queue[(state.head+state.count)%4]=output;state.queue=queue;state.count=state.count+1;return true
+}
+pub fn create(node:can.text.Value,generation:u64)->State {
+    empty=blank()
+    var state=State(generation,node,false,false,0,can.text.empty(),can.text.empty(),can.text.empty(),0,0,0,0,false,false,false,[empty;4],0,0,0,0)
+    entry1=Output(1,node,can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),0,generation);n=enqueue(borrow mut state,entry1);return state
+}
+pub fn take(borrow mut state:State)->Option<Output> {
+    if state.count==0 {return None};output=state.queue[state.head];state.head=(state.head+1)%4;state.count=state.count-1;return Some(output)
+}
+pub fn finish(borrow mut state:State,generation:u64,job:can.text.Value,assignment:can.text.Value,outcome:u32)->bool {
+    if !state.active||generation!=state.generation||generation!=state.active_generation||!can.text.equal(job,state.job)||!can.text.equal(assignment,state.assignment) {return false}
+    state.active=false
+    if outcome==4 {state.completed=state.completed+1};if outcome==5 {state.cancelled=state.cancelled+1}
+    entry2=Output(outcome,state.node,job,assignment,state.value,can.text.empty(),0,generation);return enqueue(borrow mut state,entry2)
+}
+pub fn receive(borrow mut state:State,message:can.messages.Message,generation:u64,now:u64,operation_ms:u64)->u32 {
+    if generation!=state.generation {return 0}
+    match message {
+        can.messages.Message.Ready(ready)=>{
+            if state.registered||!can.text.equal(ready.node,state.node)||!can.text.equal(ready.role,can.words.literal_worker())||ready.protocol!=1||ready.max_jobs!=1||ready.heartbeat_ms==0||ready.heartbeat_ms>60000||ready.lease_ms<=ready.heartbeat_ms||ready.lease_ms>3600000 {state.failed=true;return 1}
+            state.registered=true;state.heartbeat_ms=ready.heartbeat_ms;state.heartbeat_due=now+ready.heartbeat_ms
+        }
+        can.messages.Message.HeartbeatOk(time)=>{if !state.registered {state.failed=true;return 1};state.waiting_heartbeat=false}
+        can.messages.Message.Job(job)=>{
+            if !state.registered {state.failed=true;return 1}
+            if state.active||!can.text.equal(job.operation,can.words.literal_example_echo()) {entry3=Output(6,state.node,job.job,job.assignment,can.text.empty(),can.text.empty(),0,state.generation);n=enqueue(borrow mut state,entry3);return 0}
+            state.active=true;state.active_generation=state.generation;state.job=job.job;state.assignment=job.assignment;state.value=job.text;state.job_due=now+operation_ms
+            entry4=Output(2,state.node,job.job,job.assignment,can.text.empty(),can.text.empty(),0,state.generation);n=enqueue(borrow mut state,entry4)
+        }
+        can.messages.Message.Cancel(cancel)=>{n=finish(borrow mut state,generation,cancel.job,cancel.assignment,5)}
+        can.messages.Message.Control(control)=>{if !state.registered {state.failed=true;return 1};if control.reply {entry5=Output(7,state.node,can.text.empty(),can.text.empty(),can.text.empty(),control.request,0,state.generation);n=enqueue(borrow mut state,entry5)}}
+        can.messages.Message.Failure(failure)=>{state.failed=true;if can.text.equal(failure.code,can.words.literal_unauthorized())||can.text.equal(failure.code,can.words.literal_node_stale())||can.text.equal(failure.code,can.words.literal_license_required())||can.text.equal(failure.code,can.words.literal_can_disabled()) {state.policy=true};return 1}
+        can.messages.Message.Unknown(kind)=>{}
+        can.messages.Message.Hello(hello)=>{state.failed=true;return 1}
+        can.messages.Message.Heartbeat(beat)=>{state.failed=true;return 1}
+        can.messages.Message.Ack(report)=>{state.failed=true;return 1}
+        can.messages.Message.Event(report)=>{state.failed=true;return 1}
+    }
+    if state.failed {return 1};return 0
+}
+pub fn tick(borrow mut state:State,now:u64,operation_ms:u64,may_complete:bool)->u32 {
+    if state.waiting_heartbeat&&now>=state.heartbeat_ack_due {state.failed=true;return 1}
+    if state.registered&&now>=state.heartbeat_due {
+        var jobs:u64=0;if state.active {jobs=1}
+        entry6=Output(3,state.node,can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),jobs,state.generation);n=enqueue(borrow mut state,entry6)
+        state.heartbeat_due=now+state.heartbeat_ms;if !state.waiting_heartbeat {state.heartbeat_ack_due=now+operation_ms};state.waiting_heartbeat=true
+    }
+    if state.active {var outcome:u32=4;if now>=state.job_due {outcome=6};if may_complete||outcome==6 {generation=state.generation;job=state.job;assignment=state.assignment;n=finish(borrow mut state,generation,job,assignment,outcome)}}
+    if state.failed {return 1};return 0
+}
+pub fn deadline(borrow state:State,fallback:u64)->u64 {
+    var until=fallback
+    if state.registered&&state.heartbeat_due<until {until=state.heartbeat_due}
+    if state.waiting_heartbeat&&state.heartbeat_ack_due<until {until=state.heartbeat_ack_due}
+    if state.active&&state.job_due<until {until=state.job_due}
+    return until
+}
+pub fn invalidate(borrow mut state:State,next_generation:u64)->u32 {
+    if next_generation<=state.generation {state.failed=true;return 1}
+    state.generation=next_generation;state.registered=false;state.active=false;state.active_generation=0;state.waiting_heartbeat=false;state.count=0;state.head=0;return 0
+}

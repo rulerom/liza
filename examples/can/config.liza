@@ -1,0 +1,45 @@
+import can.text
+import apps.proxy.config
+pub struct Config {pub address:net.Address;pub peer:can.text.Value;pub host:can.text.Value;pub node:can.text.Value;pub token:can.text.Value;pub ca:can.text.Value;pub custom:bool;pub run_ms:u32;pub operation_ms:u32;pub close_ms:u32;pub reconnects:u32}
+fn argument(index:u32)->Result<can.text.Value,u32>:io {
+    var value=can.text.empty()
+    match cli.arg(index) {None=>{return Err(2)} Some(arg)=>{
+        var i:u32=0;while i<64 {match cli.ascii_at(arg,i) {None=>{return Err(2)} Some(b)=>{if b==0 {if i==0 {return Err(2)};return Ok(value)};if b<33||b>126 {return Err(2)};value.bytes[i]=b;value.length=i+1}};i=i+1}
+    }};return Err(2)
+}
+fn token(path:Path)->Result<can.text.Value,u32>:io {
+    match file.open_path(path) {Err(e)=>{return Err(2)} Ok(input)=>{
+        var value=can.text.empty();var failed=false;var done=false
+        while !done {
+            match file.read_chunk(input) {Err(e)=>{failed=true;break} Ok(chunk)=>{
+                if chunk.eof {break};var i:u32=0
+                while i<chunk.len {if value.length==514 {failed=true;break};value.bytes[value.length]=chunk.data[i];value.length=value.length+1;i=i+1}
+                if failed {break}
+            }}
+        }
+        match file.close(move input) {Err(e)=>{failed=true} Ok(n)=>{}}
+        while value.length>0 {b=value.bytes[value.length-1];if b!=10&&b!=13 {break};value.length=value.length-1}
+        if value.length==0||value.length>512 {failed=true}
+        var i:u32=0;while i<value.length {if value.bytes[i]<33||value.bytes[i]>126 {failed=true};i=i+1}
+        if failed {return Err(2)};return Ok(value)
+    }}
+}
+pub fn read()->Result<Config,u32>:io {
+    if cli.count()<5||cli.count()>7 {return Err(2)}
+    var address=net.ipv4(127,0,0,1,443)
+    match cli.arg(1) {None=>{return Err(2)} Some(arg)=>{match apps.proxy.config.endpoint(arg) {Err(e)=>{return Err(2)} Ok(a)=>{address=a}}}}
+    var peer=can.text.empty();var node=can.text.empty();var secret=can.text.empty();var ca=can.text.empty();var custom=false;var run_ms:u32=120000
+    match argument(2) {Err(e)=>{return Err(e)} Ok(v)=>{peer=v}}
+    match argument(3) {Err(e)=>{return Err(e)} Ok(v)=>{node=v}}
+    match cli.path_arg(4) {None=>{return Err(2)} Some(path)=>{match token(path) {Err(e)=>{return Err(e)} Ok(v)=>{secret=v}}}}
+    if cli.count()>=6 {match argument(5) {Err(e)=>{return Err(e)} Ok(v)=>{if !(v.length==1&&v.bytes[0]==45) {ca=v;custom=true}}}}
+    if cli.count()==7 {match cli.arg(6) {None=>{return Err(2)} Some(arg)=>{match apps.proxy.config.duration(arg) {Err(e)=>{return Err(2)} Ok(n)=>{if n<100||n>3600000 {return Err(2)};run_ms=n}}}}}
+    var host=peer
+    if address.port!=443 {
+        host.bytes[host.length]=58;host.length=host.length+1
+        var digits:[u8;5]=[0;5];var end:u32=5;var port=u32(address.port)
+        while true {end=end-1;digits[end]=u8(port%10)+48;port=port/10;if port==0 {break}}
+        while end<5 {host.bytes[host.length]=digits[end];host.length=host.length+1;end=end+1}
+    }
+    return Ok(Config(address,peer,host,node,secret,ca,custom,run_ms,5000,3000,2))
+}

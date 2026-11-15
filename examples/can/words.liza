@@ -1,0 +1,178 @@
+import can.text
+pub fn literal_type()->can.text.Value {
+ b:[u8;4]=[116,121,112,101];match can.text.from_view(view b[0..4],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_node_id()->can.text.Value {
+ b:[u8;7]=[110,111,100,101,95,105,100];match can.text.from_view(view b[0..7],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_role()->can.text.Value {
+ b:[u8;4]=[114,111,108,101];match can.text.from_view(view b[0..4],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_version()->can.text.Value {
+ b:[u8;7]=[118,101,114,115,105,111,110];match can.text.from_view(view b[0..7],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_token()->can.text.Value {
+ b:[u8;5]=[116,111,107,101,110];match can.text.from_view(view b[0..5],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_max_concurrent_jobs()->can.text.Value {
+ b:[u8;19]=[109,97,120,95,99,111,110,99,117,114,114,101,110,116,95,106,111,98,115];match can.text.from_view(view b[0..19],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_assignment_protocol()->can.text.Value {
+ b:[u8;19]=[97,115,115,105,103,110,109,101,110,116,95,112,114,111,116,111,99,111,108];match can.text.from_view(view b[0..19],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_server_time()->can.text.Value {
+ b:[u8;11]=[115,101,114,118,101,114,95,116,105,109,101];match can.text.from_view(view b[0..11],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_heartbeat_ms()->can.text.Value {
+ b:[u8;12]=[104,101,97,114,116,98,101,97,116,95,109,115];match can.text.from_view(view b[0..12],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_lease_timeout_ms()->can.text.Value {
+ b:[u8;16]=[108,101,97,115,101,95,116,105,109,101,111,117,116,95,109,115];match can.text.from_view(view b[0..16],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_job_id()->can.text.Value {
+ b:[u8;6]=[106,111,98,95,105,100];match can.text.from_view(view b[0..6],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_assignment_id()->can.text.Value {
+ b:[u8;13]=[97,115,115,105,103,110,109,101,110,116,95,105,100];match can.text.from_view(view b[0..13],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_job_type()->can.text.Value {
+ b:[u8;8]=[106,111,98,95,116,121,112,101];match can.text.from_view(view b[0..8],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_payload()->can.text.Value {
+ b:[u8;7]=[112,97,121,108,111,97,100];match can.text.from_view(view b[0..7],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_text()->can.text.Value {
+ b:[u8;4]=[116,101,120,116];match can.text.from_view(view b[0..4],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_status()->can.text.Value {
+ b:[u8;6]=[115,116,97,116,117,115];match can.text.from_view(view b[0..6],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_message()->can.text.Value {
+ b:[u8;7]=[109,101,115,115,97,103,101];match can.text.from_view(view b[0..7],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_data()->can.text.Value {
+ b:[u8;4]=[100,97,116,97];match can.text.from_view(view b[0..4],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_echo()->can.text.Value {
+ b:[u8;4]=[101,99,104,111];match can.text.from_view(view b[0..4],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_reason()->can.text.Value {
+ b:[u8;6]=[114,101,97,115,111,110];match can.text.from_view(view b[0..6],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_load()->can.text.Value {
+ b:[u8;4]=[108,111,97,100];match can.text.from_view(view b[0..4],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_jobs()->can.text.Value {
+ b:[u8;4]=[106,111,98,115];match can.text.from_view(view b[0..4],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_time()->can.text.Value {
+ b:[u8;4]=[116,105,109,101];match can.text.from_view(view b[0..4],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_request_id()->can.text.Value {
+ b:[u8;10]=[114,101,113,117,101,115,116,95,105,100];match can.text.from_view(view b[0..10],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_method()->can.text.Value {
+ b:[u8;6]=[109,101,116,104,111,100];match can.text.from_view(view b[0..6],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_expects_reply()->can.text.Value {
+ b:[u8;13]=[101,120,112,101,99,116,115,95,114,101,112,108,121];match can.text.from_view(view b[0..13],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_params()->can.text.Value {
+ b:[u8;6]=[112,97,114,97,109,115];match can.text.from_view(view b[0..6],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_code()->can.text.Value {
+ b:[u8;4]=[99,111,100,101];match can.text.from_view(view b[0..4],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_capabilities()->can.text.Value {
+ b:[u8;12]=[99,97,112,97,98,105,108,105,116,105,101,115];match can.text.from_view(view b[0..12],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_ok()->can.text.Value {
+ b:[u8;2]=[111,107];match can.text.from_view(view b[0..2],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_hello()->can.text.Value {
+ b:[u8;5]=[104,101,108,108,111];match can.text.from_view(view b[0..5],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_hello_ok()->can.text.Value {
+ b:[u8;8]=[104,101,108,108,111,95,111,107];match can.text.from_view(view b[0..8],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_heartbeat()->can.text.Value {
+ b:[u8;9]=[104,101,97,114,116,98,101,97,116];match can.text.from_view(view b[0..9],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_heartbeat_ok()->can.text.Value {
+ b:[u8;12]=[104,101,97,114,116,98,101,97,116,95,111,107];match can.text.from_view(view b[0..12],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_job()->can.text.Value {
+ b:[u8;3]=[106,111,98];match can.text.from_view(view b[0..3],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_job_ack()->can.text.Value {
+ b:[u8;7]=[106,111,98,95,97,99,107];match can.text.from_view(view b[0..7],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_job_event()->can.text.Value {
+ b:[u8;9]=[106,111,98,95,101,118,101,110,116];match can.text.from_view(view b[0..9],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_job_cancel()->can.text.Value {
+ b:[u8;10]=[106,111,98,95,99,97,110,99,101,108];match can.text.from_view(view b[0..10],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_control()->can.text.Value {
+ b:[u8;7]=[99,111,110,116,114,111,108];match can.text.from_view(view b[0..7],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_control_result()->can.text.Value {
+ b:[u8;14]=[99,111,110,116,114,111,108,95,114,101,115,117,108,116];match can.text.from_view(view b[0..14],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_control_event()->can.text.Value {
+ b:[u8;13]=[99,111,110,116,114,111,108,95,101,118,101,110,116];match can.text.from_view(view b[0..13],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_job_event_ack()->can.text.Value {
+ b:[u8;13]=[106,111,98,95,101,118,101,110,116,95,97,99,107];match can.text.from_view(view b[0..13],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_error()->can.text.Value {
+ b:[u8;5]=[101,114,114,111,114];match can.text.from_view(view b[0..5],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_worker()->can.text.Value {
+ b:[u8;6]=[119,111,114,107,101,114];match can.text.from_view(view b[0..6],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_example_echo()->can.text.Value {
+ b:[u8;12]=[101,120,97,109,112,108,101,46,101,99,104,111];match can.text.from_view(view b[0..12],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_accepted()->can.text.Value {
+ b:[u8;8]=[97,99,99,101,112,116,101,100];match can.text.from_view(view b[0..8],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_completed()->can.text.Value {
+ b:[u8;9]=[99,111,109,112,108,101,116,101,100];match can.text.from_view(view b[0..9],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_failed()->can.text.Value {
+ b:[u8;6]=[102,97,105,108,101,100];match can.text.from_view(view b[0..6],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_cancelled()->can.text.Value {
+ b:[u8;9]=[99,97,110,99,101,108,108,101,100];match can.text.from_view(view b[0..9],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_running()->can.text.Value {
+ b:[u8;7]=[114,117,110,110,105,110,103];match can.text.from_view(view b[0..7],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_acknowledged()->can.text.Value {
+ b:[u8;12]=[97,99,107,110,111,119,108,101,100,103,101,100];match can.text.from_view(view b[0..12],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_unsupported_control_method()->can.text.Value {
+ b:[u8;26]=[117,110,115,117,112,112,111,114,116,101,100,95,99,111,110,116,114,111,108,95,109,101,116,104,111,100];match can.text.from_view(view b[0..26],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_liza_can_0_1()->can.text.Value {
+ b:[u8;12]=[108,105,122,97,45,99,97,110,47,48,46,49];match can.text.from_view(view b[0..12],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_pending()->can.text.Value {
+ b:[u8;7]=[112,101,110,100,105,110,103];match can.text.from_view(view b[0..7],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_dispatched()->can.text.Value {
+ b:[u8;10]=[100,105,115,112,97,116,99,104,101,100];match can.text.from_view(view b[0..10],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_unauthorized()->can.text.Value {
+ b:[u8;12]=[117,110,97,117,116,104,111,114,105,122,101,100];match can.text.from_view(view b[0..12],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_node_stale()->can.text.Value {
+ b:[u8;10]=[110,111,100,101,95,115,116,97,108,101];match can.text.from_view(view b[0..10],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_license_required()->can.text.Value {
+ b:[u8;16]=[108,105,99,101,110,115,101,95,114,101,113,117,105,114,101,100];match can.text.from_view(view b[0..16],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
+pub fn literal_can_disabled()->can.text.Value {
+ b:[u8;12]=[99,97,110,95,100,105,115,97,98,108,101,100];match can.text.from_view(view b[0..12],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}
+}
