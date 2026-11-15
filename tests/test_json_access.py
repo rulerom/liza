@@ -282,6 +282,13 @@ class JsonAccess(unittest.TestCase):
         self.assertFalse(any('json' in f.name.text for f in self.module.externals))
 
 class JsonAccessOwnership(unittest.TestCase):
+    def test_legacy_validator_does_not_load_access_library(self):
+        module=lower(Parser('fn main()->u32 {s=json.create();return 0}').parse())
+        self.assertIn('JsonState',module.structs)
+        self.assertNotIn('JsonDocument',module.structs)
+        self.assertNotIn('JsonWriter',module.structs)
+
+
     def reject(self,source,pattern):
         with self.assertRaisesRegex((CompileError,ValueError),pattern):lower(Parser(source+'\nfn main()->u32{return 0}').parse())
 

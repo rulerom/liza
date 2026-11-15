@@ -237,6 +237,6 @@ def load_program(source, project_root=None):
             decl.name=replace(decl.name,text=canonical)
         combined.extend(program)
         combined.structs.extend(program.structs);combined.enums.extend(program.enums)
-    for name in RESERVED:
+    for name in RESERVED | {'json_access'}:
         setattr(combined,'uses_'+name,any(getattr(p,'uses_'+name,False) for p,_,_ in loaded.values()))
     return combined

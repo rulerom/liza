@@ -11,9 +11,10 @@ def attach(program):
         libraries.append('tls')
     if 'json' in libraries and 'utf8_stream' not in libraries:
         libraries.insert(0,'utf8_stream')
-    if 'json' in libraries:
+    if 'json' in libraries: libraries.append('json_mut')
+    if getattr(program,'uses_json_access',False):
         if 'utf8' not in libraries: libraries.append('utf8')
-        libraries.extend(['json_mut','json_reader','json_writer'])
+        libraries.extend(['json_reader','json_writer'])
     uses_workers = getattr(program, 'uses_workers', False)
     uses_channels = getattr(program, 'uses_channels', False)
     uses_group = getattr(program, 'uses_groups', False)

@@ -427,6 +427,8 @@ class Parser:
         functions.uses_groups = any(t.text == 'groups' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
         functions.uses_channels = any(t.text == 'channels' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
         functions.uses_workers = any(t.text == 'workers' and self.tokens[i+1].text == '.' for i,t in enumerate(self.tokens[:-1]))
+        functions.uses_json_access = any(t.text in ('JsonAccessError','JsonKind','JsonDone','JsonLimits','JsonDocument','JsonRead','JsonDecoded','JsonWriter','JsonWritten','JsonOutput') or
+            (t.text == 'json' and self.tokens[i+1].text == '.' and self.tokens[i+2].text not in ('create','feed','feed_mut','status','finish')) for i,t in enumerate(self.tokens[:-2]))
         functions.uses_json = any(t.text in ('JsonState','JsonError','JsonErrorKind','JsonAccessError','JsonKind','JsonDone','JsonLimits','JsonDocument','JsonRead','JsonDecoded','JsonWriter','JsonWritten','JsonOutput') or (t.text == 'json' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_framing = any(t.text in ('FrameState','FrameStep','FrameError') or (t.text == 'framing' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_tls = any(t.text in ('TlsState','TlsStep','TlsError','TlsOutcome','TlsRead') or (t.text == 'tls' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
