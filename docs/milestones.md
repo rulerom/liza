@@ -10,7 +10,7 @@ subviews, владеющий UTF-8 String, StringBuilder и потоковые J
 а также native workers, scoped-сеть с одним или двумя независимыми owners,
 HTTP/WS на Liza и HTTPS/WSS с обязательной проверкой сервера.
 [CAN Echo Worker](can-worker.md) реализован с локальной WSS-приёмкой;
-live-приёмка результата задания ещё не завершена.
+live-задание `example.echo` завершено с подтверждением результата в админке.
 Следующий основной рубеж — воспроизводимый [Verified Network Gateway](network-gateway.md).
 
 Номера 0.0.x ниже обозначают исторические этапы, а не единую версию всех
