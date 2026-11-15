@@ -94,7 +94,14 @@ int main(int argc,char **argv) {
     const char *missing="/liza-does-not-exist/child";
 #endif
     for(int repeat=0;repeat<12;repeat++) {
+        #ifdef _WIN32
+        DWORD missing_before,missing_after;GetProcessHandleCount(GetCurrentProcess(),&missing_before);
+#endif
         void *bad=liza_rt_process_spawn(missing,1,0,0,0,0,&error);CHECK(!bad&&error==1,20);
+#ifdef _WIN32
+        GetProcessHandleCount(GetCurrentProcess(),&missing_after);
+        if(missing_before!=missing_after)fprintf(stderr,"missing %d: %lu -> %lu\n",repeat,(unsigned long)missing_before,(unsigned long)missing_after);
+#endif
     }
     for(int repeat=0;repeat<25;repeat++) {
 #ifdef _WIN32
@@ -130,6 +137,20 @@ cleanup:
        to disappear during cleanup, rather than accepting a per-child leak. */
     if(!result&&after+14!=steady_after) {
         fprintf(stderr,"handles: initial=%lu steady=%lu final=%lu\n",(unsigned long)before,(unsigned long)steady_after,(unsigned long)after);result=17;
+    }
+#endif
+#ifdef _WIN32
+    if(result) {
+        DWORD raw_before,raw_after;GetProcessHandleCount(GetCurrentProcess(),&raw_before);
+        for(int i=0;i<12;i++) {
+            STARTUPINFOW startup={0};startup.cb=sizeof(startup);PROCESS_INFORMATION info={0};
+            wchar_t command_line[]=L"\"Z:\\liza-does-not-exist\\child.exe\"";
+            if(CreateProcessW(L"Z:\\liza-does-not-exist\\child.exe",command_line,0,0,FALSE,0,0,0,&startup,&info)) {
+                TerminateProcess(info.hProcess,137);WaitForSingleObject(info.hProcess,INFINITE);CloseHandle(info.hThread);CloseHandle(info.hProcess);
+            }
+        }
+        GetProcessHandleCount(GetCurrentProcess(),&raw_after);
+        fprintf(stderr,"raw CreateProcess missing-drive control: %lu -> %lu\n",(unsigned long)raw_before,(unsigned long)raw_after);
     }
 #endif
     return result;
