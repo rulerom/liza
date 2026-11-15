@@ -22,7 +22,7 @@ fn exchange(session:tls.Session,r:net.Reactor,id:net.Connection,storage:memory.B
     var failure:Option<TlsError> =None
     var connected=false;var state:u32=0;var done=false
     var incoming:u32=0;var fed:u32=0;var outgoing:u32=0;var sent:u32=0
-    var plaintext:u32=0;var cursor:u32=0;var tcp_eof=false;var write_blocked=false;var plaintext_blocked=false
+    var plaintext:u32=0;var cursor:u32=0;var tcp_eof=false;var write_blocked=false;var plaintext_blocked=false;var work_since_poll:u32=0
     while !done {
         var now:u64=0
         match net.monotonic_ms() {Err(e)=>{failure=Some(TlsError.Transport(e));break} Ok(n)=>{now=n}}
@@ -99,7 +99,9 @@ fn exchange(session:tls.Session,r:net.Reactor,id:net.Connection,storage:memory.B
         }
         // Input progress is independent of TCP write permission. A blocked
         // writer must observe readiness before retrying, even during parsing.
-        if !progress || write_blocked {
+        if progress && write_blocked {work_since_poll=work_since_poll+1}
+        if !progress || (write_blocked && work_since_poll>=256) {
+            work_since_poll=0
             var interest:u32=1;if !connected || outgoing!=0 {interest=3}
             match net.reactor_interest(r,id,interest) {Err(e)=>{failure=Some(TlsError.Transport(e));break} Ok(n)=>{}}
             var wait_ms:u32=0;if !progress {wait_ms=u32(deadline-now)}

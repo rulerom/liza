@@ -86,7 +86,8 @@ plaintext-запись; переключение на read/shutdown до её з
 
 TCP `WouldBlock`/`Interrupted` снимает разрешение на запись независимо от
 входного progress. Повторная запись разрешена после writable/error readiness.
-Пока есть полезная обработка input, readiness проверяется с timeout 0;
+Пока есть полезная обработка input, readiness проверяется с timeout 0
+не чаще чем после 256 шагов обработки;
 без progress используется блокирующее ожидание оставшегося deadline.
 После WANT с OUTPUT и нулевым plaintext progress исходный plaintext сохраняется
 и повторяется только после успешного `tls.drain`, освободившего BIO.

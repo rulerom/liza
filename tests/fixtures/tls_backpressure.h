@@ -41,7 +41,7 @@ liza_tls_result liza_tls_shutdown(liza_tls*t,uint64_t now){
 #undef liza_rt_reactor_ready
 #undef liza_rt_reactor_close
 static unsigned plain,full_bio,closing,phase,permit,blocked,polls,waiting,reads_during_gate,violations;
-static uint32_t saved_count,saved_hash;
+static uint32_t saved_count,saved_hash,input_gate_polls;
 void bp_plain_read(void){plain=1;if(phase==1&&!permit)reads_during_gate++;}
 void bp_full_bio(void){full_bio++;}
 void bp_close_start(void){if(!closing){closing=1;phase=2;permit=0;polls=0;waiting=0;}}
@@ -57,7 +57,7 @@ uint64_t liza_rt_reactor_write(reactor*r,uint64_t o,uint64_t g,uint64_t s,const 
 }
 uint64_t liza_rt_reactor_poll(reactor*r,uint32_t timeout){
     if(phase&&!permit&&waiting){
-        polls++;
+        polls++;if(phase==1)input_gate_polls++;
         if((phase==1&&full_bio&&polls>=3)||(phase==2&&polls>=3))permit=1;
         if(!permit){
             /* Model a non-writable socket: input readiness remains real. */
@@ -72,7 +72,8 @@ uint64_t liza_rt_reactor_poll(reactor*r,uint32_t timeout){
 }
 uint64_t liza_rt_reactor_ready(reactor*r,uint64_t o,uint64_t g,uint64_t s){return bp_real_ready(r,o,g,s);}
 uint32_t liza_rt_reactor_close(reactor*r){
-    fprintf(stderr,"TLS_BP blocked=%u bio_full=%u concurrent_reads=%u closing=%u violations=%u\n",blocked,full_bio,reads_during_gate,closing,violations);
+    if(input_gate_polls>256){violations++;fprintf(stderr,"excessive readiness polls during bounded input\n");}
+    fprintf(stderr,"TLS_BP blocked=%u bio_full=%u concurrent_reads=%u closing=%u violations=%u polls=%u\n",blocked,full_bio,reads_during_gate,closing,violations,input_gate_polls);
     return bp_real_close(r);
 }
 #endif
