@@ -127,6 +127,7 @@ Deadline при активном разборе проверяется с пол
 Workflow `HTTP and WebSocket client` запускает
 эти проверки на Linux/macOS/Windows; локальный запуск не заменяет результаты CI.
 
-Следующие самостоятельные задачи — DNS, TLS transport с проверкой имени и
-сертификата, затем JSON/CAN и композиция с RTP owner. Текущий пример не заявляет
+Для HTTPS/WSS используется [TLS transport](tls-transport.md) с обязательной
+проверкой сервера. Parser и протокольный цикл общие для plain и secure клиентов.
+Следующие самостоятельные задачи — DNS, JSON/CAN и композиция с RTP owner. Текущий пример не заявляет
 готовность production CAN или полного HTTP/WebSocket API.

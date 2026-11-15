@@ -1,7 +1,7 @@
 import httpws.bytes
 import httpws.crypto
 import httpws.http
-import httpws.websocket
+import httpws.protocol
 // Status: 0=clean close, 2=config, 3=transport/entropy, 4=protocol, 5=deadline.
 fn retry(e:ReactorError)->bool {
     match e {ReactorError.Interrupted=>{return true} ReactorError.WouldBlock=>{return true}
@@ -11,28 +11,20 @@ fn retry(e:ReactorError)->bool {
     ReactorError.Full=>{return false} ReactorError.InvalidConnection=>{return false}
     ReactorError.Exhausted=>{return false} ReactorError.OutOfMemory=>{return false}}
 }
-fn masked(opcode:u8,data:View<u8>)->Result<httpws.bytes.Wire,u32>:io {
-    match net.random_u32() {
-        Err(e)=>{return Err(3)}
-        Ok(mask)=>{match httpws.websocket.frame(opcode,data,mask) {Err(e)=>{return Err(4)} Ok(w)=>{return Ok(w)}}}
-    }
-}
 fn exchange(r:net.Reactor,id:net.Connection,storage:memory.Buffer<u8>,request:httpws.bytes.Wire,proof:[u8;28],message:View<u8>,deadline:u64,websocket:bool)->u32:io,alloc {
     var input=move storage
-    var pending=request;var sent:u32=0
-    var status:u32=0;var connected=false;var closed=false;var upgraded=false
+    var protocol=httpws.protocol.create(request,proof,websocket)
+    var status:u32=0;var connected=false
     var count:u32=0;var cursor:u32=0
-    var head=httpws.bytes.empty();var parser=httpws.websocket.create()
-    var body_size:u32=0;var expected_size:Option<u32> =None
     var batch:u32=0
     while status==0 {
-        if closed && pending.len==0 {
+        if protocol.closed && protocol.pending.len==0 {
             match net.monotonic_ms() {Err(e)=>{status=3} Ok(now)=>{if now>=deadline {status=5}}}
             break
         }
         // Keep unread bytes across partial writes and control replies. This bounds
         // output to one frame without losing coalesced input or allocating a queue.
-        if connected && pending.len==0 && cursor<count {
+        if connected && protocol.pending.len==0 && cursor<count {
             // Active input processing must not defer the deadline until poll.
             // At most 256 input bytes are parsed between clock observations.
             if batch==0 {
@@ -45,60 +37,13 @@ fn exchange(r:net.Reactor,id:net.Connection,storage:memory.Buffer<u8>,request:ht
             var byte:u8=0
             {data=memory.view(input);byte=data[cursor]}
             cursor=cursor+1
-            if !upgraded {
-                if !httpws.bytes.put(borrow mut head,byte) {status=4}
-                if head.len>=4 {
-                    n=head.len
-                    if head.data[n-4]==13 && head.data[n-3]==10 && head.data[n-2]==13 && head.data[n-1]==10 {
-                        header=head.data
-                        if websocket {match httpws.http.upgrade(view header[0..n],proof) {
-                            Err(e)=>{status=4}
-                            Ok(value)=>{match value {None=>{status=4} Some(h)=>{upgraded=true}}}
-                        }
-                        if status==0 {match masked(1,message) {Err(e)=>{status=e} Ok(w)=>{pending=w;sent=0}}}
-                        } else {
-                            match httpws.http.response(view header[0..n]) {
-                                Err(e)=>{status=4}
-                                Ok(value)=>{match value {None=>{status=4} Some(h)=>{
-                                    match httpws.http.body_length(view header[0..n],h) {
-                                        Err(e)=>{status=4}
-                                        Ok(length)=>{expected_size=length;upgraded=true;match length {None=>{} Some(size)=>{if size==0 {closed=true}}}}
-                                    }
-                                }}}
-                            }
-                        }
-                    }
-                }
-            } else if !websocket {
-                if body_size==4096 {status=4}
-                else {
-                    body_size=body_size+1
-                    single:[u8;1]=[byte]
-                    match console.write_bytes(view single[0..1]) {Ok(n)=>{} Err(e)=>{status=3}}
-                    match expected_size {None=>{} Some(size)=>{if body_size==size {closed=true}}}
-                }
-            } else {
-                match httpws.websocket.feed(borrow mut parser,byte) {
-                    Err(e)=>{status=4}
-                    Ok(event)=>{
-                        if event==1 || event==2 {
-                            body=parser.message
-                            match console.write_bytes(view body[0..parser.size]) {Ok(n)=>{} Err(e)=>{status=3}}
-                        }
-                        if event==9 || event==8 {
-                            control=parser.control;var opcode:u8=10
-                            if event==8 {opcode=8;closed=true}
-                            match masked(opcode,view control[0..parser.control_size]) {Err(e)=>{status=e} Ok(w)=>{pending=w;sent=0}}
-                        }
-                    }
-                }
-            }
+            status=httpws.protocol.feed(borrow mut protocol,byte,message)
         } else {
             var now:u64=0
             match net.monotonic_ms() {Err(e)=>{status=3} Ok(n)=>{now=n}}
             if status==0 && now>=deadline {status=5}
             var interest:u32=1
-            if !connected || pending.len!=0 {interest=2}
+            if !connected || protocol.pending.len!=0 {interest=2}
             if status==0 {
                 match net.reactor_interest(r,id,interest) {Err(e)=>{status=3} Ok(n)=>{}}
                 if status==0 {match net.reactor_poll(r,u32(deadline-now)) {Err(e)=>{if !retry(e) {status=3}} Ok(n)=>{}}}
@@ -108,17 +53,16 @@ fn exchange(r:net.Reactor,id:net.Connection,storage:memory.Buffer<u8>,request:ht
                     match net.reactor_finish_connect(r,id) {Err(e)=>{if !retry(e) {status=3}} Ok(done)=>{connected=done}}
                 }
                 if status==0 && connected {
-                    if pending.len!=0 && (flags&6)!=0 {
-                        wire=pending.data
-                        match net.reactor_write(r,id,view wire[0..pending.len],sent,pending.len-sent) {
+                    if protocol.pending.len!=0 && (flags&6)!=0 {
+                        wire=protocol.pending.data
+                        match net.reactor_write(r,id,view wire[0..protocol.pending.len],protocol.sent,protocol.pending.len-protocol.sent) {
                             Err(e)=>{if !retry(e) {status=3}}
-                            Ok(n)=>{if n==0 {status=3} else {sent=sent+n;if sent==pending.len {pending.len=0;sent=0}}}
+                            Ok(n)=>{if n==0 {status=3} else {protocol.sent=protocol.sent+n;if protocol.sent==protocol.pending.len {protocol.pending.len=0;protocol.sent=0}}}
                         }
-                    } else if pending.len==0 && cursor==count && (flags&5)!=0 {
+                    } else if protocol.pending.len==0 && cursor==count && (flags&5)!=0 {
                         (next,result)=net.reactor_read(r,id,move input,0,4096);input=move next
                         match result {Err(e)=>{if !retry(e) {status=3}} Ok(n)=>{count=n;cursor=0;batch=0;if n==0 {
-                            if !websocket && upgraded {match expected_size {None=>{closed=true} Some(size)=>{status=4}}}
-                            else {status=4}
+                            status=httpws.protocol.eof(borrow mut protocol)
                         }}}
                     }
                 }

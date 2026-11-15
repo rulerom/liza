@@ -1,0 +1,2 @@
+import httpws.secure_cli
+fn main()->u32:io,alloc {return httpws.secure_cli.run(true)}

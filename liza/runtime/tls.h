@@ -1,8 +1,9 @@
 #ifndef LIZA_TLS_H
 #define LIZA_TLS_H
-/* TLS-A: internal, thread-affine OpenSSL adapter. No language binding yet.
+/* Internal, thread-affine OpenSSL adapter behind the TLS-B linear binding.
  * The caller owns all sockets, polling and time. No borrowed pointer is retained.
- * A CA file and peer identity are mandatory; no verification bypass exists. */
+ * Peer identity is mandatory; trust is system policy or an explicit CA file.
+ * No verification bypass exists. */
 #include <stddef.h>
 #include <stdint.h>
 typedef struct liza_tls liza_tls;
@@ -24,6 +25,7 @@ typedef struct {
 } liza_tls_result;
 uint32_t liza_tls_create(const char *ca_file,const char *peer,uint64_t now,
                          uint64_t deadline,liza_tls **out);
+uint32_t liza_tls_create_system(const char *peer,uint64_t now,uint64_t deadline,liza_tls **out);
 liza_tls_result liza_tls_handshake(liza_tls *,uint64_t now);
 liza_tls_result liza_tls_write(liza_tls *,const uint8_t *,uint32_t,uint64_t now);
 liza_tls_result liza_tls_read(liza_tls *,uint8_t *,uint32_t,uint64_t now);

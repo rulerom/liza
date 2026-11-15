@@ -1,0 +1,29 @@
+import httpws.bytes
+import httpws.secure
+import apps.proxy.config
+fn argument(index:u32)->httpws.bytes.Wire:io {
+    var out=httpws.bytes.empty()
+    match cli.arg(index) {None=>{return out} Some(arg)=>{
+        var i:u32=0;while i<64 {match cli.ascii_at(arg,i) {None=>{return httpws.bytes.empty()} Some(b)=>{if b==0 {return out};n=httpws.bytes.put(borrow mut out,b)}};i=i+1}
+    }}
+    return httpws.bytes.empty()
+}
+// Explicit secure mode, numeric TCP destination, authenticated peer name.
+// Optional CA file is local to this session; no OS trust-store mutation.
+pub fn run(websocket:bool)->u32:io,alloc {
+    if cli.count()!=4 && cli.count()!=5 {e=console.errln("Usage: client IPv4:port /path peer-name [ca.pem]");return 2}
+    var address=net.ipv4(127,0,0,1,443)
+    match cli.arg(1) {None=>{return 2} Some(arg)=>{match apps.proxy.config.endpoint(arg) {Err(e)=>{return 2} Ok(a)=>{address=a}}}}
+    host=argument(1);target=argument(2);peer=argument(3);ca=argument(4)
+    if host.len==0 || target.len==0 || peer.len==0 || (cli.count()==5 && ca.len==0) {return 2}
+    h=host.data;t=target.data;p=peer.data;c=ca.data;message:[u8;4]=[76,105,122,97]
+    match httpws.secure.run(address,view h[0..host.len],view t[0..target.len],view message[0..4],view p[0..peer.len],view c[0..ca.len],cli.count()==5,10000,websocket) {
+        Ok(n)=>{return n}
+        Err(error)=>{match error {
+            TlsError.Invalid=>{return 2} TlsError.ManagedBudget=>{return 6} TlsError.OutOfMemory=>{return 6}
+            TlsError.WrongThread=>{return 6} TlsError.Configuration=>{return 6}
+            TlsError.Verification(code)=>{return 7} TlsError.Deadline=>{return 5}
+            TlsError.Protocol(reason)=>{return 4} TlsError.Transport(e)=>{return 3} TlsError.Output=>{return 3}
+        }}
+    }
+}

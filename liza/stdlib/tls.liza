@@ -1,0 +1,72 @@
+// No unchecked pointers, implicit destruction, or insecure verification mode.
+enum TlsState { Handshake; Open; Closing; Done; Dead; Unavailable }
+enum TlsOutcome { Progress; Want; Closed }
+enum TlsError { Invalid; ManagedBudget; OutOfMemory; WrongThread; Configuration; Verification(u32); Deadline; Protocol(u64); Transport(ReactorError); Output }
+struct TlsStep {count:u32;wants:u32;state:TlsState;outcome:TlsOutcome}
+struct TlsRead {buffer:memory.Buffer<u8>;result:Result<TlsStep,TlsError>}
+struct __liza_TlsRaw {status:u64;wants:u64;count:u64;state:u64;verify:u64;reason:u64}
+struct __liza_TlsCreate {session:tls.Session;error:u32}
+fn __liza_tls_error(code:u64,verify:u64,reason:u64)->TlsError {
+    if code==3 {return TlsError.Invalid}
+    if code==5 {return TlsError.Deadline}
+    if code==6 {return TlsError.WrongThread}
+    if code==7 {return TlsError.OutOfMemory}
+    if code==8 {return TlsError.ManagedBudget}
+    if verify!=0 {return TlsError.Verification(u32.wrap(verify))}
+    return TlsError.Protocol(reason)
+}
+fn __liza_tls_decode(raw:__liza_TlsRaw)->Result<TlsStep,TlsError> {
+    if raw.status>2 {return Err(__liza_tls_error(raw.status,raw.verify,raw.reason))}
+    var state=TlsState.Unavailable
+    if raw.state==0 {state=TlsState.Handshake}
+    if raw.state==1 {state=TlsState.Open}
+    if raw.state==2 {state=TlsState.Closing}
+    if raw.state==3 {state=TlsState.Done}
+    if raw.state==4 {state=TlsState.Dead}
+    var outcome=TlsOutcome.Progress
+    if raw.status==1 {outcome=TlsOutcome.Want}
+    if raw.status==2 {outcome=TlsOutcome.Closed}
+    return Ok(TlsStep(u32(raw.count),u32(raw.wants),state,outcome))
+}
+fn tls.create(peer:View<u8>,budget:u64,now:u64,deadline:u64)->Result<tls.Session,TlsError>:io,alloc {
+    empty:[u8;1]=[0]
+    raw=__liza_tls_create(peer,view empty[0..0],0,budget,now,deadline)
+    if raw.error==0 {return Ok(raw.session)}
+    if raw.error==4 {return Err(TlsError.Configuration)}
+    return Err(__liza_tls_error(u64(raw.error),0,0))
+}
+fn tls.create_with_ca(peer:View<u8>,ca:View<u8>,budget:u64,now:u64,deadline:u64)->Result<tls.Session,TlsError>:io,alloc {
+    raw=__liza_tls_create(peer,ca,1,budget,now,deadline)
+    if raw.error==0 {return Ok(raw.session)}
+    if raw.error==4 {return Err(TlsError.Configuration)}
+    return Err(__liza_tls_error(u64(raw.error),0,0))
+}
+fn tls.handshake(session:tls.Session,now:u64)->Result<TlsStep,TlsError>:io {
+    b:[u8;1]=[0];return __liza_tls_decode(__liza_tls_step(0,session,view b[0..0],0,0,now))
+}
+fn tls.shutdown(session:tls.Session,now:u64)->Result<TlsStep,TlsError>:io {
+    b:[u8;1]=[0];return __liza_tls_decode(__liza_tls_step(3,session,view b[0..0],0,0,now))
+}
+fn tls.eof(session:tls.Session,now:u64)->Result<TlsStep,TlsError>:io {
+    b:[u8;1]=[0];return __liza_tls_decode(__liza_tls_step(6,session,view b[0..0],0,0,now))
+}
+fn tls.write(session:tls.Session,data:View<u8>,start:u32,count:u32,now:u64)->Result<TlsStep,TlsError>:io {
+    return __liza_tls_decode(__liza_tls_step(1,session,data,start,count,now))
+}
+fn tls.feed(session:tls.Session,data:View<u8>,start:u32,count:u32,now:u64)->Result<TlsStep,TlsError>:io {
+    return __liza_tls_decode(__liza_tls_step(4,session,data,start,count,now))
+}
+fn tls.read(session:tls.Session,data:memory.Buffer<u8>,start:u32,count:u32,now:u64)->TlsRead:io {
+    (next,raw)=__liza_tls_read(session,move data,start,count,now)
+    return TlsRead(move next,__liza_tls_decode(raw))
+}
+fn tls.drain(session:tls.Session,data:memory.Buffer<u8>,start:u32,count:u32,now:u64)->TlsRead:io {
+    (next,raw)=__liza_tls_drain(session,move data,start,count,now)
+    return TlsRead(move next,__liza_tls_decode(raw))
+}
+// Abortive local cleanup; success does not claim graceful TCP completion.
+fn tls.destroy(session:tls.Session)->Result<u32,TlsError>:io,alloc {
+    code=__liza_tls_destroy(move session)
+    if code==0 {return Ok(0)}
+    return Err(__liza_tls_error(u64(code),0,0))
+}

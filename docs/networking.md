@@ -14,7 +14,7 @@ description: "Как выбрать UDP, TCP, Reactor, scoped-группы ил�
 | Один TCP-клиент или базовый echo | Move-only сокеты и частичные I/O | [TCP](tcp.md) |
 | Несколько TCP-соединений в одном потоке | Reactor, readiness и bounded capacity | [Reactor](reactor.md) |
 | Первый HTTP GET или ws:// клиент | Протоколы на Liza поверх Reactor, IPv4 и явные лимиты | [HTTP и WebSocket](http-websocket.md) |
-| Подготовка TLS transport | Внутренний адаптер и native приёмка; публичного HTTPS/WSS API ещё нет | [TLS-A](tls-transport.md) |
+| HTTPS/WSS transport | Move-only TLS session, обязательная проверка сервера и примеры поверх Reactor | [TLS-A/B](tls-transport.md) |
 | Сетевой consumer с командами и управляемым shutdown | `groups.run`, скрытый consumer-owned Reactor | [Scoped-группы](scoped-groups.md) |
 | Два независимых сетевых владельца | `groups.run_pair`, отдельные endpoints, ресурсы и join lanes | [Scoped-группы](scoped-groups.md#two-groups) |
 | Несколько изолированных функций с scalar входом/результатом | `workers.run(1..8)` и локальные ресурсы | [Workers](scoped-workers.md) |
