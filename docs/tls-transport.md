@@ -84,6 +84,13 @@ plaintext-запись; переключение на read/shutdown до её з
 Правило повторения следует
 [контракту SSL_write](https://docs.openssl.org/3.5/man3/SSL_write/).
 
+TCP `WouldBlock`/`Interrupted` снимает разрешение на запись независимо от
+входного progress. Повторная запись разрешена после writable/error readiness.
+Пока есть полезная обработка input, readiness проверяется с timeout 0;
+без progress используется блокирующее ожидание оставшегося deadline.
+После WANT с OUTPUT и нулевым plaintext progress исходный plaintext сохраняется
+и повторяется только после успешного `tls.drain`, освободившего BIO.
+
 ## Authentication без публичного небезопасного режима
 
 Каждая session требует непустой peer identity и аутентификацию сервера.
@@ -174,3 +181,12 @@ close_notify; реальные OpenSSL данные обрабатываются
 DNS, chunked, CAN, TLS server, session pooling, HTTP/2 и интеграция со scoped
 ролями остаются отдельными задачами. Это bounded экспериментальный клиент,
 а не универсальная production HTTPS-библиотека.
+
+Adversarial backpressure-приёмка использует реальные TLS/TCP и управляемую
+инъекцию неготовности записи: 400 различных ping одновременно заполняют BIO
+исходящими pong. Проверяются точное содержимое и порядок всех ответов,
+сохранение ciphertext при partial writes, два периода `WouldBlock` (включая
+shutdown), входной TLS progress во время блокировки и отсутствие TCP retry
+без writable readiness / plaintext retry без BIO drain. Обе отрицательные
+мутации отклоняются при O0/O2. Это детерминированная проверка контракта I/O,
+а не измерение физической пропускной способности TCP.

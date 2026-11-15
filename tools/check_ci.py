@@ -83,6 +83,7 @@ CASES = [
     (['tests/test_tls.py'], {'test', 'tls-transport'}),
     (['examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza'], {'test', 'editor', 'docs', 'tls-transport'}),
     (['tests/test_tls_transport.py'], {'test', 'tls-transport'}),
+    (['tests/fixtures/tls_backpressure.h'], {'test', 'editor', 'tls-transport'}),
     (['tests/native/tls_transport.c'], {'test', 'tls-transport'}),
     (['examples/httpws/http.liza'], {'test', 'editor', 'docs', 'http-ws', 'tls-transport'}),
     (['examples/liza_ws.liza'], {'test', 'editor', 'docs', 'http-ws'}),

@@ -131,6 +131,56 @@ class TlsClients(unittest.TestCase):
             self.assertEqual(self.session('short',opt,response).stdout,b'ok')
             self.session('short',opt,stalled,expected=5)
 
+    def test_sustained_ciphertext_backpressure_with_input(self):
+        root=self.root/'backpressure';root.mkdir()
+        fixture=ROOT/'tests/fixtures/tls_backpressure.h'
+        runtime=ROOT/'liza/runtime'/('reactor_windows.c' if sys.platform=='win32' else 'reactor_posix.c')
+        reactor=root/'reactor.c';engine=root/'engine.c'
+        reactor.write_text('#define LIZA_TLS_BP_REACTOR "'+runtime.as_posix()+'"\n#include "'+fixture.as_posix()+'"\n')
+        engine.write_text('#define LIZA_TLS_BP_ENGINE "'+(ROOT/'liza/runtime/tls_openssl.c').as_posix()+'"\n#include "'+fixture.as_posix()+'"\n')
+        from liza.stdlib import link_flags as original_flags
+        def flags(module):
+            return [str(engine) if Path(f).name=='tls_openssl.c' else f for f in original_flags(module)]
+        payloads=[i.to_bytes(2,'big')+bytes([i%251])*123 for i in range(400)]
+        def peer(conn):
+            request=self.request(conn)
+            key=next(line.split(b':',1)[1].strip() for line in request.split(b'\r\n') if line.lower().startswith(b'sec-websocket-key:'))
+            proof=base64.b64encode(hashlib.sha1(key+b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest())
+            conn.sendall(b'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+proof+b'\r\n\r\n'+b''.join(b'\x89\x7d'+p for p in payloads))
+            self.assertEqual(client_frame(conn),(1,b'Liza'))
+            for payload in payloads: self.assertEqual(client_frame(conn),(10,payload))
+            conn.sendall(b'\x88\x02\x03\xe8')
+            self.assertEqual(client_frame(conn),(8,b'\x03\xe8'))
+        for opt in ('0','2'):
+            with patch('test_httpws.link_flags',side_effect=flags):
+                self.clients['pressure',opt]=build(ROOT/'examples/apps/liza_wss.liza',root,opt,ROOT/'examples',reactor_stub=reactor)
+            run=self.session('pressure',opt,peer,version=ssl.TLSVersion.TLSv1_2)
+            self.assertRegex(run.stderr,rb'TLS_BP blocked=2 bio_full=[1-9][0-9]* concurrent_reads=[1-9][0-9]* closing=1 violations=0')
+            print('pressure O'+opt+': '+run.stderr.decode().strip(),flush=True)
+            # The same oracle must reject both retry bugs, not just pass a
+            # cooperative socket schedule that never reaches the relevant state.
+            for label,before,after,expected,diagnostic in (
+                ('tcp','if outgoing!=0 && !write_blocked {','if outgoing!=0 {',3,b'write retry before writable readiness'),
+                ('bio','if !plaintext_blocked {','if true {',2,b'plaintext retry before BIO drain')):
+                mutant=root/(label+opt);mutant.mkdir()
+                shutil.copytree(ROOT/'examples/httpws',mutant/'httpws')
+                (mutant/'apps/proxy').mkdir(parents=True)
+                shutil.copy(ROOT/'examples/apps/proxy/config.liza',mutant/'apps/proxy/config.liza')
+                code=mutant/'httpws/secure.liza';text=code.read_text();self.assertIn(before,text);code.write_text(text.replace(before,after))
+                entry=mutant/'main.liza';entry.write_text('import httpws.secure_cli\nfn main()->u32:io,alloc{return httpws.secure_cli.run(true)}')
+                with patch('test_httpws.link_flags',side_effect=flags):
+                    self.clients['mutant',opt]=build(entry,mutant,opt,mutant,reactor_stub=reactor)
+                def rejected(conn):
+                    request=self.request(conn)
+                    key=next(line.split(b':',1)[1].strip() for line in request.split(b'\r\n') if line.lower().startswith(b'sec-websocket-key:'))
+                    proof=base64.b64encode(hashlib.sha1(key+b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest())
+                    conn.sendall(b'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+proof+b'\r\n\r\n'+b''.join(b'\x89\x7d'+p for p in payloads))
+                    while conn.recv(4096): pass
+                    return False
+                rejected_run=self.session('mutant',opt,rejected,expected=expected,version=ssl.TLSVersion.TLSv1_2)
+                self.assertIn(diagnostic,rejected_run.stderr)
+
+
     def session(self, mode, opt, handler, expected=0, peer='localhost', ca='ca.pem', cert='server.pem', version=ssl.TLSVersion.TLSv1_3):
         errors, names = [], []
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -150,7 +200,7 @@ class TlsClients(unittest.TestCase):
                             # Requires the client's final close_notify to reach TCP.
                             conn.unwrap().close()
                 except (ssl.SSLError, ConnectionError) as error:
-                    if expected not in (4,5,7): errors.append(error)
+                    if expected not in (2,3,4,5,7): errors.append(error)
                 except BaseException as error:
                     errors.append(error)
             worker=threading.Thread(target=serve,daemon=True);worker.start()
@@ -159,7 +209,7 @@ class TlsClients(unittest.TestCase):
             run=subprocess.run(args,cwd=self.root,capture_output=True,timeout=15)
             worker.join(13)
             self.assertFalse(worker.is_alive(),'TLS server stuck waiting for close_notify')
-            self.assertFalse(errors,repr(errors))
+            self.assertFalse(errors,repr(errors)+repr((run.returncode,run.stderr)))
             self.assertEqual(run.returncode,expected,run.stderr)
             if expected==7: self.assertEqual(run.stdout,b'')
             if peer=='localhost': self.assertEqual(names,['localhost'])

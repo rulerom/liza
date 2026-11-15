@@ -1,10 +1,10 @@
 name: TLS transport and clients
 on:
   pull_request:
-    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', '.github/workflows/tls-transport.yml']
+    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
   push:
     branches: [main]
-    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', '.github/workflows/tls-transport.yml']
+    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
   workflow_dispatch:
 permissions:
   contents: read
