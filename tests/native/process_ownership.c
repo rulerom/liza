@@ -97,12 +97,24 @@ int main(int argc,char **argv) {
         void *bad=liza_rt_process_spawn(missing,1,0,0,0,0,&error);CHECK(!bad&&error==1,20);
     }
     for(int repeat=0;repeat<25;repeat++) {
+#ifdef _WIN32
+        DWORD cycle_before,cycle_spawned,cycle_closed;
+        GetProcessHandleCount(GetCurrentProcess(),&cycle_before);
+#endif
         children[0]=liza_rt_process_spawn(path,1,(const uint8_t*)"exit\0000\0",7,0,0,&error);CHECK(children[0],16);
+#ifdef _WIN32
+        GetProcessHandleCount(GetCurrentProcess(),&cycle_spawned);
+#endif
         CHECK(liza_rt_process_poll(children[0],1,&kind,&code)==0&&kind==1&&code==0,18);
         CHECK(liza_rt_process_close(children[0])==0,19);children[0]=0;
+#ifdef _WIN32
+        GetProcessHandleCount(GetCurrentProcess(),&cycle_closed);
+        if(cycle_before!=cycle_closed)fprintf(stderr,"cycle %d: before=%lu spawned=%lu closed=%lu\n",repeat,(unsigned long)cycle_before,(unsigned long)cycle_spawned,(unsigned long)cycle_closed);
+#endif
     }
 #ifdef _WIN32
     GetProcessHandleCount(GetCurrentProcess(),&steady_after);
+    if(steady_before!=steady_after)fprintf(stderr,"steady handles: before=%lu after=%lu\n",(unsigned long)steady_before,(unsigned long)steady_after);
     CHECK(steady_before==steady_after,21);
 #endif
 cleanup:
