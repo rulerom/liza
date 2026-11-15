@@ -23,8 +23,9 @@ description: "Три задачи для проверки Liza: парсер RTP
 | HTTP GET и WebSocket | [HTTP/WS: сборка, протокол и лимиты](http-websocket.md) |
 | Аутентифицированный HTTPS/WSS | [TLS: сборка, ошибки и владение](tls-transport.md) |
 
-[CAN-клиент](roadmap.md#can-client) — следующий прикладной этап; исходника
-готового CAN-приложения пока нет. Общий выбор API — в [сетевой навигации](networking.md).
+[CAN Echo Worker](can-worker.md) — bounded приложение в
+`examples/apps/liza_can.liza`: регистрация, heartbeat, echo, отмена и generation.
+Статус live-приёмки указан отдельно. Общий выбор API — в [сетевой навигации](networking.md).
 
 ## Парсер RTP-заголовка
 
