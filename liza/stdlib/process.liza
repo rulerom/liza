@@ -1,0 +1,82 @@
+enum ProcessError {NotFound;PermissionDenied;Invalid;TooLarge;OutOfMemory;Limit;Running;WrongThread;Interrupted;Unsupported;Other}
+enum ProcessExitKind {Exited;Signaled}
+enum ProcessDone {Done}
+struct ProcessExit {kind:ProcessExitKind;code:u32}
+struct ProcessCloseFailure {child:process.Child;error:ProcessError}
+struct ProcessCommand {inherit:bool;arguments:[u8;8192];argument_bytes:u32;argument_count:u32;environment:[u8;8192];environment_bytes:u32;environment_count:u32}
+struct __liza_ProcessChild {child:process.Child;error:u32}
+struct __liza_ProcessPoll {error:u32;kind:u32;code:u32}
+fn __liza_process_error(code:u32)->ProcessError {
+    if code==1 {return ProcessError.NotFound}
+    if code==2 {return ProcessError.PermissionDenied}
+    if code==3 {return ProcessError.Invalid}
+    if code==4 {return ProcessError.TooLarge}
+    if code==5 {return ProcessError.OutOfMemory}
+    if code==6 {return ProcessError.Limit}
+    if code==7 {return ProcessError.Running}
+    if code==8 {return ProcessError.WrongThread}
+    if code==9 {return ProcessError.Interrupted}
+    if code==10 {return ProcessError.Unsupported}
+    return ProcessError.Other
+}
+fn process.command(inherit_environment:bool)->ProcessCommand {
+    return ProcessCommand(inherit_environment,[0;8192],0,0,[0;8192],0,0)
+}
+fn process.argument(command:ProcessCommand,value:View<u8>)->Result<ProcessCommand,ProcessError> {
+    if value.len>1024||command.argument_count>=32||value.len+1>8192-command.argument_bytes {return Err(ProcessError.TooLarge)}
+    match utf8.validate(value) {Err(e)=>{return Err(ProcessError.Invalid)} Ok(done)=>{}}
+    var i:u32=0;while i<value.len {if value[i]==0 {return Err(ProcessError.Invalid)};i=i+1}
+    var next=command;i=0
+    while i<value.len {next.arguments[next.argument_bytes+i]=value[i];i=i+1}
+    next.arguments[next.argument_bytes+value.len]=0
+    next.argument_bytes=next.argument_bytes+value.len+1;next.argument_count=next.argument_count+1
+    return Ok(next)
+}
+fn process.environment(command:ProcessCommand,name:View<u8>,value:View<u8>)->Result<ProcessCommand,ProcessError> {
+    if name.len==0||name.len>128||value.len>4096||command.environment_count>=32||name.len+value.len+2>8192-command.environment_bytes {return Err(ProcessError.TooLarge)}
+    match utf8.validate(value) {Err(e)=>{return Err(ProcessError.Invalid)} Ok(done)=>{}}
+    var i:u32=0
+    while i<name.len {if name[i]<33||name[i]>126||name[i]==61 {return Err(ProcessError.Invalid)};i=i+1}
+    i=0;while i<value.len {if value[i]==0 {return Err(ProcessError.Invalid)};i=i+1}
+    var next=command;i=0
+    while i<name.len {next.environment[next.environment_bytes+i]=name[i];i=i+1}
+    next.environment[next.environment_bytes+name.len]=61;i=0
+    while i<value.len {next.environment[next.environment_bytes+name.len+1+i]=value[i];i=i+1}
+    next.environment[next.environment_bytes+name.len+1+value.len]=0
+    next.environment_bytes=next.environment_bytes+name.len+value.len+2;next.environment_count=next.environment_count+1
+    return Ok(next)
+}
+fn process.spawn(executable:Path,command:ProcessCommand)->Result<process.Child,ProcessError>:io,alloc {
+    arguments=command.arguments;environment=command.environment
+    raw=__liza_process_spawn(executable,command.inherit,view arguments[0..command.argument_bytes],view environment[0..command.environment_bytes])
+    if raw.error!=0 {return Err(__liza_process_error(raw.error))}
+    return Ok(raw.child)
+}
+fn __liza_process_exit(raw:__liza_ProcessPoll)->ProcessExit {
+    var kind=ProcessExitKind.Exited;if raw.kind==2 {kind=ProcessExitKind.Signaled}
+    return ProcessExit(kind,raw.code)
+}
+fn process.try_wait(child:process.Child)->Result<Option<ProcessExit>,ProcessError>:io {
+    raw=__liza_process_poll(child,false)
+    if raw.error!=0 {return Err(__liza_process_error(raw.error))}
+    if raw.kind==0 {return Ok(None)}
+    return Ok(Some(__liza_process_exit(raw)))
+}
+fn process.wait(child:process.Child)->Result<ProcessExit,ProcessError>:io {
+    raw=__liza_process_poll(child,true)
+    if raw.error!=0 {return Err(__liza_process_error(raw.error))}
+    return Ok(__liza_process_exit(raw))
+}
+fn process.terminate(child:process.Child)->Result<ProcessDone,ProcessError>:io {
+    code=__liza_process_op(child,1)
+    if code!=0 {return Err(__liza_process_error(code))};return Ok(ProcessDone.Done)
+}
+fn process.kill(child:process.Child)->Result<ProcessDone,ProcessError>:io {
+    code=__liza_process_op(child,2)
+    if code!=0 {return Err(__liza_process_error(code))};return Ok(ProcessDone.Done)
+}
+fn process.close(child:process.Child)->Result<ProcessDone,ProcessCloseFailure>:io,alloc {
+    code=__liza_process_close(child)
+    if code!=0 {return Err(ProcessCloseFailure(move child,__liza_process_error(code)))}
+    return Ok(ProcessDone.Done)
+}

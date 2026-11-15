@@ -1,0 +1,22 @@
+// CLI: absolute-child-executable. This standalone example may block in wait.
+fn cleanup(child:process.Child)->u32:io,alloc {
+    var owned=move child
+    while true {
+        match process.close(move owned) {
+            Ok(done)=>{return 0}
+            Err(failure)=>{
+                (next,error)=move failure;owned=move next
+                killed=process.kill(owned);waited=process.wait(owned)
+            }
+        }
+    }
+}
+fn main()->u32:io,alloc {
+    match cli.path_arg(1) {None=>{return 2} Some(path)=>{
+        command=process.command(false)
+        match process.spawn(path,command) {Err(e)=>{return 3} Ok(child)=>{
+            result=process.wait(child);closed=cleanup(move child)
+            match result {Err(e)=>{return 4} Ok(status)=>{return status.code}}
+        }}
+    }}
+}

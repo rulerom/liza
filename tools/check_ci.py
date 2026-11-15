@@ -39,8 +39,10 @@ def selected(workflows, paths, event='pull_request', branch='feature/example'):
 # These expectations are independent of the actual YAML filter lists.
 COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline',
             'verified-relay-r1', 'verified-relay-r2b', 'verified-relay-r2c',
-            'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload', 'http-ws', 'tls-transport', 'json-access'}
+            'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload', 'http-ws', 'tls-transport', 'json-access', 'process-child'}
 CASES = [
+    (['tests/test_process.py', 'tests/native/process_child.c', 'tests/native/process_ownership.c'], {'test', 'process-child'}),
+    (['examples/apps/process_child.liza'], {'test', 'docs', 'editor', 'process-child'}),
     (['tests/test_json_access.py'], {'test', 'json-access'}),
     (['tests/fixtures/can_examples.json'], {'test', 'editor', 'json-access'}),
     (['tests/fixtures/json_access.liza'], {'test', 'editor', 'json-access'}),
@@ -83,7 +85,7 @@ CASES = [
     (['tests/native/reactor_sources.c'], {'test', 'reactor-sources'}),
     (['examples/apps/liza_proxy_ops.liza'], {'test', 'editor', 'docs'}),
     (['examples/apps/proxy/config.liza'], {'test', 'editor', 'docs', 'http-ws', 'tls-transport'}),
-    (['tests/test_httpws.py'], {'test', 'http-ws', 'tls-transport'}),
+    (['tests/test_httpws.py'], {'test', 'http-ws', 'tls-transport', 'process-child'}),
     (['tests/test_tls.py'], {'test', 'tls-transport'}),
     (['examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza'], {'test', 'editor', 'docs', 'tls-transport'}),
     (['tests/test_tls_transport.py'], {'test', 'tls-transport'}),

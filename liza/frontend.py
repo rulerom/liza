@@ -170,7 +170,7 @@ class Parser:
         self.tokens = lex(source, filename)
         self.index = 0
         self.generic_scope = {}
-        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"TlsState", "TlsOutcome", "TlsError", "ReactorError", "FrameError", "NetError", "IoError", "FileError", "MemoryError", "FileCreateError", "FileWriteError", "Utf8ErrorKind", "Utf8StreamErrorKind", "JsonErrorKind", "JsonAccessError", "JsonKind", "ChannelError", "GroupError", "GroupPublication", "GroupEvent"}
+        self.enum_names = {self.tokens[i+1].text for i,t in enumerate(self.tokens[:-1]) if t.text == "enum"} | {"ProcessError", "ProcessExitKind", "FsError", "FileKind", "TlsState", "TlsOutcome", "TlsError", "ReactorError", "FrameError", "NetError", "IoError", "FileError", "MemoryError", "FileCreateError", "FileWriteError", "Utf8ErrorKind", "Utf8StreamErrorKind", "JsonErrorKind", "JsonAccessError", "JsonKind", "ChannelError", "GroupError", "GroupPublication", "GroupEvent"}
 
     @property
     def current(self):
@@ -431,6 +431,7 @@ class Parser:
             (t.text == 'json' and self.tokens[i+1].text == '.' and self.tokens[i+2].text not in ('create','feed','feed_mut','status','finish')) for i,t in enumerate(self.tokens[:-2]))
         functions.uses_json = any(t.text in ('JsonState','JsonError','JsonErrorKind','JsonAccessError','JsonKind','JsonDone','JsonLimits','JsonDocument','JsonRead','JsonDecoded','JsonWriter','JsonWritten','JsonOutput') or (t.text == 'json' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_framing = any(t.text in ('FrameState','FrameStep','FrameError') or (t.text == 'framing' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
+        functions.uses_process = any(t.text in ('ProcessError','ProcessExitKind','ProcessExit','ProcessCommand','ProcessDone','ProcessCloseFailure') or (t.text == 'process' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_tls = any(t.text in ('TlsState','TlsStep','TlsError','TlsOutcome','TlsRead') or (t.text == 'tls' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_net = any(t.text in ('NetError','ReactorError') or (t.text == 'net' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_cli = any(t.text in ('Arg', 'Path') or (t.text == 'cli' and self.tokens[i+1].text == '.')
@@ -438,7 +439,7 @@ class Parser:
         functions.uses_console = any(t.text in ('IoError', 'IoFailure') or
                                      (t.text == 'console' and self.tokens[i+1].text == '.')
                                      for i,t in enumerate(self.tokens[:-1]))
-        functions.uses_file = any(t.text in ('File', 'FileError', 'FileFailure', 'FileBuffer', 'FileChunk', 'FileCreateError', 'FileWriteError', 'FileWriteFailure') or
+        functions.uses_file = any(t.text in ('File', 'FileError', 'FileFailure', 'FileBuffer', 'FileChunk', 'FileCreateError', 'FileWriteError', 'FileWriteFailure','FsError','FileKind','FileInfo') or
                                   (t.text == 'file' and self.tokens[i+1].text == '.')
                                   for i,t in enumerate(self.tokens[:-1]))
         functions.uses_utf8_stream = any(t.text in ('Utf8StreamState', 'Utf8StreamError', 'Utf8StreamErrorKind') or

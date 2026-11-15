@@ -53,7 +53,7 @@ def external(fn, lines):
 
 def entry(module):
     names={f.name.text for f in getattr(module,'externals',[])}
-    if any(n.startswith('__liza_cli_') or n in ('__liza_file_open_path','__liza_file_create_path') for n in names):
+    if any(n.startswith(('__liza_cli_', '__liza_process_', '__liza_fs_')) or n in ('__liza_file_open_path','__liza_file_create_path') for n in names):
         symbol='wmain' if sys.platform=='win32' else 'main'
         return ['declare void @liza_rt_cli_init(i32, ptr)',
                 f'define i32 @{symbol}(i32 %argc, ptr %argv) {{','entry:',
