@@ -45,6 +45,12 @@ DNS, chunked, HTTP/2, новые workers и расширение TLS runtime н�
 
 ## Стратегические приоритеты: Verified Network Gateway
 
+Прикладной [план переноса агентов VideoGrace](videograce-agents.md) задаёт
+последовательность Recorder → Summarizer, затем отдельные медиасервисы.
+Общий CAN lifecycle выделяется по мере переноса; orchestration и inference
+моделей рассматриваются отдельно. Этот план не расширяет объём Process API
+и не запускает SG5.
+
 > Liza — системный язык для производительных сетевых сервисов с определённым поведением, контролируемыми ресурсами и математически проверяемыми свойствами.
 
 Следующий большой рубеж — [Liza Verified Network Gateway](network-gateway.md):
