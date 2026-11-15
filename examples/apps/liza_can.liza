@@ -1,0 +1,30 @@
+import can.config
+import can.transport
+fn pause()->u32:io,alloc {
+    match net.reactor_create(0,0) {Err(e)=>{return 1} Ok(r)=>{
+        match net.reactor_stop_accepting(r) {Err(e)=>{c=net.reactor_close(move r);return 1} Ok(n)=>{}}
+        waited=net.reactor_poll(r,500);closed=net.reactor_close(move r);return 0
+    }}
+}
+fn retry(error:can.transport.Error)->bool {
+    match error {
+        can.transport.Error.Tls(e)=>{match e {TlsError.Transport(n)=>{return true} TlsError.Protocol(n)=>{return true} TlsError.Invalid=>{return false} TlsError.ManagedBudget=>{return false} TlsError.OutOfMemory=>{return false} TlsError.WrongThread=>{return false} TlsError.Configuration=>{return false} TlsError.Verification(n)=>{return false} TlsError.Deadline=>{return false} TlsError.Output=>{return false}}}
+        can.transport.Error.Protocol=>{return false} can.transport.Error.Policy=>{return false} can.transport.Error.Deadline=>{return false} can.transport.Error.Memory=>{return false}
+    }
+}
+fn main()->u32:io,alloc {
+    match can.config.read() {Err(e)=>{log=console.errln("Usage: liza-can IPv4:port tls-peer node-id token-file [ca-file|-] [run-ms]");return 2} Ok(config)=>{
+        var now:u64=0;match net.monotonic_ms() {Err(e)=>{return 3} Ok(n)=>{now=n}}
+        until=now+u64(config.run_ms);var generation:u64=1
+        while true {
+            match can.transport.run(config,generation,until) {
+                Ok(stats)=>{log=console.write("CAN completed=");n=console.print_u64(stats.completed);log2=console.write(" cancelled=");n2=console.print_u64(stats.cancelled);log3=console.println("");return 0}
+                Err(error)=>{
+                    if generation>u64(config.reconnects)||!retry(error) {log=console.errln("CAN session failed");return 3}
+                    match net.monotonic_ms() {Err(e)=>{return 3} Ok(n)=>{if n+u64(config.operation_ms)>=until {return 3}}}
+                    generation=generation+1;log=console.println("CAN reconnect");n=pause()
+                }
+            }
+        }
+    }}
+}

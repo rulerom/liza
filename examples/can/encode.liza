@@ -1,0 +1,66 @@
+import can.text
+import can.words
+import can.logic
+struct Builder {writer:JsonWriter;status:Result<JsonDone,JsonAccessError>}
+fn key(builder:Builder,name:can.text.Value)->Builder {
+    (writer,status)=move builder
+    match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
+    bytes=name.bytes;(next,result)=json.key(move writer,view bytes[0..name.length]);return Builder(move next,result)
+}
+fn text(builder:Builder,value:can.text.Value)->Builder {
+    (writer,status)=move builder
+    match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
+    bytes=value.bytes;(next,result)=json.write_string(move writer,view bytes[0..value.length]);return Builder(move next,result)
+}
+fn integer(builder:Builder,value:u64)->Builder {
+    (writer,status)=move builder;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
+    (next,result)=json.write_u64(move writer,value);return Builder(move next,result)
+}
+fn boolean(builder:Builder,value:bool)->Builder {
+    (writer,status)=move builder;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
+    (next,result)=json.write_bool(move writer,value);return Builder(move next,result)
+}
+fn container(builder:Builder,kind:u32)->Builder {
+    (writer,status)=move builder;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
+    if kind==0 {(next,result)=json.begin_object(move writer);return Builder(move next,result)}
+    if kind==1 {(next,result)=json.end_object(move writer);return Builder(move next,result)}
+    if kind==2 {(next,result)=json.begin_array(move writer);return Builder(move next,result)}
+    (next,result)=json.end_array(move writer);return Builder(move next,result)
+}
+fn string_field(builder:Builder,name:can.text.Value,value:can.text.Value)->Builder {return text(key(move builder,name),value)}
+fn number_field(builder:Builder,name:can.text.Value,value:u64)->Builder {return integer(key(move builder,name),value)}
+pub fn message(buffer:memory.Buffer<u8>,output:can.logic.Output,token:can.text.Value)->JsonOutput {
+    (writer,status)=json.writer(move buffer,4096,8);var builder=Builder(move writer,status)
+    builder=container(move builder,0)
+    var kind=can.words.literal_job_event()
+    if output.kind==1 {kind=can.words.literal_hello()};if output.kind==2 {kind=can.words.literal_job_ack()};if output.kind==3 {kind=can.words.literal_heartbeat()};if output.kind==7 {kind=can.words.literal_control_result()}
+    builder=string_field(move builder,can.words.literal_type(),kind)
+    if output.kind==1 {
+        builder=string_field(move builder,can.words.literal_node_id(),output.node)
+        builder=string_field(move builder,can.words.literal_role(),can.words.literal_worker())
+        builder=string_field(move builder,can.words.literal_token(),token)
+        builder=string_field(move builder,can.words.literal_version(),can.words.literal_liza_can_0_1())
+        builder=number_field(move builder,can.words.literal_max_concurrent_jobs(),1)
+        builder=number_field(move builder,can.words.literal_assignment_protocol(),1)
+        builder=container(key(move builder,can.words.literal_capabilities()),2)
+        builder=text(move builder,can.words.literal_example_echo());builder=container(move builder,3)
+    } else if output.kind==3 {
+        builder=container(key(move builder,can.words.literal_load()),0)
+        builder=number_field(move builder,can.words.literal_jobs(),output.jobs);builder=container(move builder,1)
+    } else if output.kind==7 {
+        builder=string_field(move builder,can.words.literal_request_id(),output.request)
+        builder=boolean(key(move builder,can.words.literal_ok()),false)
+        builder=string_field(move builder,can.words.literal_error(),can.words.literal_unsupported_control_method())
+    } else {
+        builder=string_field(move builder,can.words.literal_job_id(),output.job)
+        builder=string_field(move builder,can.words.literal_assignment_id(),output.assignment)
+        var status_word=can.words.literal_accepted()
+        if output.kind==4 {status_word=can.words.literal_completed()};if output.kind==5 {status_word=can.words.literal_cancelled()};if output.kind==6 {status_word=can.words.literal_failed()}
+        builder=string_field(move builder,can.words.literal_status(),status_word)
+        if output.kind==4 {builder=container(key(move builder,can.words.literal_data()),0);builder=string_field(move builder,can.words.literal_echo(),output.value);builder=container(move builder,1)}
+    }
+    builder=container(move builder,1)
+    (final,status_result)=move builder
+    (bytes,length,finished)=json.finish_writer(move final)
+    match status_result {Err(e)=>{return JsonOutput(move bytes,length,Err(e))} Ok(n)=>{return JsonOutput(move bytes,length,finished)}}
+}
