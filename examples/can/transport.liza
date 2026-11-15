@@ -23,6 +23,17 @@ fn state_number(state:TlsState)->u32 {
     match state {TlsState.Handshake=>{return 0} TlsState.Open=>{return 1} TlsState.Closing=>{return 2} TlsState.Done=>{return 3} TlsState.Dead=>{return 4} TlsState.Unavailable=>{return 5}}
 }
 fn closed(outcome:TlsOutcome)->bool {match outcome {TlsOutcome.Progress=>{return false} TlsOutcome.Want=>{return false} TlsOutcome.Closed=>{return true}}}
+// Log schema diagnostics only; never print the received message or credentials.
+fn message_error(error:can.messages.Error)->u32:io {
+    match error {
+        can.messages.Error.Missing(field)=>{a=console.errln("CAN message: missing required field");b=console.print_u64(u64(field));c=console.println("")}
+        can.messages.Error.WrongType(field)=>{a=console.errln("CAN message: wrong field type");b=console.print_u64(u64(field));c=console.println("")}
+        can.messages.Error.TooLarge(field)=>{a=console.errln("CAN message: field exceeds limit")}
+        can.messages.Error.BadValue(field)=>{a=console.errln("CAN message: invalid field value")}
+        can.messages.Error.Json(json_error)=>{a=console.errln("CAN message: invalid JSON")}
+    }
+    return 0
+}
 // TLS ciphertext pump follows the accepted TLS-B driver, with CAN deadlines.
 fn exchange(session:tls.Session,r:net.Reactor,id:net.Connection,bundle:can.storage.Bundle,request:httpws.bytes.Wire,proof:[u8;28],config:can.config.Config,generation:u64,run_until:u64,started:u64)->Result<Stats,Error>:io,alloc {
     (initial_io,initial_document,initial_scratch,initial_output)=move bundle
@@ -66,7 +77,7 @@ fn exchange(session:tls.Session,r:net.Reactor,id:net.Connection,bundle:can.stora
                                 bytes=app.parser.message;var i:u32=0
                                 while i<app.parser.size {document=memory.set(move document,i,bytes[i]);i=i+1}
                                 (next_document,next_scratch,result)=can.messages.parse(move document,app.parser.size,move scratch);document=move next_document;scratch=move next_scratch
-                                match result {Err(e)=>{failure=Some(Error.Protocol)} Ok(message)=>{
+                                match result {Err(e)=>{reported=message_error(e);failure=Some(Error.Protocol)} Ok(message)=>{
                                     ready_before=model.registered
                                     status=can.logic.receive(borrow mut model,message,generation,now,u64(config.operation_ms))
                                     if status!=0 {if model.policy {failure=Some(Error.Policy)} else {failure=Some(Error.Protocol)}}
