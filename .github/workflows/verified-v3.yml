@@ -86,8 +86,8 @@ jobs:
           # Formula names and prefixes are part of the audited environment:
           # llvm@23 is not interchangeable with the locked llvm bottle.
           for package in llvm z3 zstd; do
-            bottle="$(python -m verification.v3.fetch_bottle --package "$package" --directory "$RUNNER_TEMP/proof-bottles")"
-            brew reinstall "$bottle"
+            python -m verification.v3.fetch_bottle --package "$package" \
+              --directory "$RUNNER_TEMP/proof-bottles" --restore
           done
       - name: Reject toolchain drift before building Alive2
         run: |

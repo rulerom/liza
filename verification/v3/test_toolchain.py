@@ -4,7 +4,7 @@ import platform
 import tempfile
 import unittest
 from unittest.mock import patch
-from verification.v3.fetch_bottle import fetch
+from verification.v3.fetch_bottle import fetch, restore
 from verification.v3.toolchain import sha, verify
 
 
@@ -53,6 +53,29 @@ class ToolchainTests(unittest.TestCase):
 
 
 class BottleTests(unittest.TestCase):
+    def test_restore_refuses_changed_bytes_before_touching_installed_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root/'z3--1.arm64_tahoe.bottle.tar.gz'
+            archive.write_bytes(b'pinned archive')
+            lock = root/'lock.json'
+            lock.write_text(json.dumps({'bottles': {'z3': {
+                'filename': archive.name, 'url': 'https://example.invalid/pinned',
+                'sha256': sha(archive)}}}))
+            with patch('verification.v3.fetch_bottle.subprocess.run') as command:
+                restore(lock, 'z3', root)
+                calls = command.call_args_list
+                self.assertEqual(calls[0].args[0][0], 'curl')
+                self.assertEqual(calls[1].args[0], ['brew', 'uninstall', '--ignore-dependencies', '--force', 'z3'])
+                self.assertEqual(calls[2].args[0], ['brew', 'install', '--ignore-dependencies', './'+archive.name])
+                self.assertEqual(calls[2].kwargs['cwd'], root.resolve())
+                self.assertTrue(all(call.kwargs['check'] for call in calls))
+                command.reset_mock()
+                archive.write_bytes(b'changed archive')
+                with self.assertRaisesRegex(ValueError, 'digest mismatch'):
+                    restore(lock, 'z3', root)
+                self.assertEqual([call.args[0][0] for call in command.call_args_list], ['curl'])
+
     def test_only_matching_archive_is_returned_for_installation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -22,10 +22,27 @@ def fetch(lock_path, package, directory):
     return destination
 
 
+def restore(lock_path, package, directory):
+    """Replace a candidate only after authenticating its locked archive.
+
+    Used on the disposable proof runner, never to modify the lock. Recent
+    Homebrew resolves `reinstall <path>` as a formula/tap name; only `install`
+    has the explicit local-bottle loader. A relative path also avoids treating
+    an absolute runner path as a fully-qualified tap.
+    """
+    archive = fetch(lock_path, package, directory)
+    subprocess.run(['brew', 'uninstall', '--ignore-dependencies', '--force', package], check=True)
+    subprocess.run(['brew', 'install', '--ignore-dependencies', './' + archive.name],
+                   cwd=archive.parent, check=True)
+    return archive
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--lock', default=str(Path(__file__).with_name('toolchain-lock.json')))
     parser.add_argument('--package', required=True, choices=('llvm', 'z3', 'zstd'))
     parser.add_argument('--directory', required=True)
+    parser.add_argument('--restore', action='store_true', help='Replace the candidate on an isolated proof runner')
     args = parser.parse_args()
-    print(fetch(args.lock, args.package, args.directory))
+    operation = restore if args.restore else fetch
+    print(operation(args.lock, args.package, args.directory))
