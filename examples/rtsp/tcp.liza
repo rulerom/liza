@@ -16,6 +16,23 @@ pub fn send(owned:Client,wire:httpws.bytes.Wire)->Client {
 fn retry(error:ReactorError)->bool {
     match error {ReactorError.WouldBlock=>{return true} ReactorError.Interrupted=>{return true} ReactorError.AddressInUse=>{} ReactorError.PermissionDenied=>{} ReactorError.Disconnected=>{} ReactorError.InvalidRange=>{} ReactorError.Other=>{} ReactorError.InvalidCapacity=>{} ReactorError.Full=>{} ReactorError.InvalidConnection=>{} ReactorError.Exhausted=>{} ReactorError.OutOfMemory=>{}};return false
 }
+// No aggregate event is carried around the byte loop. Snapshots are made only
+// when a complete response or interleaved record is returned to the caller.
+fn buffered_event(borrow mut state:State,data:View<u8>)->Event {
+    var processed:u32=0
+    while state.cursor<state.length&&processed<256 {
+        byte=data[state.cursor];state.cursor=state.cursor+1;processed=processed+1
+        match rtsp.stream.feed(borrow mut state.parser,byte) {
+            Err(e)=>{return Event.Failed}
+            Ok(code)=>{
+                if code==1 {return Event.Response(Response(state.parser.head,state.parser.body))}
+                if code==2 {return Event.Packet(Frame(state.parser.frame,state.parser.have))}
+                if code==3 {return Event.Rtcp}
+            }
+        }
+    }
+    return Event.Idle
+}
 pub fn step(owned:Client,r:net.Reactor)->Step:io {
     (id,initial_buffer,initial)=move owned;var buffer=move initial_buffer;var state=initial;var event=Event.Idle;var failed=false
     if !state.connected {match net.reactor_finish_connect(r,id) {Err(e)=>{if !retry(e) {failed=true}} Ok(ready)=>{state.connected=ready}}}
@@ -28,16 +45,9 @@ pub fn step(owned:Client,r:net.Reactor)->Step:io {
                 Ok(n)=>{if n==0 {failed=true} else {state.sent=state.sent+n;if state.sent==state.pending.len {state.pending.len=0;state.sent=0}}}
             }
         }
-        var processed:u32=0
-        while state.cursor<state.length&&processed<256&&!failed {
-            var byte:u8=0;{data=memory.view(buffer);byte=data[state.cursor]};state.cursor=state.cursor+1;processed=processed+1
-            var parser=state.parser
-            match rtsp.stream.feed(borrow mut parser,byte) {
-                Err(e)=>{failed=true}
-                Ok(code)=>{if code==1 {event=Event.Response(Response(parser.head,parser.body))};if code==2 {event=Event.Packet(Frame(parser.frame,parser.have))};if code==3 {event=Event.Rtcp}}
-            }
-            state.parser=parser
-            match event {Event.Idle=>{} Event.Response(v)=>{break} Event.Packet(v)=>{break} Event.Rtcp=>{break} Event.Failed=>{break}}
+        if !failed {
+            {data=memory.view(buffer);event=buffered_event(borrow mut state,data)}
+            match event {Event.Failed=>{failed=true} Event.Idle=>{} Event.Response(v)=>{} Event.Packet(v)=>{} Event.Rtcp=>{}}
         }
         if state.cursor==state.length&&!failed {
             (next,result)=net.reactor_read(r,id,move buffer,0,4096);buffer=move next

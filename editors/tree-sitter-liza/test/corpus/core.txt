@@ -765,3 +765,32 @@ fn update(borrow mut state:State)->u32 { return next(borrow mut state) }
           (arguments
             (mutable_borrow_expression
               (identifier))))))))
+
+==================
+Nested mutable field borrow
+==================
+fn feed(borrow mut state:State,byte:u8)->u32 { return put(borrow mut state.parser.header,byte) }
+---
+
+(source_file
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)
+        (type_identifier
+          (identifier)))
+      (parameter
+        (identifier)
+        (builtin_type)))
+    (builtin_type)
+    (block
+      (return_statement
+        (call_expression
+          (identifier)
+          (arguments
+            (mutable_borrow_expression
+              (identifier)
+              (identifier)
+              (identifier))
+            (identifier)))))))

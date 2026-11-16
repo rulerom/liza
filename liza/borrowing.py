@@ -68,7 +68,12 @@ def check_borrows(fn, types, match_types=None, variants=None, structs=None, sign
                     if i in signature.mutable_params:
                         if arg.kind != 'borrow_mut':
                             raise CompileError(arg.token, 'mutable argument requires explicit borrow mut')
-                        binding = env[arg.args[0].token.text]
+                        # Field loans conservatively exclude the entire root,
+                        # including sibling fields and later argument reads.
+                        root = projection_root(arg.args[0])
+                        if root is None:
+                            raise CompileError(arg.token, 'mutable borrow requires a named structure or field')
+                        binding = env[root]
                         identity = binding.identity
                         if not binding.writable or binding.mode == 'readonly':
                             raise CompileError(arg.token, 'mutable borrow requires a var or mutable parameter')

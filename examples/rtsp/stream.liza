@@ -23,6 +23,11 @@ fn parse(data:View<u8>)->Result<Head,u32> {
     match rtsp.bytes.field(data,rtsp.words.content_type()) {Err(e)=>{return Err(1)} Ok(v)=>{kind=v}}
     return Ok(Head(status,sequence,session,base,transport,kind,length))
 }
+// Payload-byte path: scalar stores into the caller's existing frame storage.
+fn frame_byte(borrow mut state:State,byte:u8)->u32 {
+    state.frame[state.have]=byte;state.have=state.have+1
+    if state.have==state.needed {state.phase=0;if state.channel==0 {return 2};return 3};return 0
+}
 // 1=response complete, 2=RTP, 3=RTCP. Interleaved channels are negotiated 0/1.
 pub fn feed(borrow mut state:State,byte:u8)->Result<u32,u32> {
     if state.phase==0 {
@@ -34,17 +39,17 @@ pub fn feed(borrow mut state:State,byte:u8)->Result<u32,u32> {
     if state.phase==2 {state.needed=u32(byte)*256;state.phase=3;return Ok(0)}
     if state.phase==3 {state.needed=state.needed+u32(byte);if state.needed==0||state.needed>4096 {return Err(1)};state.phase=6;return Ok(0)}
     if state.phase==6 {
-        state.frame[state.have]=byte;state.have=state.have+1
-        if state.have==state.needed {state.phase=0;if state.channel==0 {return Ok(2)};return Ok(3)};return Ok(0)
+        return Ok(frame_byte(borrow mut state,byte))
     }
     if state.phase==4 {
-        var header=state.header;accepted=httpws.bytes.put(borrow mut header,byte);state.header=header;if !accepted {return Err(1)}
-        n=header.len;if n>=4 {d=header.data;if d[n-4]==13&&d[n-3]==10&&d[n-2]==13&&d[n-1]==10 {
+        accepted=httpws.bytes.put(borrow mut state.header,byte);if !accepted {return Err(1)}
+        n=state.header.len;if n>=4 {if state.header.data[n-4]==13&&state.header.data[n-3]==10&&state.header.data[n-2]==13&&state.header.data[n-1]==10 {
+            d=state.header.data
             match parse(view d[0..n]) {Err(e)=>{return Err(1)} Ok(h)=>{state.head=h;state.phase=5;if h.length==0 {state.phase=0;return Ok(1)}}}
         }}
     } else if state.phase==5 {
-        var body=state.body;accepted=httpws.bytes.put(borrow mut body,byte);state.body=body;if !accepted {return Err(1)}
-        if body.len==state.head.length {state.phase=0;return Ok(1)}
+        accepted=httpws.bytes.put(borrow mut state.body,byte);if !accepted {return Err(1)}
+        if state.body.len==state.head.length {state.phase=0;return Ok(1)}
     }
     return Ok(0)
 }

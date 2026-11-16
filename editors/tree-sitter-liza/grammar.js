@@ -55,7 +55,8 @@ module.exports = grammar({
     field_expression: $ => prec(13, seq(field('value', $._expression), '.', field('field', choice($.identifier, alias('view',$.identifier))))),
     index_expression: $ => prec(13, seq(field('value', $._expression), '[', field('index', $._expression), ']')),
     view_expression: $ => seq('view', $.identifier, '[', $._expression, '..', $._expression, ']'),
-    mutable_borrow_expression: $ => seq('borrow', 'mut', $.identifier),
+    _mutable_place: $ => choice($.identifier, prec.left(15, seq($._mutable_place, '.', $.identifier))),
+    mutable_borrow_expression: $ => prec(14, seq('borrow', 'mut', $._mutable_place)),
     unary_expression: $ => prec(11, seq(choice('!', '~', '-', 'copy', 'move'), $._expression)),
     binary_expression: $ => choice(...[
       [1, ['||']], [2, ['&&']], [3, ['|']], [4, ['^']], [5, ['&']],

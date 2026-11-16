@@ -8,5 +8,5 @@ repository = "https://github.com/rulerom/liza"
 
 [grammars.liza]
 repository = "https://github.com/rulerom/liza"
-rev = "8466fd797cab449c86f8e73f826680a117f27cd1"
+rev = "44da4e2fb776afa7e9bb3a08f92d3874823ebdb9"
 path = "editors/tree-sitter-liza"

@@ -54,7 +54,7 @@ class RtspClient(unittest.TestCase):
             folder.mkdir()
             cls.clients.append(build(ROOT / 'examples/apps/liza_rtsp.liza', folder, opt, ROOT / 'examples'))
 
-    def scenario(self, exe, bad_cseq=False, drop_after=None):
+    def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload'):
         errors, packets, methods, commands = [], [], [], []
         stopped = threading.Event()
         listeners = [socket.socket() for _ in range(2)]
@@ -112,7 +112,7 @@ class RtspClient(unittest.TestCase):
                     if playing:
                         sequence += 1
                         # Every fifth packet is an IDR; payload must survive unchanged.
-                        payload = (b'\x65' if sequence % 5 == 0 else b'\x61') + b'camera-payload'
+                        payload = (b'\x65' if sequence % 5 == 0 else b'\x61') + payload_bytes
                         packet = struct.pack('!BBHII', 128, 224, sequence, sequence * 3600, 777) + payload
                         record = b'$\0' + struct.pack('!H', len(packet)) + packet
                         conn.sendall(record[:3])
@@ -243,3 +243,17 @@ class RtspClient(unittest.TestCase):
             self.assertEqual(commands.count('connect_request'), 1)
             self.assertIn('device_disconnect', commands)
             self.assertIn('disconnect_from_conference', commands)
+
+    def test_maximum_record_crosses_byte_batches_and_socket_reads(self):
+        payload=bytes(n % 256 for n in range(4083))
+        for exe in self.clients:
+            run, packets, methods, commands = self.scenario(exe, payload_bytes=payload)
+            self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
+            self.assertGreater(len(packets),10)
+            self.assertEqual(packets[0][12:],SPS)
+            self.assertEqual(packets[1][12:],PPS)
+            self.assertEqual(packets[2][12:],b'\x65'+payload)
+            for packet in packets[2:]:
+                self.assertEqual(len(packet),4096)
+                self.assertIn(packet[12],(0x61,0x65))
+                self.assertEqual(packet[13:],payload)
