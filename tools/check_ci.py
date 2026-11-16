@@ -41,6 +41,8 @@ COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline
             'verified-relay-r1', 'verified-relay-r2b', 'verified-relay-r2c',
             'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload', 'http-ws', 'tls-transport', 'json-access', 'process-child'}
 CASES = [
+    (['tools/monitor_rtsp_endurance.py'], {'test'}),
+    (['tests/test_endurance_monitor.py'], {'test'}),
     (['tests/test_rtsp_client.py', 'tests/test_rtsp_protocol.py'], {'test', 'tls-transport'}),
     (['examples/rtsp/client.liza', 'examples/vg/control.liza', 'examples/apps/liza_rtsp.liza'], {'test', 'docs', 'editor', 'tls-transport'}),
     (['tests/test_recorder_agent.py'], {'test', 'tls-transport'}),

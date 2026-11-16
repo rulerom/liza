@@ -20,6 +20,7 @@ on:
       - 'tools/check_utf8_stream_cost.py'
       - 'tools/check_cli_cost.py'
       - 'tools/check_file_write_cost.py'
+      - 'tools/monitor_rtsp_endurance.py'
       - '.github/workflows/test.yml'
   push:
     branches: [main]
@@ -42,6 +43,7 @@ on:
       - 'tools/check_utf8_stream_cost.py'
       - 'tools/check_cli_cost.py'
       - 'tools/check_file_write_cost.py'
+      - 'tools/monitor_rtsp_endurance.py'
       - '.github/workflows/test.yml'
   workflow_dispatch:
 permissions:
