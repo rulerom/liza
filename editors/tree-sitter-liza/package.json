@@ -2,6 +2,7 @@
   "name": "tree-sitter-liza",
   "version": "0.1.0",
   "private": true,
+  "license": "BSL-1.0",
   "description": "Tree-sitter grammar for the Liza programming language",
   "scripts": {"generate": "tree-sitter generate --abi 14", "test": "tree-sitter test"},
   "devDependencies": {"tree-sitter-cli": "0.25.10"}

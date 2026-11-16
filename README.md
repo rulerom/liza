@@ -4,6 +4,10 @@
 
 [Документация](https://liza.rulerom.com/) · [Быстрый старт](https://liza.rulerom.com/getting-started.html)
 
+**Лицензия: [Boost Software License 1.0 (BSL-1.0)](LICENSE).**
+Сторонние компоненты и зависимости сохраняют собственные лицензии;
+например, заголовки Tree-sitter в грамматике — [MIT](editors/tree-sitter-liza/src/tree_sitter/LICENSE).
+
 **Liza — системный язык для производительных сетевых сервисов с определённым поведением, контролируемыми ресурсами и математически проверяемыми свойствами.**
 
 *Liza — a systems programming language for high-performance network services with well-defined behavior, controlled resources, and mathematically verifiable properties.*
