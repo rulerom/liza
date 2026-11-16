@@ -1,0 +1,26 @@
+{
+  "binary_name": "liza-rtsp-foreground-bin",
+  "binary_sha256": "2ff538c7114e1a4ad198f7c0a45bcb54848313c40b726a039f3e99d08423a8a0",
+  "process_start_utc": "Mon Nov 16 12:15:33 2026",
+  "rtp_counters": "unavailable until normal application shutdown",
+  "first_sample": {
+    "pid": 26472,
+    "uptime_s": 25549.0,
+    "cpu_s": 5432.62,
+    "cpu_recent_percent": 21.4,
+    "rss_bytes": 7143424,
+    "process_state": "S+",
+    "sample_epoch_s": 1794856882.156158,
+    "sampled_at_utc": "2026-11-16T19:21:22.156164+00:00",
+    "rtp_received": null,
+    "rtp_succeeded": null,
+    "rtp_sequence_discontinuities": null,
+    "errors": [],
+    "open_fds": 6,
+    "tcp_sockets": 2,
+    "tcp_established": 2,
+    "udp_sockets": 1,
+    "bytes_in": 8024097257,
+    "bytes_out": 7986831794
+  }
+}
