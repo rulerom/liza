@@ -26,6 +26,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  field-borrow:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: clang --version
+      - name: Nested field exclusivity, snapshots and mutation replay
+        run: >-
+          python -m unittest
+          tests.test_mutable_borrow.MutableBorrowChecking
+          tests.test_mutable_borrow.MutableBorrowNative.test_nested_field_reborrow_snapshots_and_distinct_roots
+          tests.test_mutable_borrow.MutableBorrowNative.test_parent_argument_snapshot_precedes_field_mutation
+          tests.test_mutable_borrow.MutableBorrowNative.test_mutant_field_reborrow_cannot_alias_parent_reader
+          -v
   agreement:
     runs-on: ubuntu-latest
     timeout-minutes: 15

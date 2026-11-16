@@ -87,6 +87,39 @@ fn update<T>(borrow mut s:Box<T>,value:T)->T {old=observe(s);s.value=value;retur
 fn main()->u32 {var s=Box<u32>(7);old=update(borrow mut s,9);return old-7+s.value-9}'''
         llvm(compile_ir(src))
 
+    def test_field_reborrow_uses_original_storage(self):
+        source=BASE+'''struct Inner {value:Small}
+struct Outer {inner:Inner;other:Small}
+fn forward(borrow mut s:Outer)->u32 {return inc(borrow mut s.inner.value)}
+fn main()->u32 {var s=Outer(Inner(Small(1)),Small(2));x=forward(borrow mut s);return s.inner.value.n-2}
+'''
+        module=compile_ir(source);text=llvm(module)
+        body=function_body(text,'forward')
+        self.assertEqual(body.count('getelementptr'),2)
+        self.assertIn('@liza_inc(ptr ',body)
+        self.assertNotRegex(body,r'alloca|memcpy|memmove|insertvalue|load ')
+
+    def test_field_borrows_keep_root_exclusive(self):
+        declaration='struct Outer {left:Small;right:Small}\n'
+        for call in ('pair(borrow mut s.left,borrow mut s.right)',
+                     'mixed(s.right,borrow mut s.left)',
+                     'mixed(s,borrow mut s.left)',
+                     'later(borrow mut s.left,s.right.n)',
+                     'later(borrow mut s.left,get(s.right))',
+                     'later(borrow mut s.left,inc(borrow mut s.right))'):
+            if call=='mixed(s,borrow mut s.left)':
+                # Same root with different argument types, not a typing failure.
+                text=declaration+'fn conflict(borrow s:Outer,borrow mut v:Small)->u32{return 0}\n'
+                call='conflict(s,borrow mut s.left)'
+            else:text=declaration
+            self.reject(text+'fn main()->u32 {var s=Outer(Small(1),Small(2));x='+call+';return 0}', 'borrow')
+        self.reject(declaration+'fn bad(borrow s:Outer)->u32 {return inc(borrow mut s.left)} fn main()->u32{return 0}', 'mutable')
+        self.reject(declaration+'fn main()->u32 {s=Outer(Small(1),Small(2));x=inc(borrow mut s.left);return 0}', 'mutable')
+        self.reject('struct Outer {items:[Small;2]} fn main()->u32 {var s=Outer([Small(0);2]);x=inc(borrow mut s.items[0]);return 0}', 'array elements')
+        self.reject('''struct Holder {child:Small;buffer:memory.Buffer<u8>}
+fn bad(value:Holder)->u32 {var s=move value;x=inc(borrow mut s.child);(c,b)=move s;r=memory.release(move b);return 0}
+fn main()->u32{return 0}''','resource-free')
+
 
 @unittest.skipUnless(shutil.which('clang'),'Clang required')
 class MutableBorrowNative(unittest.TestCase):
@@ -120,6 +153,24 @@ class MutableBorrowNative(unittest.TestCase):
  return 0
 }''')
 
+    def test_nested_field_reborrow_snapshots_and_distinct_roots(self):
+        self.run_source(BASE+'''struct Inner {value:Small;large:Large}
+struct Outer {inner:Inner;other:Small}
+fn advance(borrow mut s:Outer)->u32 {return inc(borrow mut s.inner.value)}
+fn main()->u32 {
+ var s=Outer(Inner(Small(1),Large([7;128],0)),Small(10));old=copy s
+ var other=Outer(Inner(Small(2),Large([8;128],0)),Small(20))
+ var i:u32=0
+ while i<128 {v=set(borrow mut s.inner.large,i);i=i+1}
+ x=advance(borrow mut s)
+ y=pair(borrow mut s.inner.value,borrow mut other.inner.value)
+ if s.inner.value.n!=3||other.inner.value.n!=4||s.other.n!=10 {return 1}
+ if old.inner.value.n!=1||old.inner.large.a[127]!=7||s.inner.large.a[127]!=8 {return 2}
+ s=Outer(Inner(Small(30),Large([9;128],0)),Small(40))
+ z=advance(borrow mut s);if s.inner.value.n!=31 {return 3}
+ return 0
+}''')
+
     def test_branch_continue_break_and_snapshot_at_join(self):
         self.run_source(BASE+'''fn main()->u32 {
  var s=Small(0);var i:u32=0
@@ -138,6 +189,11 @@ class MutableBorrowNative(unittest.TestCase):
     def test_argument_snapshot_precedes_mutable_call(self):
         self.run_source(BASE+'''fn compare(old:Small,n:u32)->u32{return n-old.n}
 fn main()->u32 {var s=Small(0);delta=compare(s,inc(borrow mut s));return delta-1}''')
+
+    def test_parent_argument_snapshot_precedes_field_mutation(self):
+        self.run_source(BASE+'''struct Outer {left:Small;right:Small}
+fn compare(old:Outer,n:u32)->u32{return n-old.left.n}
+fn main()->u32 {var s=Outer(Small(1),Small(2));delta=compare(s,inc(borrow mut s.left));return delta-1}''')
 
     def test_err_preserves_prior_writes(self):
         self.run_source(BASE+'''fn fail(borrow mut s:Small)->Result<u32,u32>{s.n=9;return Err(1)}
@@ -171,6 +227,18 @@ fn main()->u32 {var s=Small(0);match fail(borrow mut s){Ok(v)=>{return 1} Err(e)
  old=b.n;a.n=a.n+1;if b.n!=old {return 1} return 0
 }
 fn main()->u32 {var s=Small(1);return conflict(borrow mut s,s)}'''
+        with self.assertRaisesRegex(CompileError,'borrow'):
+            compile_ir(source)
+        with patch('liza.ir.check_borrows',return_value=None):
+            self.run_source(source,expected_exit=1)
+
+    def test_mutant_field_reborrow_cannot_alias_parent_reader(self):
+        source=BASE+'''struct Outer {left:Small;right:Small}
+fn conflict(borrow mut child:Small,borrow parent:Outer)->u32 {
+ old=parent.left.n;child.n=child.n+1
+ if parent.left.n!=old {return 1};return 0
+}
+fn main()->u32 {var s=Outer(Small(1),Small(2));return conflict(borrow mut s.left,s)}'''
         with self.assertRaisesRegex(CompileError,'borrow'):
             compile_ir(source)
         with patch('liza.ir.check_borrows',return_value=None):

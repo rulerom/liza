@@ -570,7 +570,13 @@ class Parser:
             left = Expr(token, 'view', [owner, start, end])
         elif token.text == 'borrow':
             self.take('borrow');self.take('mut')
-            left = Expr(token, 'borrow_mut', [Expr(self.identifier(), 'name', [])])
+            place = Expr(self.identifier(), 'name', [])
+            while self.current.text == '.':
+                self.take('.')
+                place = Expr(self.identifier(), 'field', [place])
+            if self.current.text == '[':
+                raise CompileError(token, 'mutable borrow supports structure fields, not array elements')
+            left = Expr(token, 'borrow_mut', [place])
         elif token.text in ('copy', 'move'):
             left = Expr(self.take(), token.text, [self.expression(11)])
             if token.text == 'move' and left.args[0].kind != 'name':

@@ -315,10 +315,10 @@ class Lowerer:
                 if mutable_arg:
                     if arg.kind != 'borrow_mut':
                         raise CompileError(arg.token, 'mutable argument requires explicit borrow mut')
-                    root = arg.args[0].token.text
+                    root = self.storage_root(arg.args[0])
                     if names[root] not in self.storage_values or root in self.readonly_names:
                         raise CompileError(arg.token, 'mutable borrow requires a var or mutable parameter')
-                    value = names[root]
+                    value = self.storage_address(arg.args[0], names, inferred)
                 elif readonly_value and arg.kind == 'name' and names[arg.token.text] in self.storage_values:
                     value = names[arg.token.text]
                 else:
@@ -326,7 +326,7 @@ class Lowerer:
                     if readonly_value:
                         value = self.emit('storage.local', [value], type=inferred[id(arg)], storage_relation='readonly_temporary')
                 if mutable_arg or readonly_value:
-                    loan = self.emit('loan.begin', [value], type=self.types[value], owner_binding=value,
+                    loan = self.emit('loan.begin', [value], type=self.types[value], owner_binding=names[root] if mutable_arg else value,
                                      storage_relation='mutable' if mutable_arg else 'readonly')
                     loans.append(loan);value=loan
                 args.append(value)

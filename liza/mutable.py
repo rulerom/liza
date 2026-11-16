@@ -1,6 +1,7 @@
 """M0's deliberately restricted addressable value types and source discovery."""
 from .types import SCALAR_TYPES, is_array, element_type
 from .frontend import Conditional, While, Match, Scope, LoopControl, Update, Destructure
+from .readonly import projection_root
 
 
 def plain_value(t, structs):
@@ -21,7 +22,7 @@ def addressable_bindings(body):
     result = set()
     def expr(node, env):
         if node.kind == 'borrow_mut':
-            target = env.get(node.args[0].token.text)
+            target = env.get(projection_root(node.args[0]))
             if target is not None and getattr(target, 'is_var', False):
                 result.add(id(target))
         for arg in node.args:

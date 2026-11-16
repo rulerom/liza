@@ -1,0 +1,164 @@
+{
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "binary_sha256": {
+    "baseline": "221770e493da92261f52d2d1d91196bd932dc479b8c551cde544f4ed77d40b99",
+    "candidate": "e4b186c54f29817ede21bca93db9837f3c77d8b375966845c58d41ba078e58de"
+  },
+  "harness_sha256": "3fdfecd10a9841043eade06befc6705e6fa4607e5159f406f385444bba333516",
+  "duration_ms": 60000,
+  "pairs": 3,
+  "runs": [
+    {
+      "received": 12791,
+      "attempted": 11730,
+      "succeeded": 11730,
+      "gated": 1063,
+      "discontinuities": 0,
+      "wall_s": 60.19,
+      "user_s": 42.24,
+      "system_s": 0.7,
+      "rss_bytes": 15663104,
+      "cpu_s": 42.940000000000005,
+      "cpu_cores": 0.713407542781193,
+      "input_pps": 212.51038378468184,
+      "cpu_us_per_input": 3357.047924321789,
+      "pair": 1,
+      "variant": "baseline"
+    },
+    {
+      "received": 12535,
+      "attempted": 11520,
+      "succeeded": 11520,
+      "gated": 1017,
+      "discontinuities": 0,
+      "wall_s": 60.55,
+      "user_s": 12.14,
+      "system_s": 2.3,
+      "rss_bytes": 15613952,
+      "cpu_s": 14.440000000000001,
+      "cpu_cores": 0.23848059454995874,
+      "input_pps": 207.01899256812553,
+      "cpu_us_per_input": 1151.9744714798564,
+      "pair": 1,
+      "variant": "candidate"
+    },
+    {
+      "received": 12658,
+      "attempted": 11682,
+      "succeeded": 11682,
+      "gated": 978,
+      "discontinuities": 0,
+      "wall_s": 60.26,
+      "user_s": 13.26,
+      "system_s": 2.69,
+      "rss_bytes": 15581184,
+      "cpu_s": 15.95,
+      "cpu_cores": 0.2646863591105211,
+      "input_pps": 210.0564221705941,
+      "cpu_us_per_input": 1260.0726813082636,
+      "pair": 2,
+      "variant": "candidate"
+    },
+    {
+      "received": 12559,
+      "attempted": 11528,
+      "succeeded": 11528,
+      "gated": 1033,
+      "discontinuities": 0,
+      "wall_s": 60.33,
+      "user_s": 43.22,
+      "system_s": 0.71,
+      "rss_bytes": 15581184,
+      "cpu_s": 43.93,
+      "cpu_cores": 0.7281617768937511,
+      "input_pps": 208.17172219459638,
+      "cpu_us_per_input": 3497.8899593916713,
+      "pair": 2,
+      "variant": "baseline"
+    },
+    {
+      "received": 12458,
+      "attempted": 11403,
+      "succeeded": 11403,
+      "gated": 1057,
+      "discontinuities": 0,
+      "wall_s": 60.28,
+      "user_s": 43.4,
+      "system_s": 0.69,
+      "rss_bytes": 15679488,
+      "cpu_s": 44.089999999999996,
+      "cpu_cores": 0.7314200398142003,
+      "input_pps": 206.6688785666888,
+      "cpu_us_per_input": 3539.09134692567,
+      "pair": 3,
+      "variant": "baseline"
+    },
+    {
+      "received": 12511,
+      "attempted": 11444,
+      "succeeded": 11444,
+      "gated": 1069,
+      "discontinuities": 0,
+      "wall_s": 60.18,
+      "user_s": 11.83,
+      "system_s": 2.33,
+      "rss_bytes": 15581184,
+      "cpu_s": 14.16,
+      "cpu_cores": 0.23529411764705882,
+      "input_pps": 207.892987703556,
+      "cpu_us_per_input": 1131.8040124690272,
+      "pair": 3,
+      "variant": "candidate"
+    }
+  ],
+  "medians": {
+    "baseline": {
+      "cpu_cores": 0.7281617768937511,
+      "cpu_us_per_input": 3497.8899593916713,
+      "input_pps": 208.17172219459638,
+      "rss_bytes": 15663104
+    },
+    "candidate": {
+      "cpu_cores": 0.23848059454995874,
+      "cpu_us_per_input": 1151.9744714798564,
+      "input_pps": 207.892987703556,
+      "rss_bytes": 15581184
+    }
+  },
+  "host_cpu": "Apple M4",
+  "recorded_date": "2026-11-16",
+  "optimization": "O2",
+  "baseline_revision": "e0c7d2b0e284cafdab54e6afd263c609c27167ac",
+  "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin",
+  "candidate_source_sha256": {
+    "liza/frontend.py": "5a4e187685c8519b0b308494a6e61e65ec7fbe43b424f9acc6cd80ce191e6ea3",
+    "liza/mutable.py": "7249bff4bbbe6369868882b655aaeee281f43a281a495475dd348212f4c112f4",
+    "liza/borrowing.py": "65a7a693072a9e2ed92c1fde6c112e9079634abc52374b95898b3a7ce4aa610c",
+    "liza/ir.py": "50fcaff8d54a0db7135781368cfb293b929585fb30fb03ed16d51e42d60d9928",
+    "examples/rtsp/tcp.liza": "7f1151763c30c4ac7bc457d852ed35e0d69b37324f60c5d59c028386d8a31962",
+    "examples/rtsp/stream.liza": "d67fd8aba4fdcd6bcb0c5628ace690f154231874f27861b4570f5761f134e908"
+  },
+  "stack_samples": {
+    "baseline": {
+      "main_thread": 8558,
+      "memmove": 6598,
+      "poll": 1863
+    },
+    "candidate": {
+      "main_thread": 8178,
+      "memmove": 2291,
+      "poll": 5642
+    },
+    "interval_ms": 1,
+    "duration_s": 10,
+    "note": "Separate 30-second sessions, wall-clock stack samples, not exact CPU attribution or copies per packet."
+  },
+  "limits": [
+    "One live camera with uncontrolled pacing and scene complexity.",
+    "Whole-process CPU includes setup, IDR gating, control and shutdown.",
+    "Local send acceptance does not measure delivery, loss or latency.",
+    "No compilers, tests or concurrent publisher ran during the final six trials.",
+    "An interrupted initial trial and preliminary candidate trials are excluded."
+  ]
+}
