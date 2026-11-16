@@ -36,6 +36,7 @@ FAULT = r'''
 #undef liza_rt_reactor_finish_connect
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
 static unsigned long long tick=100,reads,writes,fins,polls,commands;
 static unsigned stop,command_length;
 static char command[64];
@@ -94,7 +95,16 @@ uint64_t liza_rt_reactor_read(reactor*r,uint64_t o,uint64_t g,uint64_t s,uint8_t
 uint64_t liza_rt_reactor_write(reactor*r,uint64_t o,uint64_t g,uint64_t s,const uint8_t*b,uint32_t l,uint32_t a,uint32_t n){
     if(getenv("LIFECYCLE_BLOCK"))return net_failure(4);
     if(n>7)n=7; /* force successful short writes */
-    uint64_t result=real_write(r,o,g,s,b,l,a,n);if(!(result>>32))writes+=(uint32_t)result;return result;
+    uint64_t result=real_write(r,o,g,s,b,l,a,n);if(!(result>>32))writes+=(uint32_t)result;
+    /* The peer can receive bytes before the caller records activity time. */
+    if(getenv("LIFECYCLE_DELAY_WRITE_ACK") && !(result>>32) && (uint32_t)result) {
+#ifdef _WIN32
+        Sleep(50);
+#else
+        struct timespec delay={0,50000000};nanosleep(&delay,NULL);
+#endif
+    }
+    return result;
 }
 uint64_t liza_rt_reactor_shutdown_write(reactor*r,uint64_t o,uint64_t g,uint64_t s){fins++;return real_fin(r,o,g,s);}
 uint64_t liza_rt_reactor_finish_connect(reactor*r,uint64_t o,uint64_t g,uint64_t s){
@@ -230,8 +240,11 @@ class Lifecycle(unittest.TestCase):
                 self.assertEqual(r.returncode,2);self.assertEqual(r.stdout,b'')
     def test_eof_and_fin_do_not_refresh_idle(self):
         for _,exe in self.executables:
-            self.control(100,0);up=self.listener();p,port=self.start(exe,up,['--idle-timeout-ms','10'])
+            self.control(100,0);up=self.listener();p,port=self.start(exe,up,['--idle-timeout-ms','10'],{'LIFECYCLE_DELAY_WRITE_ACK':'1'})
             c,u=self.connect(port,up);self.ping(c,u)
+            # recv confirms delivery, not the proxy's subsequent clock update.
+            # The next poll snapshot is a barrier after all byte progress at 100.
+            self.wait_ack(lambda x:x[0]==100 and x[1]==10 and x[2]==10)
             self.control(109,0);c.shutdown(socket.SHUT_WR);self.assertEqual(u.recv(1),b'')
             self.wait_ack(lambda x:x[0]==109 and x[3]>0)
             self.control(110,0);self.assertEqual(c.recv(1),b'')
