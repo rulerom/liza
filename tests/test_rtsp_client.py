@@ -54,7 +54,7 @@ class RtspClient(unittest.TestCase):
             folder.mkdir()
             cls.clients.append(build(ROOT / 'examples/apps/liza_rtsp.liza', folder, opt, ROOT / 'examples'))
 
-    def scenario(self, exe, bad_cseq=False):
+    def scenario(self, exe, bad_cseq=False, drop_after=None):
         errors, packets, methods, commands = [], [], [], []
         stopped = threading.Event()
         listeners = [socket.socket() for _ in range(2)]
@@ -117,6 +117,8 @@ class RtspClient(unittest.TestCase):
                         record = b'$\0' + struct.pack('!H', len(packet)) + packet
                         conn.sendall(record[:3])
                         conn.sendall(record[3:] + b'$\1\0\4\x80\xc8\0\0')
+                        if drop_after is not None and sequence == drop_after:
+                            return
 
         def control_peer():
             with control.accept()[0] as raw, context.wrap_socket(raw, server_side=True) as conn:
@@ -231,3 +233,13 @@ class RtspClient(unittest.TestCase):
             self.assertNotEqual(run.returncode, 0)
             self.assertFalse(packets)
             self.assertEqual(methods, [b'OPTIONS'])
+
+    def test_camera_disconnect_stops_publication_and_cleans_up(self):
+        for exe in self.clients:
+            run, packets, methods, commands = self.scenario(exe, drop_after=35)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertGreater(len(packets), 0, (run.stdout, run.stderr))
+            self.assertEqual(methods, [b'OPTIONS', b'DESCRIBE', b'SETUP', b'PLAY'])
+            self.assertEqual(commands.count('connect_request'), 1)
+            self.assertIn('device_disconnect', commands)
+            self.assertIn('disconnect_from_conference', commands)
