@@ -23,7 +23,8 @@ def link_flags():
         # O0 preserves bounded aggregate snapshots in native protocol callers.
         # The default PE reserve (1 MiB) is insufficient for their call chains.
         # This is an executable main-stack reserve, not TLS managed memory;
-        # pages commit on demand and worker stack policies remain unchanged.
+        # pages commit on demand. Explicit SG2 stack budgets remain separate;
+        # legacy native threads using the PE default inherit this reserve.
         flags += ['-lcrypt32', '-Wl,/STACK:8388608']
     return flags
 

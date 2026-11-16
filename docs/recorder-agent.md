@@ -37,8 +37,9 @@ python3 -m liza build --project-root examples \
 8 МиБ (страницы commit по мере использования). На O0 снимки агрегатов ещё
 создают крупные фиксированные кадры: в исследованной x64-сборке кадр
 `recorder.child.tick` — около 2,7 МиБ. Стандартного PE reserve 1 МиБ недостаточно.
-Это отдельный бюджет процесса, не `tls.managed_bytes()` и не настройка workers;
-оптимизация копирования агрегатов остаётся отдельной задачей компилятора.
+Это не `tls.managed_bytes()`. Явные stack budgets SG2 задаются отдельно;
+старые native workers с default stack наследуют reserve PE-программы.
+Оптимизация копирования агрегатов остаётся отдельной задачей компилятора.
 
 Агент регистрирует роль `recorder`, capabilities `recording` и
 `consolidated_native`, один активный assignment. `conference_tag`, ID сессии и

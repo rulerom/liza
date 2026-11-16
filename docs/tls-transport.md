@@ -171,7 +171,8 @@ ciphertext writes и семибайтовыми reads, DNS/IP identity, неиз
 На Windows TLS-linker flags задают reserve основного стека PE-программы 8 МиБ,
 чтобы O0-сборки протокольных клиентов с ограниченными агрегатами не упирались
 в стандартный reserve 1 МиБ. Commit страниц происходит по необходимости.
-Этот reserve не входит в `tls.managed_bytes()` и не меняет размеры стеков workers.
+Этот reserve не входит в `tls.managed_bytes()`. Явные stack budgets SG2 задаются
+отдельно; legacy native threads, использующие default stack, наследуют PE reserve.
 
 Workflow `TLS transport and clients` проверяет Linux/macOS/Windows.
 
