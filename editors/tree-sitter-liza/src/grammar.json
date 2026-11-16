@@ -1810,22 +1810,56 @@
         }
       ]
     },
-    "mutable_borrow_expression": {
-      "type": "SEQ",
+    "_mutable_place": {
+      "type": "CHOICE",
       "members": [
-        {
-          "type": "STRING",
-          "value": "borrow"
-        },
-        {
-          "type": "STRING",
-          "value": "mut"
-        },
         {
           "type": "SYMBOL",
           "name": "identifier"
+        },
+        {
+          "type": "PREC_LEFT",
+          "value": 15,
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "_mutable_place"
+              },
+              {
+                "type": "STRING",
+                "value": "."
+              },
+              {
+                "type": "SYMBOL",
+                "name": "identifier"
+              }
+            ]
+          }
         }
       ]
+    },
+    "mutable_borrow_expression": {
+      "type": "PREC",
+      "value": 14,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "borrow"
+          },
+          {
+            "type": "STRING",
+            "value": "mut"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "_mutable_place"
+          }
+        ]
+      }
     },
     "unary_expression": {
       "type": "PREC",
