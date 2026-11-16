@@ -109,6 +109,7 @@ nav:
       - Быстрый старт: getting-started.md
       - Редактор Zed: editor.md
       - Карта примеров: reference-programs.md
+      - Лицензия: license.md
   - Язык:
       - Основы: basics.md
       - Модель вычислений и памяти: design.md

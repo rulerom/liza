@@ -1,5 +1,7 @@
 # Liza for Zed
 
+Licensed under the [Boost Software License 1.0](LICENSE) (BSL-1.0).
+
 In Zed run **`zed: install dev extension`** and select this directory
 (`editors/zed`, not the repository root). Open any `.liza` file.
 Zed downloads the pinned Tree-sitter grammar and builds it automatically;
