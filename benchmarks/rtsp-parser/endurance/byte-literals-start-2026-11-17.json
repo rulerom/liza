@@ -1,0 +1,27 @@
+{
+  "binary_name": "liza-rtsp-byte-literals-bin",
+  "binary_sha256": "d8f2e598d2fcfc616b9b2f3f69c83aa0c25a74255e49261db7e41a592ab9bc97",
+  "process_start_utc": "Mon Nov 16 19:54:50 2026",
+  "monitor_started_at_uptime_s": 24.0,
+  "rtp_counters": "unavailable until normal application shutdown",
+  "first_sample": {
+    "pid": 65445,
+    "uptime_s": 24.0,
+    "cpu_s": 4.3,
+    "cpu_recent_percent": 19.1,
+    "rss_bytes": 15482880,
+    "process_state": "Ss",
+    "sample_epoch_s": 1794858914.02584,
+    "sampled_at_utc": "2026-11-16T19:55:14.025845+00:00",
+    "rtp_received": null,
+    "rtp_succeeded": null,
+    "rtp_sequence_discontinuities": null,
+    "errors": [],
+    "open_fds": 6,
+    "tcp_sockets": 2,
+    "tcp_established": 2,
+    "udp_sockets": 1,
+    "bytes_in": 6910345,
+    "bytes_out": 5044360
+  }
+}

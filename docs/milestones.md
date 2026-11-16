@@ -77,7 +77,7 @@ Milestone означает работающую возможность с опр
 | **SG2/SG3** | [Scoped-группы](scoped-groups.md), команды и единое ожидание TCP/control | Результат после native joins/handback; fail-stop граница |
 | **SG4-A** | [UDP endpoint](sg4-a1-udp.md), [Liza/C RTP workload](sg4-a2-rtp-fanout.md), [collector audit](sg4-a2-collector.md) | Сохранённые измерения и явные ограничения стенда |
 | **SG4-B1/B2** | [Две группы](sg4-b1-multiple-groups.md) и [dual RTP workload](sg4-b2-dual-owners.md) | Изоляция ресурсов/завершения; эффект CPU и UDP queues не разделён |
-| **RTSP endurance · 17 ноября 2026** | [Контрольная точка около семи часов](rtsp-endurance.md) реальной H.264-публикации | RSS около 6,9 МиБ, CPU около 0,21 ядра; 24-часовое наблюдение продолжается, live RTP counters недоступны |
+| **RTSP endurance · 17 ноября 2026** | [Контрольная точка около семи часов](rtsp-endurance.md) реальной H.264-публикации | Последний снимок первого процесса — 7 ч 25 мин; он перестал наблюдаться до 24 часов. Новая сборка запущена с отдельным журналом; live RTP counters недоступны |
 
 Эксперименты Verified V0–V4 и Relay проверяют выбранные модели и фрагменты IR.
 Они не доказывают корректность всех новых механизмов языка, сетевого runtime
