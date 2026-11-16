@@ -41,6 +41,8 @@ COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline
             'verified-relay-r1', 'verified-relay-r2b', 'verified-relay-r2c',
             'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload', 'http-ws', 'tls-transport', 'json-access'}
 CASES = [
+    (['tests/test_can_codec.py', 'tests/test_can_worker.py'], {'test', 'tls-transport'}),
+    (['examples/can/*.liza', 'examples/apps/liza_can.liza'], {'test', 'editor', 'docs', 'tls-transport'}),
     (['tests/test_json_access.py'], {'test', 'json-access'}),
     (['tests/fixtures/can_examples.json'], {'test', 'editor', 'json-access'}),
     (['tests/fixtures/json_access.liza'], {'test', 'editor', 'json-access'}),

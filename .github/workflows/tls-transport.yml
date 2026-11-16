@@ -1,10 +1,10 @@
 name: TLS transport and clients
 on:
   pull_request:
-    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
+    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_can*.py', 'examples/can/**', 'examples/apps/liza_can.liza', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
   push:
     branches: [main]
-    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
+    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_can*.py', 'examples/can/**', 'examples/apps/liza_can.liza', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -47,3 +47,4 @@ jobs:
           "$tlsPrefix/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - run: clang --version
       - run: python -m unittest discover -s tests -p "test_tls*.py" -v
+      - run: python -m unittest discover -s tests -p "test_can*.py" -v

@@ -11,7 +11,7 @@ hide:
   <h1>Сетевые сервисы.<br>Явные ресурсы. Проверяемые свойства.</h1>
   <p class="liza-definition">Liza — экспериментальный системный язык для сетевой инфраструктуры: прокси, шлюзов и протокольных сервисов. Он сочетает определённую семантику, явное управление ресурсами и инструменты проверки отдельных свойств программ.</p>
   <p class="liza-lead"><strong>Сегодня:</strong> нативные TCP-прокси и Message Router, HTTP/WS на Liza, HTTPS/WSS с проверкой сервера, scoped-группы и RTP fanout с одним или двумя независимыми сетевыми владельцами.</p>
-  <p class="liza-lead"><strong>Следующий этап:</strong> минимальный WSS-клиент VideoGrace CAN, измерения реальных приложений и расширение проверяемого фрагмента. Язык и его API ещё могут меняться.</p>
+  <p class="liza-lead"><strong>Следующий этап:</strong> измерения реальных приложений и расширение проверяемого фрагмента. Язык и его API ещё могут меняться.</p>
   <div class="liza-actions">
     <a class="liza-button liza-button-primary" href="getting-started.html">Написать первую программу</a>
     <a class="liza-button" href="network-gateway.html">Verified Network Gateway</a>
@@ -169,7 +169,7 @@ build\hello.exe
   [Message Router](message-router.md).
 - **HTTP/WS и HTTPS/WSS:** протоколы на Liza, общий parser, частичный I/O,
   move-only TLS session и обязательная проверка сервера. Есть Linux/macOS/Windows
-  приёмка; DNS, chunked и CAN пока отсутствуют. [HTTP/WS](http-websocket.md) ·
+  приёмка; DNS и chunked пока отсутствуют. [HTTP/WS](http-websocket.md) ·
   [TLS и команды запуска](tls-transport.md).
 - **UDP и RTP:** standalone UDP и consumer-owned endpoint в Reactor,
   проверка RTP, single/dual fanout workloads с сохранёнными измерениями.
@@ -197,9 +197,9 @@ fanout. Для них важны backpressure, корректное заверш
 предлагает универсальную production HTTP/TLS-библиотеку или зрелую экосистему
 сетевых библиотек. Реализованные клиенты имеют явные ограничения.
 
-Ближайшее приложение — [минимальный клиент VideoGrace CAN](roadmap.md#can-client)
-поверх WSS: один запрос, коррелированный ответ, timeout и освобождение ресурсов.
-Это следующий этап, а не уже доступная возможность.
+Экспериментальный [CAN Echo Worker](can-worker.md) использует WSS и typed JSON:
+регистрация, heartbeat, одно задание, отмена и переподключение. Локальная приёмка
+прошла; администратор подтвердил `accepted → completed` и точный echo на demo.
 
 *Liza is an experimental systems language for network infrastructure, with
 well-defined semantics, explicit resource management and tools for checking

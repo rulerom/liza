@@ -1,0 +1,1 @@
+pub struct Bundle {pub network:memory.Buffer<u8>;pub document:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub output:memory.Buffer<u8>}
