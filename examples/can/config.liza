@@ -24,8 +24,8 @@ fn token(path:Path)->Result<can.text.Value,u32>:io {
         if failed {return Err(2)};return Ok(value)
     }}
 }
-pub fn read()->Result<Config,u32>:io {
-    if cli.count()<5||cli.count()>7 {return Err(2)}
+pub fn read_prefix()->Result<Config,u32>:io {
+    if cli.count()<5 {return Err(2)}
     var address=net.ipv4(127,0,0,1,443)
     match cli.arg(1) {None=>{return Err(2)} Some(arg)=>{match apps.proxy.config.endpoint(arg) {Err(e)=>{return Err(2)} Ok(a)=>{address=a}}}}
     var peer=can.text.empty();var node=can.text.empty();var secret=can.text.empty();var ca=can.text.empty();var custom=false;var run_ms:u32=120000
@@ -33,7 +33,7 @@ pub fn read()->Result<Config,u32>:io {
     match argument(3) {Err(e)=>{return Err(e)} Ok(v)=>{node=v}}
     match cli.path_arg(4) {None=>{return Err(2)} Some(path)=>{match token(path) {Err(e)=>{return Err(e)} Ok(v)=>{secret=v}}}}
     if cli.count()>=6 {match argument(5) {Err(e)=>{return Err(e)} Ok(v)=>{if !(v.length==1&&v.bytes[0]==45) {ca=v;custom=true}}}}
-    if cli.count()==7 {match cli.arg(6) {None=>{return Err(2)} Some(arg)=>{match apps.proxy.config.duration(arg) {Err(e)=>{return Err(2)} Ok(n)=>{if n<100||n>3600000 {return Err(2)};run_ms=n}}}}}
+    if cli.count()>=7 {match cli.arg(6) {None=>{return Err(2)} Some(arg)=>{match apps.proxy.config.duration(arg) {Err(e)=>{return Err(2)} Ok(n)=>{if n<100||n>3600000 {return Err(2)};run_ms=n}}}}}
     var host=peer
     if address.port!=443 {
         host.bytes[host.length]=58;host.length=host.length+1
@@ -43,3 +43,5 @@ pub fn read()->Result<Config,u32>:io {
     }
     return Ok(Config(address,peer,host,node,secret,ca,custom,run_ms,5000,3000,2))
 }
+
+pub fn read()->Result<Config,u32>:io {if cli.count()<5||cli.count()>7 {return Err(2)};return read_prefix()}

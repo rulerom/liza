@@ -41,6 +41,9 @@ COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline
             'verified-relay-r1', 'verified-relay-r2b', 'verified-relay-r2c',
             'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload', 'http-ws', 'tls-transport', 'json-access', 'process-child'}
 CASES = [
+    (['tests/test_recorder_agent.py'], {'test', 'tls-transport'}),
+    (['tests/native/recorder_fixture.c'], {'test', 'tls-transport'}),
+    (['examples/recorder/upload.liza', 'examples/apps/liza_recorder.liza'], {'test', 'docs', 'editor', 'tls-transport'}),
     (['tests/test_process.py', 'tests/native/process_child.c', 'tests/native/process_ownership.c'], {'test', 'process-child'}),
     (['examples/apps/process_child.liza'], {'test', 'docs', 'editor', 'process-child'}),
     (['tests/test_can_codec.py', 'tests/test_can_worker.py'], {'test', 'tls-transport'}),

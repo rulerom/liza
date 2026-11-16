@@ -1,0 +1,46 @@
+import can.config
+import can.text
+import can.fields
+import recorder.words
+pub struct Config {pub network:can.config.Config;pub server:can.text.Value;pub output:can.text.Value;pub local_only:bool;pub stop_ms:u64;pub term_ms:u64;pub max_record_ms:u64;pub ack_ms:u64}
+struct Loaded {buffer:memory.Buffer<u8>;length:u32;valid:bool}
+fn load(path:Path,initial:memory.Buffer<u8>)->Loaded:io {
+    // Keep the actual byte count: an embedded NUL must be rejected by JSON.
+    var buffer=move initial
+    match file.open_path(path) {Err(e)=>{return Loaded(move buffer,0,false)} Ok(input)=>{
+        var count:u32=0;var valid=true
+        while true {match file.read_chunk(input) {Err(e)=>{valid=false;break} Ok(chunk)=>{
+            if chunk.eof {break};if chunk.len>4096-count {valid=false;break}
+            var i:u32=0;while i<chunk.len {buffer=memory.set(move buffer,count+i,chunk.data[i]);i=i+1};count=count+chunk.len
+        }}}
+        match file.close(move input) {Err(e)=>{valid=false} Ok(done)=>{}}
+        return Loaded(move buffer,count,valid)
+    }}
+}
+pub fn read()->Result<Config,u32>:io,alloc {
+    if cli.count()!=9 {return Err(2)}
+    var network=can.config.Config(net.ipv4(127,0,0,1,443),can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),false,120000,5000,3000,2)
+    match can.config.read_prefix() {Err(e)=>{return Err(2)} Ok(config)=>{network=config}}
+    match cli.path_arg(8) {None=>{return Err(2)} Some(path)=>{
+    match memory.create(8192) {Err(e)=>{return Err(2)} Ok(region)=>{
+    match memory.alloc<u8>(region,4096,0) {Err(e)=>{closed=memory.close(move region);return Err(2)} Ok(initial)=>{
+    match memory.alloc<u8>(region,1024,0) {Err(e)=>{released=memory.release(move initial);closed=memory.close(move region);return Err(2)} Ok(scratch)=>{
+        (buffer,length,loaded)=load(path,move initial)
+        var cursor=can.fields.open(move buffer,length,move scratch);empty=can.text.empty()
+        (c1,output)=can.fields.text(move cursor,empty,empty,recorder.words.word_output_dir(),true,96);cursor=move c1
+        (c2,local_only)=can.fields.boolean(move cursor,empty,empty,recorder.words.word_local_only(),false,false);cursor=move c2
+        (c3,ack_ms)=can.fields.number(move cursor,empty,empty,recorder.words.word_ack_ms(),false,15000);cursor=move c3
+        (last,last_scratch,valid)=can.fields.finish(move cursor)
+        a=memory.release(move last);b=memory.release(move last_scratch);closed=memory.close(move region)
+        if !loaded||!valid||output.length==0||ack_ms<100||ack_ms>60000 {return Err(2)}
+        data=output.bytes
+        if data[0]!=47 {if output.length<3 {return Err(2)};if data[1]!=58||(data[2]!=47&&data[2]!=92) {return Err(2)}}
+        host=network.host.bytes;prefix:[u8;8]=[104,116,116,112,115,58,47,47]
+        var server=can.text.empty();var i:u32=0;while i<8 {server.bytes[i]=prefix[i];i=i+1};server.length=8;i=0
+        while i<network.host.length {server.bytes[server.length]=host[i];server.length=server.length+1;i=i+1}
+        return Ok(Config(network,server,output,local_only,10000,5000,86400000,ack_ms))
+    }}
+    }}
+    }}
+    }}
+}

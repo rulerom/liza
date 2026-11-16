@@ -19,7 +19,13 @@ def link_flags():
     else:
         flags = subprocess.check_output(['pkg-config', '--cflags', '--libs', 'openssl'], text=True).split()
     if sys.platform == 'darwin': flags += ['-framework', 'Security', '-framework', 'CoreFoundation']
-    if sys.platform == 'win32': flags += ['-lcrypt32']
+    if sys.platform == 'win32':
+        # O0 preserves bounded aggregate snapshots in native protocol callers.
+        # The default PE reserve (1 MiB) is insufficient for their call chains.
+        # This is an executable main-stack reserve, not TLS managed memory;
+        # pages commit on demand. Explicit SG2 stack budgets remain separate;
+        # legacy native threads using the PE default inherit this reserve.
+        flags += ['-lcrypt32', '-Wl,/STACK:8388608']
     return flags
 
 

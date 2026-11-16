@@ -1,0 +1,27 @@
+import httpws.bytes
+import httpws.http
+pub struct State {pub pending:httpws.bytes.Wire;pub sent:u32;pub closed:bool;pub response_ready:bool;pub head:httpws.bytes.Wire;pub body:[u8;4096];pub length:u32;pub expected:u32;pub headers:bool}
+pub fn create(request:httpws.bytes.Wire)->State {return State(request,0,false,false,httpws.bytes.empty(),[0;4096],0,0,false)}
+// Storage replies require explicit bounded Content-Length. Reject redirects,
+// Transfer-Encoding, oversized replies and premature EOF rather than guessing.
+pub fn feed(borrow mut app:State,byte:u8)->Result<u32,u32> {
+    if app.response_ready||app.closed {return Err(1)}
+    if !app.headers {
+        var header=app.head;accepted=httpws.bytes.put(borrow mut header,byte);app.head=header
+        if !accepted {return Err(1)}
+        n=app.head.len;if n<4 {return Ok(0)};data=app.head.data
+        if data[n-4]!=13||data[n-3]!=10||data[n-2]!=13||data[n-1]!=10 {return Ok(0)}
+        match httpws.http.response(view data[0..n]) {Err(e)=>{return Err(1)} Ok(head)=>{match head {
+            None=>{return Err(1)} Some(h)=>{
+                if h.status<200||h.status>=300 {return Err(1)}
+                match httpws.http.body_length(view data[0..n],h) {Err(e)=>{return Err(1)} Ok(length)=>{match length {None=>{return Err(1)} Some(count)=>{app.expected=count}}}}
+            }
+        }}}
+        app.headers=true
+    } else {
+        if app.length>=app.expected {return Err(1)}
+        app.body[app.length]=byte;app.length=app.length+1
+    }
+    if app.headers&&app.length==app.expected {app.response_ready=true;return Ok(1)}
+    return Ok(0)
+}

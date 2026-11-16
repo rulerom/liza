@@ -1,0 +1,67 @@
+import can.text
+import can.words
+import can.encode
+import recorder.words
+import recorder.model
+pub fn message(buffer:memory.Buffer<u8>,output:recorder.model.Output,node:can.text.Value,token:can.text.Value)->JsonOutput {
+    var writer=can.encode.begin(move buffer);writer=can.encode.container(move writer,0)
+    var kind=recorder.words.word_hello()
+    if output.kind==2 {kind=recorder.words.word_heartbeat()}
+    if output.kind==3 {kind=can.words.literal_job_ack()}
+    if output.kind==4 {kind=can.words.literal_job_event()}
+    if output.kind==5 {kind=recorder.words.word_control_result()}
+    writer=can.encode.string_field(move writer,recorder.words.word_type(),kind)
+    if output.kind==1 {
+        writer=can.encode.string_field(move writer,recorder.words.word_node_id(),node)
+        writer=can.encode.string_field(move writer,recorder.words.word_role(),recorder.words.word_recorder())
+        writer=can.encode.string_field(move writer,recorder.words.word_token(),token)
+        writer=can.encode.string_field(move writer,recorder.words.word_version(),can.words.literal_liza_can_0_1())
+        writer=can.encode.number_field(move writer,recorder.words.word_max_concurrent_jobs(),1)
+        writer=can.encode.number_field(move writer,recorder.words.word_assignment_protocol(),1)
+        writer=can.encode.container(can.encode.key(move writer,recorder.words.word_capabilities()),2)
+        writer=can.encode.text(move writer,recorder.words.word_recording());writer=can.encode.text(move writer,recorder.words.word_consolidated_native());writer=can.encode.container(move writer,3)
+    } else if output.kind==2 {
+        writer=can.encode.container(can.encode.key(move writer,recorder.words.word_load()),0)
+        writer=can.encode.number_field(move writer,recorder.words.word_jobs(),output.jobs);writer=can.encode.container(move writer,1)
+    } else if output.kind==5 {
+        writer=can.encode.string_field(move writer,recorder.words.word_request_id(),output.request)
+        writer=can.encode.boolean(can.encode.key(move writer,recorder.words.word_ok()),false)
+        writer=can.encode.string_field(move writer,recorder.words.word_error(),recorder.words.word_unsupported_control_method())
+    } else {
+        writer=can.encode.string_field(move writer,recorder.words.word_job_id(),output.job)
+        writer=can.encode.string_field(move writer,recorder.words.word_assignment_id(),output.assignment)
+        writer=can.encode.string_field(move writer,recorder.words.word_status(),output.status)
+        if output.note.length!=0 {writer=can.encode.string_field(move writer,recorder.words.word_message(),output.note)}
+        if output.data.path.length!=0 {
+            writer=can.encode.container(can.encode.key(move writer,recorder.words.word_data()),0)
+            writer=can.encode.string_field(move writer,recorder.words.word_local_path(),output.data.path)
+            writer=can.encode.number_field(move writer,recorder.words.word_size(),output.data.size)
+            writer=can.encode.number_field(move writer,recorder.words.word_exit_code(),u64(output.data.code))
+            writer=can.encode.boolean(can.encode.key(move writer,recorder.words.word_published()),output.data.published)
+            writer=can.encode.boolean(can.encode.key(move writer,recorder.words.word_local_only()),output.data.local_only)
+            if output.data.blob.length!=0 {
+                writer=can.encode.string_field(move writer,recorder.words.word_schema(),recorder.words.word_artifact_schema())
+                writer=can.encode.number_field(move writer,recorder.words.word_conference_session_id(),output.data.session)
+                writer=can.encode.container(can.encode.key(move writer,recorder.words.word_recording()),0)
+                writer=can.encode.string_field(move writer,recorder.words.word_job_id(),output.job)
+                writer=can.encode.string_field(move writer,recorder.words.word_conference_tag(),output.data.tag)
+                writer=can.encode.number_field(move writer,recorder.words.word_conference_session_id(),output.data.session)
+                writer=can.encode.string_field(move writer,recorder.words.word_profile(),recorder.words.word_consolidated_native())
+                writer=can.encode.string_field(move writer,recorder.words.word_status(),recorder.words.word_completed())
+                writer=can.encode.number_field(move writer,recorder.words.word_duration_ms(),output.data.duration)
+                writer=can.encode.container(move writer,1)
+                writer=can.encode.container(can.encode.key(move writer,recorder.words.word_files()),2)
+                writer=can.encode.container(move writer,0)
+                writer=can.encode.string_field(move writer,recorder.words.word_path(),output.data.filename)
+                writer=can.encode.string_field(move writer,recorder.words.word_blob_id(),output.data.blob)
+                writer=can.encode.string_field(move writer,recorder.words.word_url(),output.data.url)
+                writer=can.encode.string_field(move writer,recorder.words.word_content_type(),output.data.mime)
+                writer=can.encode.string_field(move writer,recorder.words.word_scope(),recorder.words.word_manual())
+                writer=can.encode.number_field(move writer,recorder.words.word_size(),output.data.size)
+                writer=can.encode.container(move writer,1);writer=can.encode.container(move writer,3)
+            }
+            writer=can.encode.container(move writer,1)
+        }
+    }
+    writer=can.encode.container(move writer,1);return can.encode.finish(move writer)
+}

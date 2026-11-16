@@ -1,0 +1,78 @@
+import recorder.model
+import recorder.config
+import recorder.launch
+import recorder.paths
+import recorder.words
+import can.text
+pub struct Step {pub child:Option<process.Child>;pub state:recorder.model.State}
+fn failed(state:recorder.model.State,note:can.text.Value)->recorder.model.State {
+    var next=state;job=state.current.job;assignment=state.current.assignment
+    next.phase=0;next.current.token=can.text.empty();next.current.upload_token=can.text.empty()
+    n=recorder.model.event(borrow mut next,job,assignment,recorder.words.word_failed(),note,recorder.model.empty_data());return next
+}
+pub fn tick(slot:Option<process.Child>,state:recorder.model.State,executable:Path,config:recorder.config.Config,now:u64)->Step:io,alloc {
+    var next=state
+    match move slot {
+        None=>{
+            if state.phase==1 {
+                if state.stop_requested {return Step(None,failed(state,recorder.words.word_cancelled_by_server()))}
+                match recorder.launch.start(executable,config,state.current) {
+                    Err(e)=>{return Step(None,failed(state,recorder.words.word_spawn_failed()))}
+                    Ok(started)=>{
+                        (child,paths)=move started;next.paths=paths;next.phase=2;next.started=now;next.current.token=can.text.empty()
+                        job=state.current.job;assignment=state.current.assignment
+                        n=recorder.model.event(borrow mut next,job,assignment,recorder.words.word_running(),recorder.words.word_recording_started(),recorder.model.empty_data())
+                        return Step(Some(move child),next)
+                    }
+                }
+            }
+            return Step(None,next)
+        }
+        Some(child)=>{
+            var receipt:Option<ProcessExit> =None
+            match process.try_wait(child) {Err(e)=>{next.stop_requested=true} Ok(found)=>{receipt=found}}
+            match receipt {
+                Some(status)=>{
+                    match process.close(move child) {
+                        Err(failure)=>{(retained,error)=move failure;next.stop_requested=true;return Step(Some(move retained),next)}
+                        Ok(done)=>{
+                            removed=recorder.paths.remove(state.paths.stop)
+                            job=state.current.job;assignment=state.current.assignment
+                            if status.code!=0 {return Step(None,failed(next,recorder.words.word_native_exit_failed()))}
+                            var size:u64=0
+                            match recorder.paths.size(state.paths.output) {Err(e)=>{return Step(None,failed(next,recorder.words.word_artifact_missing()))} Ok(n)=>{size=n}}
+                            if size==0 {return Step(None,failed(next,recorder.words.word_artifact_empty()))}
+                            var data=recorder.model.empty_data();data.path=state.paths.output;data.size=size;data.code=status.code;data.local_only=config.local_only
+                            data.tag=state.current.tag;data.session=state.current.session;data.duration=now-state.started
+                            data.filename=recorder.words.word_output_mp4();data.mime=recorder.words.word_video_mp4()
+                            if state.current.audio&&!state.current.video {data.filename=recorder.words.word_output_m4a();data.mime=recorder.words.word_audio_mp4()}
+                            if config.local_only {
+                                next.completed=next.completed+1;if state.stop_requested {next.stopped=next.stopped+1}
+                                next.phase=0;next.current.upload_token=can.text.empty()
+                                n=recorder.model.event(borrow mut next,job,assignment,recorder.words.word_completed(),recorder.words.word_local_recorded(),data)
+                            } else {
+                                next.phase=6;next.receipt_due=now+config.ack_ms;next.artifact=data
+                                n=recorder.model.event(borrow mut next,job,assignment,recorder.words.word_finalizing(),recorder.words.word_local_recorded(),recorder.model.empty_data())
+                            }
+                            return Step(None,next)
+                        }
+                    }
+                }
+                None=>{}
+            }
+            if state.current.max_sec!=0&&now>=state.started+state.current.max_sec*1000 {next.stop_requested=true}
+            if now>=state.started+config.max_record_ms {next.stop_requested=true}
+            if next.stop_requested&&next.phase==2 {
+                marker=recorder.paths.marker(state.paths.stop)
+                next.phase=3;next.stop_due=now+config.stop_ms
+                if !marker {next.stop_due=now}
+            }
+            if next.phase==3&&now>=next.stop_due {
+                terminated=process.terminate(child);next.phase=4;next.term_due=now+config.term_ms
+                match terminated {Err(e)=>{next.term_due=now} Ok(done)=>{}}
+            }
+            if (next.phase==4||next.phase==5)&&now>=next.term_due {killed=process.kill(child);next.phase=5;next.term_due=now+1000}
+            return Step(Some(move child),next)
+        }
+    }
+}

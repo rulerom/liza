@@ -1,0 +1,47 @@
+import can.text
+import recorder.config
+import recorder.messages
+import recorder.paths
+import recorder.words
+pub struct Paths {pub directory:can.text.Value;pub output:can.text.Value;pub stop:can.text.Value}
+pub struct Started {pub child:process.Child;pub paths:Paths}
+fn argument(command:ProcessCommand,value:can.text.Value)->Result<ProcessCommand,u32> {
+    bytes=value.bytes;match process.argument(command,view bytes[0..value.length]) {Err(e)=>{return Err(1)} Ok(next)=>{return Ok(next)}}
+}
+fn decimal(value:u64)->can.text.Value {
+    var n=value;var bytes:[u8;20]=[0;20];var at:u32=20
+    while true {at=at-1;bytes[at]=u8(n%10)+48;n=n/10;if n==0 {break}}
+    match can.text.from_view(view bytes[at..20],20) {Err(e)=>{return can.text.empty()} Ok(v)=>{return v}}
+}
+pub fn valid(job:recorder.messages.Start)->bool {
+    if !recorder.paths.component(job.job)||!recorder.paths.component(job.assignment)||job.tag.length==0||job.session==0||job.token.length==0 {return false}
+    if job.profile.length!=0&&!can.text.equal(job.profile,recorder.words.word_consolidated_native()) {return false}
+    if !job.audio&&!job.video {return false}
+    return job.bitrate>=64&&job.bitrate<=20000&&job.max_sec<=86400
+}
+pub fn start(executable:Path,config:recorder.config.Config,job:recorder.messages.Start)->Result<Started,u32>:io,alloc {
+    if !valid(job) {return Err(1)}
+    job_dir=recorder.paths.join(config.output,job.job);directory=recorder.paths.join(job_dir,job.assignment)
+    var filename=recorder.words.word_output_mp4()
+    if job.audio&&!job.video {filename=recorder.words.word_output_m4a()}
+    output=recorder.paths.join(directory,filename);stop=recorder.paths.join(directory,recorder.words.word__native_recorder_stop())
+    if !recorder.paths.mkdir(config.output)||!recorder.paths.mkdir(job_dir)||!recorder.paths.mkdir(directory) {return Err(2)}
+    {bytes=output.bytes;match file.stat_utf8(view bytes[0..output.length]) {Err(e)=>{return Err(2)} Ok(info)=>{match info.kind {FileKind.Missing=>{} FileKind.Regular=>{return Err(3)} FileKind.Directory=>{return Err(3)} FileKind.Symlink=>{return Err(3)} FileKind.Other=>{return Err(3)}}}}}
+    if !recorder.paths.remove(stop) {return Err(2)}
+    var command=process.command(true)
+    match argument(command,recorder.words.word___server_url()) {Err(e)=>{return Err(e)} Ok(c1)=>{command=c1}}
+    match argument(command,config.server) {Err(e)=>{return Err(e)} Ok(c2)=>{command=c2}}
+    match argument(command,recorder.words.word___conference_tag()) {Err(e)=>{return Err(e)} Ok(c3)=>{command=c3}}
+    match argument(command,job.tag) {Err(e)=>{return Err(e)} Ok(c4)=>{command=c4}}
+    match argument(command,recorder.words.word___output()) {Err(e)=>{return Err(e)} Ok(c5)=>{command=c5}}
+    match argument(command,output) {Err(e)=>{return Err(e)} Ok(c6)=>{command=c6}}
+    match argument(command,recorder.words.word___stop_file()) {Err(e)=>{return Err(e)} Ok(c7)=>{command=c7}}
+    match argument(command,stop) {Err(e)=>{return Err(e)} Ok(c8)=>{command=c8}}
+    match argument(command,recorder.words.word___bitrate()) {Err(e)=>{return Err(e)} Ok(c9)=>{command=c9}}
+    match argument(command,decimal(job.bitrate)) {Err(e)=>{return Err(e)} Ok(c10)=>{command=c10}}
+    if job.audio&&!job.video {match argument(command,recorder.words.word___only_audio()) {Err(e)=>{return Err(e)} Ok(c11)=>{command=c11}}}
+    if job.video&&!job.audio {match argument(command,recorder.words.word___only_video()) {Err(e)=>{return Err(e)} Ok(c12)=>{command=c12}}}
+    key=recorder.words.word_VG_ACCESS_TOKEN();name=key.bytes;token=job.token.bytes
+    match process.environment(command,view name[0..key.length],view token[0..job.token.length]) {Err(e)=>{return Err(1)} Ok(c13)=>{command=c13}}
+    match process.spawn(executable,command) {Err(e)=>{return Err(4)} Ok(child)=>{return Ok(Started(move child,Paths(directory,output,stop)))}}
+}

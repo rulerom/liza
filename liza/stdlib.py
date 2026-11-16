@@ -178,6 +178,9 @@ def attach(program):
         ('__liza_process_close',['process.Child'],'u32',[], 'io,alloc'),
         ('__liza_fs_stat',['Path'],'__liza_FileInfo',[], 'io'),
         ('__liza_fs_op',['Path','u32'],'u32',[], 'io'),
+        ('__liza_fs_utf8_stat',['View<u8>'],'__liza_FileInfo',[], 'io'),
+        ('__liza_fs_utf8_op',['View<u8>','u32'],'u32',[], 'io'),
+        ('__liza_fs_utf8_file',['View<u8>','bool'],'__liza_FileOpen',[], 'io'),
     ]
     reactor_externals += tls_externals
     reactor_externals += group_externals
@@ -208,7 +211,9 @@ def link_flags(module):
     fs_names = {n for n in names if n.startswith('__liza_fs_')}
     libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names-group_names-tls_names-process_names-fs_names else []) + (['file'] if names & file_names else [])
     if process_names: libraries.append('process')
-    if fs_names: libraries.append('fs')
+    if fs_names:
+        libraries.append('fs')
+        if 'file' not in libraries: libraries.append('file')
     if worker_names: libraries.append('workers')
     if channel_names: libraries.append('channels')
     if group_names: libraries.append('sg3')

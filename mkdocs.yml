@@ -142,6 +142,7 @@ nav:
       - HTTPS/WSS и TLS: tls-transport.md
       - Дочерние процессы: child-process.md
       - CAN Echo Worker: can-worker.md
+      - Recorder Agent: recorder-agent.md
       - Scoped-группы: scoped-groups.md
       - Изолированные workers: scoped-workers.md
       - Scoped-канал u32: scoped-channels.md

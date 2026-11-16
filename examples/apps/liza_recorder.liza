@@ -1,0 +1,20 @@
+import recorder.config
+import recorder.agent
+fn main()->u32:io,alloc {
+    match recorder.config.read() {Err(e)=>{log=console.errln("Usage: liza-recorder IPv4:port peer node token-file ca|- run-ms native-recorder config.json");return 2} Ok(config)=>{
+        match cli.path_arg(7) {None=>{return 2} Some(executable)=>{
+            var now:u64=0;match net.monotonic_ms() {Err(e)=>{return 3} Ok(n)=>{now=n}}
+            until=now+u64(config.network.run_ms);var generation:u64=1
+            while true {
+                match recorder.agent.run(executable,config,generation,until) {
+                    Err(e)=>{log=console.errln("Recorder agent failed; local artifacts retained");return e}
+                    Ok(stats)=>{
+                        if !stats.reconnect {log=console.write("Recorder local completed=");n=console.print_u64(stats.completed);line=console.println("");return 0}
+                        if generation>u64(config.network.reconnects) {return 3}
+                        generation=generation+1;log=console.println("Recorder CAN reconnect")
+                    }
+                }
+            }
+        }}
+    }}
+}

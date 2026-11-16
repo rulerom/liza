@@ -1,0 +1,148 @@
+import can.connection
+import can.socket
+import can.config
+import can.storage
+import can.text
+import recorder.config
+import recorder.messages
+import recorder.model
+import recorder.encode
+import recorder.child
+import recorder.upload
+import recorder.words
+pub struct Stats {pub completed:u64;pub stopped:u64;pub ready:bool;pub reconnect:bool}
+fn clock()->u64:io {match net.monotonic_ms() {Err(e)=>{return 0} Ok(now)=>{return now}}}
+fn exchange(link:can.connection.Connection,bundle:can.storage.Bundle,upload_buffer:memory.Buffer<u8>,executable:Path,config:recorder.config.Config,generation:u64,run_until:u64)->Result<Stats,u32>:io,alloc {
+    (crypto,initial_reactor,id,request,proof)=move link
+    (network,initial_document,initial_scratch,initial_output)=move bundle
+    var reactor=move initial_reactor
+    var socket=can.socket.create(move crypto,id,move network,request,proof,clock()+u64(config.network.operation_ms),config.network.close_ms)
+    var document=move initial_document;var scratch=move initial_scratch;var output=move initial_output
+    var transfer=recorder.upload.create(move upload_buffer)
+    var slot:Option<process.Child> =None
+    var state=recorder.model.create(config.network.node,generation)
+    var upgraded=false;var hello_due:u64=0;var stopping=false;var network_dead=false;var failed=false;var closing=false;var peer_closing=false;var reported_offset:u64=0
+    while true {
+        now=clock();if now==0 {failed=true;network_dead=true;if state.phase>=2&&state.phase<6 {state.phase=4;state.term_due=0}}
+        if now>=run_until {stopping=true;state.stop_requested=true}
+        match net.reactor_shutdown_requested(reactor) {Err(e)=>{failed=true;network_dead=true} Ok(requested)=>{if requested!=0 {stopping=true;state.stop_requested=true}}}
+        if network_dead {n=recorder.model.invalidate(borrow mut state)}
+        (next_slot,next_state)=recorder.child.tick(move slot,state,executable,config,now);slot=move next_slot;state=next_state
+        if !network_dead {
+            n=recorder.model.publication(borrow mut state,now)
+            (next_transfer,upload_reactor,upload_doc,upload_temp,uploaded)=recorder.upload.tick(move transfer,move reactor,move document,move scratch,config.network,state.current,state.paths.output,state.artifact.size,state.phase==7,now)
+            transfer=move next_transfer;reactor=move upload_reactor;document=move upload_doc;scratch=move upload_temp
+            if state.phase==7&&(uploaded.offset>=reported_offset+1048576||uploaded.mode==5) {
+                log=console.write("Recorder storage bytes=");amount=console.print_u64(uploaded.offset);line=console.println("");reported_offset=uploaded.offset
+            }
+            if state.phase==7&&(uploaded.failed||uploaded.mode==5) {
+                job=state.current.job;assignment=state.current.assignment
+                if uploaded.failed {
+                    state.phase=0;state.current.upload_token=can.text.empty();data=state.artifact
+                    n2=recorder.model.event(borrow mut state,job,assignment,recorder.words.word_failed(),recorder.words.word_upload_failed(),data)
+                } else {
+                    state.artifact.blob=uploaded.blob;state.artifact.url=uploaded.url
+                    state.phase=8;state.receipt_due=now+config.ack_ms;data=state.artifact
+                    n3=recorder.model.event(borrow mut state,job,assignment,recorder.words.word_artifact_ready(),recorder.words.word_artifact_ready(),data)
+                }
+                (reset,reset_reactor)=recorder.upload.reset(move transfer,move reactor);transfer=move reset;reactor=move reset_reactor
+                reported_offset=0
+            }
+        }
+        if network_dead {
+            var active=false;match move slot {None=>{slot=None} Some(child)=>{active=true;slot=Some(move child)}}
+            if !active {break}
+            waited=net.reactor_poll(reactor,100);continue
+        }
+        if upgraded&&!closing {
+            status=recorder.model.heartbeat(borrow mut state,now,u64(config.network.operation_ms))
+            if status!=0 {network_dead=true;continue}
+        }
+        if upgraded&&!peer_closing&&!state.registered&&hello_due!=0&&now>=hello_due {failed=true;network_dead=true;continue}
+        if upgraded&&can.socket.can_send(socket) {
+            match recorder.model.take(borrow mut state) {None=>{} Some(queued)=>{
+                if queued.generation!=generation {failed=true;network_dead=true;continue}
+                if queued.kind==4 {status_bytes=queued.status.bytes;log=console.write("Recorder event ");status_log=console.write_bytes(view status_bytes[0..queued.status.length]);separator=console.write(" monotonic_ms=");timestamp=console.print_u64(now);line=console.println("")}
+                (encoded,length,result)=recorder.encode.message(move output,queued,config.network.node,config.network.token);output=move encoded
+                match result {Err(e)=>{failed=true;network_dead=true;continue} Ok(done)=>{}}
+                {bytes=memory.view(output);(next_socket,sent)=can.socket.send(move socket,1,view bytes[0..length],now+u64(config.network.operation_ms));socket=move next_socket
+                match sent {Err(e)=>{failed=true;network_dead=true} Ok(accepted)=>{if !accepted {failed=true;network_dead=true}}}}
+                if network_dead {continue}
+            }}
+        }
+        var active=false;match move slot {None=>{slot=None} Some(child)=>{active=true;slot=Some(move child)}}
+        if stopping&&!active&&state.phase==0&&state.count==0&&can.socket.can_send(socket)&&!closing {
+            socket=can.socket.stop(move socket,now+u64(config.network.close_ms));closing=true
+        }
+        var until=run_until
+        if stopping {until=now+100}
+        if state.registered&&state.heartbeat_due<until {until=state.heartbeat_due}
+        if state.waiting_heartbeat&&state.heartbeat_ack_due<until {until=state.heartbeat_ack_due}
+        if upgraded&&!peer_closing&&!state.registered&&hello_due<until {until=hello_due}
+        if (active||state.phase!=0)&&now+100<until {until=now+100}
+        if state.phase==7 {until=now;if !recorder.upload.buffered(transfer) {until=now+2}}
+        (next_socket,next_reactor,event)=can.socket.step(move socket,move reactor,now,until);socket=move next_socket;reactor=move next_reactor
+        match event {
+            can.socket.Event.Idle=>{}
+            can.socket.Event.Upgraded=>{
+                upgraded=true;hello_due=now+u64(config.network.operation_ms)
+                hello=recorder.model.Output(1,can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),recorder.model.empty_data(),can.text.empty(),0,generation)
+                n=recorder.model.enqueue(borrow mut state,hello)
+            }
+            can.socket.Event.Message(frame)=>{
+                if !closing&&!peer_closing {
+                    bytes=frame.bytes;var i:u32=0;while i<frame.length {document=memory.set(move document,i,bytes[i]);i=i+1}
+                    (next_document,next_scratch,result)=recorder.messages.parse(move document,frame.length,move scratch);document=move next_document;scratch=move next_scratch
+                    match result {Err(e)=>{failed=true;network_dead=true} Ok(message)=>{
+                        ready=state.registered
+                        status=recorder.model.receive(borrow mut state,message,generation,now,config)
+                        if status!=0 {failed=true;network_dead=true}
+                        if !ready&&state.registered {log=console.println("Recorder CAN ready")}
+                    }}
+                }
+            }
+            can.socket.Event.PeerClosed=>{if !closing {peer_closing=true;state.stop_requested=true;n=recorder.model.invalidate(borrow mut state)}}
+            can.socket.Event.Closed=>{if !closing {network_dead=true};if closing {break}}
+            can.socket.Event.Failed(error)=>{
+                network_dead=true
+                match error {can.socket.Error.Protocol=>{failed=true} can.socket.Error.Deadline=>{}
+                    can.socket.Error.Tls(tls_error)=>{match tls_error {
+                        TlsError.Transport(e)=>{} TlsError.Protocol(e)=>{} TlsError.Deadline=>{}
+                        TlsError.Invalid=>{failed=true} TlsError.ManagedBudget=>{failed=true} TlsError.OutOfMemory=>{failed=true} TlsError.WrongThread=>{failed=true} TlsError.Configuration=>{failed=true} TlsError.Verification(e)=>{failed=true} TlsError.Output=>{failed=true}
+                    }}
+                }
+            }
+        }
+    }
+    // Discharge the empty owned variant; all paths above retain a live Child.
+    match move slot {None=>{} Some(child)=>{
+        var owned=move child
+        while true {match process.try_wait(owned) {Err(e)=>{} Ok(found)=>{match found {None=>{} Some(status)=>{
+            match process.close(move owned) {Ok(done)=>{break} Err(failure)=>{(next,error)=move failure;owned=move next}}
+        }}}};killed=process.kill(owned);waited=net.reactor_poll(reactor,100)}
+    }}
+    reactor=recorder.upload.close(move transfer,move reactor)
+    (last_reactor,closed)=can.socket.close(move socket,move reactor);reactor_closed=net.reactor_close(move last_reactor)
+    a=memory.release(move document);b=memory.release(move scratch);c=memory.release(move output)
+    if failed {return Err(3)}
+    return Ok(Stats(state.completed,state.stopped,state.registered,network_dead&&!stopping))
+}
+fn allocate(link:can.connection.Connection,executable:Path,config:recorder.config.Config,generation:u64,until:u64)->Result<Stats,u32>:io,alloc {
+    match memory.create(106496) {Err(e)=>{closed=can.connection.close(move link);return Err(2)} Ok(region)=>{
+    match memory.alloc<u8>(region,12288,0) {Err(e)=>{closed=memory.close(move region);c=can.connection.close(move link);return Err(2)} Ok(network)=>{
+    match memory.alloc<u8>(region,4096,0) {Err(e)=>{a=memory.release(move network);closed=memory.close(move region);c=can.connection.close(move link);return Err(2)} Ok(document)=>{
+    match memory.alloc<u8>(region,1024,0) {Err(e)=>{a=memory.release(move network);b=memory.release(move document);closed=memory.close(move region);c=can.connection.close(move link);return Err(2)} Ok(scratch)=>{
+    match memory.alloc<u8>(region,4096,0) {Err(e)=>{a=memory.release(move network);b=memory.release(move document);d=memory.release(move scratch);closed=memory.close(move region);c=can.connection.close(move link);return Err(2)} Ok(output)=>{
+        match memory.alloc<u8>(region,77824,0) {Err(e)=>{a=memory.release(move network);b=memory.release(move document);c=memory.release(move scratch);d=memory.release(move output);closed=memory.close(move region);link_closed=can.connection.close(move link);return Err(2)} Ok(upload_buffer)=>{
+        bundle=can.storage.Bundle(move network,move document,move scratch,move output)
+        result=exchange(move link,move bundle,move upload_buffer,executable,config,generation,until);closed=memory.close(move region);return result
+        }}
+    }}
+    }}
+    }}
+    }}
+    }}
+}
+pub fn run(executable:Path,config:recorder.config.Config,generation:u64,until:u64)->Result<Stats,u32>:io,alloc {
+    match can.connection.open(config.network,until+60000) {Err(e)=>{return Err(3)} Ok(link)=>{return allocate(move link,executable,config,generation,until)}}
+}
