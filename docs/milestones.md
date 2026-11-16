@@ -9,7 +9,8 @@ TCP Proxy Operations, ресурсные структуры, `borrow` / `borrow 
 subviews, владеющий UTF-8 String, StringBuilder и потоковые JSON check/format,
 а также native workers, scoped-сеть с одним или двумя независимыми owners,
 HTTP/WS на Liza и HTTPS/WSS с обязательной проверкой сервера.
-Ближайшее приложение — [CAN-клиент поверх WSS](roadmap.md#can-client), пока не реализован.
+[CAN Echo Worker](can-worker.md) реализован с локальной WSS-приёмкой;
+live-задание `example.echo` завершено с подтверждением результата в админке.
 Следующий основной рубеж — воспроизводимый [Verified Network Gateway](network-gateway.md).
 
 Номера 0.0.x ниже обозначают исторические этапы, а не единую версию всех

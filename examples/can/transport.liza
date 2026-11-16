@@ -1,0 +1,198 @@
+import httpws.bytes
+import httpws.crypto
+import httpws.http
+import can.text
+import can.words
+import can.messages
+import can.logic
+import can.encode
+import can.websocket
+import can.config
+import can.storage
+pub enum Error {Tls(TlsError);Protocol;Policy;Deadline;Memory}
+pub struct Stats {pub generation:u64;pub completed:u64;pub cancelled:u64;pub ready:bool}
+fn retry(e:ReactorError)->bool {
+    match e {ReactorError.Interrupted=>{return true} ReactorError.WouldBlock=>{return true}
+    ReactorError.AddressInUse=>{return false} ReactorError.PermissionDenied=>{return false}
+    ReactorError.Disconnected=>{return false} ReactorError.InvalidRange=>{return false}
+    ReactorError.Other=>{return false} ReactorError.InvalidCapacity=>{return false}
+    ReactorError.Full=>{return false} ReactorError.InvalidConnection=>{return false}
+    ReactorError.Exhausted=>{return false} ReactorError.OutOfMemory=>{return false}}
+}
+fn state_number(state:TlsState)->u32 {
+    match state {TlsState.Handshake=>{return 0} TlsState.Open=>{return 1} TlsState.Closing=>{return 2} TlsState.Done=>{return 3} TlsState.Dead=>{return 4} TlsState.Unavailable=>{return 5}}
+}
+fn closed(outcome:TlsOutcome)->bool {match outcome {TlsOutcome.Progress=>{return false} TlsOutcome.Want=>{return false} TlsOutcome.Closed=>{return true}}}
+// Log schema diagnostics only; never print the received message or credentials.
+fn message_error(error:can.messages.Error)->u32:io {
+    match error {
+        can.messages.Error.Missing(field)=>{a=console.errln("CAN message: missing required field");b=console.print_u64(u64(field));c=console.println("")}
+        can.messages.Error.WrongType(field)=>{a=console.errln("CAN message: wrong field type");b=console.print_u64(u64(field));c=console.println("")}
+        can.messages.Error.TooLarge(field)=>{a=console.errln("CAN message: field exceeds limit")}
+        can.messages.Error.BadValue(field)=>{a=console.errln("CAN message: invalid field value")}
+        can.messages.Error.Json(json_error)=>{a=console.errln("CAN message: invalid JSON")}
+    }
+    return 0
+}
+// TLS ciphertext pump follows the accepted TLS-B driver, with CAN deadlines.
+fn exchange(session:tls.Session,r:net.Reactor,id:net.Connection,bundle:can.storage.Bundle,request:httpws.bytes.Wire,proof:[u8;28],config:can.config.Config,generation:u64,run_until:u64,started:u64)->Result<Stats,Error>:io,alloc {
+    (initial_io,initial_document,initial_scratch,initial_output)=move bundle
+    var input=move initial_io;var document=move initial_document;var scratch=move initial_scratch;var output=move initial_output
+    var app=can.websocket.create(request);var model=can.logic.create(config.node,generation)
+    var failure:Option<Error> =None
+    var connected=false;var state:u32=0;var done=false
+    var incoming:u32=0;var fed:u32=0;var outgoing:u32=0;var sent:u32=0
+    var plaintext:u32=0;var cursor:u32=0;var tcp_eof=false;var write_blocked=false;var plaintext_blocked=false;var work_since_poll:u32=0
+    connect_due=started+u64(config.operation_ms)
+    var hello_due:u64=0;var send_due=connect_due;var close_due:u64=0;var stopping=false;var local_stop=false
+    while !done {
+        var now:u64=0
+        match net.monotonic_ms() {Err(e)=>{failure=Some(Error.Tls(TlsError.Transport(e)));break} Ok(n)=>{now=n}}
+        if !app.upgraded&&now>=connect_due {failure=Some(Error.Deadline);break}
+        if app.upgraded&&!model.registered&&hello_due!=0&&now>=hello_due {failure=Some(Error.Deadline);break}
+        if app.pending.len!=0&&now>=send_due {failure=Some(Error.Deadline);break}
+        if now>=run_until&&!stopping {stopping=true;local_stop=true;close_due=now+u64(config.close_ms);model.active=false}
+        if close_due!=0&&now>=close_due {failure=Some(Error.Deadline);break}
+        var progress=false
+        if !connected {match net.reactor_finish_connect(r,id) {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)));break}} Ok(ready)=>{connected=ready;progress=ready}}}
+        if connected {
+            if state==0 {match tls.handshake(session,now) {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{if state_number(step.state)!=state {progress=true};state=state_number(step.state)}}}
+            else if state==1 {
+                if app.pending.len!=0 {
+                    if !plaintext_blocked {
+                        wire=app.pending.data;var amount=app.pending.len-app.sent;if amount>4096 {amount=4096}
+                        match tls.write(session,view wire[0..app.pending.len],app.sent,amount,now) {
+                            Err(e)=>{failure=Some(Error.Tls(e));break}
+                            Ok(step)=>{state=state_number(step.state);if step.count==0&&(step.wants&2)!=0 {plaintext_blocked=true};if step.count!=0 {progress=true;app.sent=app.sent+step.count;if app.sent==app.pending.len {app.pending.len=0;app.sent=0}}}
+                        }
+                    }
+                } else if cursor<plaintext&&!app.closed {
+                    var byte:u8=0;{data=memory.view(input);byte=data[8192+cursor]};cursor=cursor+1;progress=true
+                    match can.websocket.feed(borrow mut app,byte,proof) {
+                        Err(e)=>{failure=Some(Error.Protocol);break}
+                        Ok(event)=>{
+                            if event==2 {failure=Some(Error.Protocol);break}
+                            if event==11 {hello_due=now+u64(config.operation_ms)}
+                            if event==1&&!stopping {
+                                bytes=app.parser.message;var i:u32=0
+                                while i<app.parser.size {document=memory.set(move document,i,bytes[i]);i=i+1}
+                                (next_document,next_scratch,result)=can.messages.parse(move document,app.parser.size,move scratch);document=move next_document;scratch=move next_scratch
+                                match result {Err(e)=>{reported=message_error(e);failure=Some(Error.Protocol)} Ok(message)=>{
+                                    ready_before=model.registered
+                                    status=can.logic.receive(borrow mut model,message,generation,now,u64(config.operation_ms))
+                                    if status!=0 {if model.policy {failure=Some(Error.Policy)} else {failure=Some(Error.Protocol)}}
+                                    if !ready_before&&model.registered {log=console.println("CAN ready")}
+                                }}
+                                match failure {Some(e)=>{break} None=>{}}
+                            }
+                            if event==9 {control=app.parser.control;control_length=app.parser.control_size;if can.websocket.frame(borrow mut app,10,view control[0..control_length])!=0 {failure=Some(Error.Protocol);break};send_due=now+u64(config.operation_ms)}
+                            if event==8 {
+                                if !stopping {stopping=true;close_due=now+u64(config.close_ms);model.active=false}
+                                if !app.close_sent {control=app.parser.control;control_length=app.parser.control_size;if can.websocket.frame(borrow mut app,8,view control[0..control_length])!=0 {failure=Some(Error.Protocol);break};send_due=close_due}
+                            }
+                        }
+                    }
+                } else if !app.closed {
+                    (next,result)=tls.read(session,move input,8192,4096,now);input=move next
+                    match result {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{
+                        state=state_number(step.state);plaintext=step.count;cursor=0;if step.count!=0 {progress=true}
+                        if closed(step.outcome)&&!app.closed {failure=Some(Error.Protocol);break}
+                    }}
+                }
+                if app.closed&&app.pending.len==0 {state=2;progress=true}
+            }
+            if state==2&&(!app.closed||app.pending.len!=0) {failure=Some(Error.Protocol);break}
+            if state==2 {match tls.shutdown(session,now) {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{if state_number(step.state)!=state {progress=true};state=state_number(step.state)}}}
+            if fed<incoming {
+                {data=memory.view(input);match tls.feed(session,data,fed,incoming-fed,now) {Err(e)=>{failure=Some(Error.Tls(e))} Ok(step)=>{fed=fed+step.count;if step.count!=0 {progress=true}}}}
+                match failure {Some(e)=>{break} None=>{}}
+            }
+            if outgoing==0 {
+                (next,result)=tls.drain(session,move input,4096,4096,now);input=move next
+                match result {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{outgoing=step.count;sent=0;if outgoing!=0 {plaintext_blocked=false;progress=true}}}
+            }
+            if outgoing!=0&&!write_blocked {
+                {data=memory.view(input);match net.reactor_write(r,id,data,4096+sent,outgoing-sent) {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)))} else {write_blocked=true}} Ok(n)=>{if n==0 {failure=Some(Error.Tls(TlsError.Transport(ReactorError.Disconnected)))} else {sent=sent+n;progress=true;if sent==outgoing {outgoing=0;sent=0}}}}}
+                match failure {Some(e)=>{break} None=>{}}
+            }
+            if state==3&&outgoing==0 {
+                (next,result)=tls.drain(session,move input,4096,4096,now);input=move next
+                match result {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{outgoing=step.count;sent=0;if outgoing==0 {done=true;break};progress=true}}
+            }
+            if fed==incoming&&!tcp_eof&&state!=3 {
+                (next,result)=net.reactor_read(r,id,move input,0,4096);input=move next
+                match result {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)));break}} Ok(n)=>{incoming=n;fed=0;if n!=0 {progress=true} else {tcp_eof=true;progress=true;match tls.eof(session,now) {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{}}}}}
+            }
+        }
+        if app.upgraded&&!stopping {
+            status=can.logic.tick(borrow mut model,now,u64(config.operation_ms),cursor==plaintext)
+            if status!=0 {failure=Some(Error.Deadline);break}
+            if app.pending.len==0 {
+                match can.logic.take(borrow mut model) {None=>{} Some(queued)=>{
+                    if queued.generation!=generation {failure=Some(Error.Protocol);break}
+                    (encoded,length,result)=can.encode.message(move output,queued,config.token);output=move encoded
+                    match result {Err(e)=>{failure=Some(Error.Protocol);break} Ok(n)=>{}}
+                    {bytes=memory.view(output);if can.websocket.frame(borrow mut app,1,view bytes[0..length])!=0 {failure=Some(Error.Protocol)}}
+                    match failure {Some(e)=>{break} None=>{}}
+                    send_due=now+u64(config.operation_ms);progress=true
+                }}
+            }
+        }
+        if stopping&&app.upgraded&&!app.close_sent&&app.pending.len==0 {
+            code:[u8;2]=[3,232];if can.websocket.frame(borrow mut app,8,view code[0..2])!=0 {failure=Some(Error.Protocol);break};send_due=close_due;progress=true
+        }
+        if progress&&write_blocked {work_since_poll=work_since_poll+1}
+        if !progress||(write_blocked&&work_since_poll>=256) {
+            work_since_poll=0
+            var interest:u32=0;if fed==incoming&&!tcp_eof&&state!=3 {interest=1};if outgoing!=0 {interest=interest|2};if !connected {interest=3}
+            var until=run_until
+            if stopping {until=close_due} else {
+                if !app.upgraded&&connect_due<until {until=connect_due}
+                if app.upgraded&&!model.registered&&hello_due!=0&&hello_due<until {until=hello_due}
+                until=can.logic.deadline(model,until)
+            }
+            if app.pending.len!=0&&send_due<until {until=send_due}
+            var wait_ms:u32=0;if !progress&&until>now {wait_ms=u32(until-now)}
+            match net.reactor_interest(r,id,interest) {Err(e)=>{failure=Some(Error.Tls(TlsError.Transport(e)));break} Ok(n)=>{}}
+            match net.reactor_poll(r,wait_ms) {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)));break}} Ok(n)=>{}}
+            if write_blocked {match net.reactor_ready(r,id) {Err(e)=>{failure=Some(Error.Tls(TlsError.Transport(e)));break} Ok(flags)=>{if (flags&6)!=0 {write_blocked=false}}}}
+        }
+    }
+    if !local_stop {match failure {None=>{failure=Some(Error.Tls(TlsError.Transport(ReactorError.Disconnected)))} Some(error)=>{}}}
+    model.active=false;model.count=0
+    a=memory.release(move input);b=memory.release(move document);c=memory.release(move scratch);d=memory.release(move output)
+    match tls.destroy(move session) {Err(error)=>{failure=Some(Error.Tls(error))} Ok(n)=>{}}
+    match net.reactor_close(move r) {Err(error)=>{failure=Some(Error.Tls(TlsError.Transport(error)))} Ok(n)=>{}}
+    match failure {Some(error)=>{return Err(error)} None=>{return Ok(Stats(generation,model.completed,model.cancelled,model.registered))}}
+}
+fn start(session:tls.Session,config:can.config.Config,request:httpws.bytes.Wire,proof:[u8;28],generation:u64,until:u64,now:u64)->Result<Stats,Error>:io,alloc {
+    match net.reactor_create(0,1) {Err(e)=>{d=tls.destroy(move session);return Err(Error.Tls(TlsError.Transport(e)))} Ok(r)=>{
+        match net.reactor_stop_accepting(r) {Err(e)=>{c=net.reactor_close(move r);d=tls.destroy(move session);return Err(Error.Tls(TlsError.Transport(e)))} Ok(n)=>{}}
+        match net.reactor_connect_at(r,config.address) {Err(e)=>{c=net.reactor_close(move r);d=tls.destroy(move session);return Err(Error.Tls(TlsError.Transport(e)))} Ok(id)=>{
+            match memory.create(24576) {Err(e)=>{c=net.reactor_close(move r);d=tls.destroy(move session);return Err(Error.Memory)} Ok(region)=>{
+ match memory.alloc<u8>(region,12288,0) {Err(e)=>{c=memory.close(move region);closed=net.reactor_close(move r);destroyed=tls.destroy(move session);return Err(Error.Memory)} Ok(network)=>{
+ match memory.alloc<u8>(region,4096,0) {Err(e)=>{free0=memory.release(move network);c=memory.close(move region);closed=net.reactor_close(move r);destroyed=tls.destroy(move session);return Err(Error.Memory)} Ok(document)=>{
+ match memory.alloc<u8>(region,1024,0) {Err(e)=>{free1=memory.release(move document);free0=memory.release(move network);c=memory.close(move region);closed=net.reactor_close(move r);destroyed=tls.destroy(move session);return Err(Error.Memory)} Ok(scratch)=>{
+ match memory.alloc<u8>(region,4096,0) {Err(e)=>{free2=memory.release(move scratch);free1=memory.release(move document);free0=memory.release(move network);c=memory.close(move region);closed=net.reactor_close(move r);destroyed=tls.destroy(move session);return Err(Error.Memory)} Ok(output)=>{
+ bundle=can.storage.Bundle(move network,move document,move scratch,move output)
+ result=exchange(move session,move r,id,move bundle,request,proof,config,generation,until,now);closed=memory.close(move region);return result
+ }}
+ }}
+ }}
+ }}
+ }}
+
+        }}
+    }}
+}
+pub fn run(config:can.config.Config,generation:u64,until:u64)->Result<Stats,Error>:io,alloc {
+    var now:u64=0;match net.monotonic_ms() {Err(e)=>{return Err(Error.Tls(TlsError.Transport(e)))} Ok(n)=>{now=n}}
+    var nonce:[u8;16]=[0;16];var i:u32=0
+    while i<4 {match net.random_u32() {Err(e)=>{return Err(Error.Protocol)} Ok(n)=>{nonce[i*4]=u8.wrap(n>>24);nonce[i*4+1]=u8.wrap(n>>16);nonce[i*4+2]=u8.wrap(n>>8);nonce[i*4+3]=u8.wrap(n)}};i=i+1}
+    key=httpws.crypto.key(nonce);proof=httpws.crypto.accept(key)
+    host=config.host.bytes;peer=config.peer.bytes;ca=config.ca.bytes;target:[u8;4]=[47,99,97,110]
+    var request=httpws.bytes.empty()
+    match httpws.http.request(view host[0..config.host.length],view target[0..4],key) {Err(e)=>{return Err(Error.Protocol)} Ok(w)=>{request=w}}
+    if config.custom {match tls.create_with_ca(view peer[0..config.peer.length],view ca[0..config.ca.length],tls.managed_bytes(),now,until+u64(config.close_ms)) {Err(e)=>{return Err(Error.Tls(e))} Ok(session)=>{return start(move session,config,request,proof,generation,until,now)}}}
+    match tls.create(view peer[0..config.peer.length],tls.managed_bytes(),now,until+u64(config.close_ms)) {Err(e)=>{return Err(Error.Tls(e))} Ok(session)=>{return start(move session,config,request,proof,generation,until,now)}}
+}

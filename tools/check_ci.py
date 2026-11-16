@@ -43,6 +43,8 @@ COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline
 CASES = [
     (['tests/test_process.py', 'tests/native/process_child.c', 'tests/native/process_ownership.c'], {'test', 'process-child'}),
     (['examples/apps/process_child.liza'], {'test', 'docs', 'editor', 'process-child'}),
+    (['tests/test_can_codec.py', 'tests/test_can_worker.py'], {'test', 'tls-transport'}),
+    (['examples/can/*.liza', 'examples/apps/liza_can.liza'], {'test', 'editor', 'docs', 'tls-transport'}),
     (['tests/test_json_access.py'], {'test', 'json-access'}),
     (['tests/fixtures/can_examples.json'], {'test', 'editor', 'json-access'}),
     (['tests/fixtures/json_access.liza'], {'test', 'editor', 'json-access'}),

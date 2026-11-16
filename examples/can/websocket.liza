@@ -1,0 +1,26 @@
+import httpws.bytes
+import httpws.http
+import httpws.websocket
+pub struct State {pub header:httpws.bytes.Wire;pub parser:httpws.websocket.State;pub upgraded:bool;pub pending:httpws.bytes.Wire;pub sent:u32;pub closed:bool;pub close_sent:bool}
+pub fn create(request:httpws.bytes.Wire)->State {return State(httpws.bytes.empty(),httpws.websocket.create(),false,request,0,false,false)}
+pub fn frame(borrow mut state:State,opcode:u8,data:View<u8>)->u32:io {
+    if state.pending.len!=0 {return 1}
+    match net.random_u32() {Err(e)=>{return 1} Ok(mask)=>{match httpws.websocket.frame(opcode,data,mask) {Err(e)=>{return 1} Ok(wire)=>{state.pending=wire;state.sent=0}}}}
+    if opcode==8 {state.close_sent=true};return 0
+}
+// Events: 0=incomplete, 1=text, 2=binary, 8=close, 9=ping, 10=pong, 11=upgrade.
+pub fn feed(borrow mut state:State,byte:u8,proof:[u8;28])->Result<u32,u32> {
+    if !state.upgraded {
+        if state.header.len==8192 {return Err(1)}
+        state.header.data[state.header.len]=byte;state.header.len=state.header.len+1
+        if state.header.len>=4 {
+            n=state.header.len
+            if state.header.data[n-4]==13&&state.header.data[n-3]==10&&state.header.data[n-2]==13&&state.header.data[n-1]==10 {
+                bytes=state.header.data
+                match httpws.http.upgrade(view bytes[0..n],proof) {Err(e)=>{return Err(1)} Ok(value)=>{match value {None=>{return Err(1)} Some(head)=>{state.upgraded=true;return Ok(11)}}}}
+            }
+        };return Ok(0)
+    }
+    var parser=state.parser;result=httpws.websocket.feed(borrow mut parser,byte);state.parser=parser
+    match result {Err(e)=>{return Err(1)} Ok(event)=>{if event==8 {state.closed=true};return Ok(event)}}
+}
