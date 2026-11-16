@@ -32,7 +32,7 @@ fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Parsed 
     (c12,ca)=can.fields.text(move cursor,empty,empty,vg.words.ca_file(),false,1024);cursor=move c12
     (doc,temp,valid)=can.fields.finish(move cursor)
     var first=net.ipv4(127,0,0,1,554);var second=net.ipv4(127,0,0,1,443);var ok=valid
-    if camera_port>65535||vg_port>65535||version>4294967295||run_ms<100||run_ms>3600000||peer.length==0||login.length==0||password.length==0||conference.length==0 {ok=false}
+    if camera_port>65535||vg_port>65535||version>4294967295||(run_ms!=0&&run_ms<100)||run_ms>3600000||peer.length==0||login.length==0||password.length==0||conference.length==0 {ok=false}
     match address(camera,u16.wrap(camera_port)) {Err(e)=>{ok=false} Ok(v)=>{first=v}}
     match address(vg_ip,u16.wrap(vg_port)) {Err(e)=>{ok=false} Ok(v)=>{second=v}}
     var host=peer
