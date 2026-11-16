@@ -794,3 +794,42 @@ fn feed(borrow mut state:State,byte:u8)->u32 { return put(borrow mut state.parse
               (identifier)
               (identifier))
             (identifier)))))))
+
+==================
+Static byte literals and byte escapes
+==================
+fn main()->u32 {
+  method=b"PLAY"
+  binary=b"\0\xff\r\n\t\\\""
+  empty=b""
+  return first(b"Content-Length")
+}
+---
+
+(source_file
+  (function_definition
+    (identifier)
+    (parameters)
+    (builtin_type)
+    (block
+      (assignment
+        (identifier)
+        (byte_string))
+      (assignment
+        (identifier)
+        (byte_string
+          (byte_escape_sequence)
+          (byte_escape_sequence)
+          (byte_escape_sequence)
+          (byte_escape_sequence)
+          (byte_escape_sequence)
+          (byte_escape_sequence)
+          (byte_escape_sequence)))
+      (assignment
+        (identifier)
+        (byte_string))
+      (return_statement
+        (call_expression
+          (identifier)
+          (arguments
+            (byte_string)))))))
