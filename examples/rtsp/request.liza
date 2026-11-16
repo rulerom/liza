@@ -1,24 +1,24 @@
-import rtsp.words
 import rtsp.bytes
 import recorder.request
 import can.text
 import httpws.bytes
-pub fn make(method:can.text.Value,target:can.text.Value,cseq:u32,session:can.text.Value)->Result<httpws.bytes.Wire,u32> {
-    values:[can.text.Value;3]=[method,target,session];var i:u32=0
-    while i<3 {v=values[i];var j:u32=0;while j<v.length {b=v.bytes[j];if b<33||b>126 {return Err(1)};j=j+1};i=i+1}
-    var out=httpws.bytes.empty();space:[u8;1]=[32]
-    match rtsp.bytes.append(out,method) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
-    n=httpws.bytes.append(borrow mut out,view space[0..1])
+pub fn make(method:View<u8>,target:can.text.Value,cseq:u32,session:can.text.Value)->Result<httpws.bytes.Wire,u32> {
+    var at:u32=0;while at<method.len {b=method[at];if b<33||b>126 {return Err(1)};at=at+1}
+    values:[can.text.Value;2]=[target,session];var i:u32=0
+    while i<2 {v=values[i];var j:u32=0;while j<v.length {b=v.bytes[j];if b<33||b>126 {return Err(1)};j=j+1};i=i+1}
+    var out=httpws.bytes.empty()
+    if !httpws.bytes.append(borrow mut out,method) {return Err(1)}
+    if !httpws.bytes.append(borrow mut out,b" ") {return Err(1)}
     match rtsp.bytes.append(out,target) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
-    match rtsp.bytes.append(out,rtsp.words.rtsp()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+    if !httpws.bytes.append(borrow mut out,b" RTSP/1.0\r\nCSeq: ") {return Err(1)}
     match rtsp.bytes.append(out,recorder.request.decimal(u64(cseq))) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
-    match rtsp.bytes.append(out,rtsp.words.ua()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+    if !httpws.bytes.append(borrow mut out,b"\r\nUser-Agent: Liza-RTSP/0.1") {return Err(1)}
     if session.length!=0 {
-        match rtsp.bytes.append(out,rtsp.words.session_header()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+        if !httpws.bytes.append(borrow mut out,b"\r\nSession: ") {return Err(1)}
         match rtsp.bytes.append(out,session) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
     }
-    method_data=method.bytes
-    if rtsp.bytes.equal(view method_data[0..method.length],rtsp.words.describe()) {match rtsp.bytes.append(out,rtsp.words.accept()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}}
-    if rtsp.bytes.equal(view method_data[0..method.length],rtsp.words.setup()) {match rtsp.bytes.append(out,rtsp.words.transport()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}}
-    return rtsp.bytes.append(out,rtsp.words.end())
+    if rtsp.bytes.equal(method,b"DESCRIBE") {if !httpws.bytes.append(borrow mut out,b"\r\nAccept: application/sdp") {return Err(1)}}
+    if rtsp.bytes.equal(method,b"SETUP") {if !httpws.bytes.append(borrow mut out,b"\r\nTransport: RTP/AVP/TCP;unicast;interleaved=0-1") {return Err(1)}}
+    if !httpws.bytes.append(borrow mut out,b"\r\n\r\n") {return Err(1)}
+    return Ok(out)
 }

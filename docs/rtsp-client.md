@@ -56,6 +56,10 @@ reserve 8 МиБ; это отдельная величина от Region и `tls
 
 ## Протокол и владение
 
+Постоянные методы и заголовки записываются [байтовыми литералами](byte-literals.md),
+например `b"PLAY"` и `b"Content-Length"`. Они передаются как readonly views;
+модуль `rtsp.words` с десятичными ASCII-массивами больше не требуется.
+
 Один Reactor владеет UDP endpoint и двумя исходящими TCP-соединениями:
 RTSP камеры и WSS сервера. UDP endpoint исключает TCP listener, но не
 исходящие TCP slots. Числовой socket handle приложению не выдаётся.

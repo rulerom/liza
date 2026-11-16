@@ -20,6 +20,18 @@ class RtspLowering(unittest.TestCase):
         cls.functions={fn.name:fn for fn in cls.module}
         cls.text=llvm(cls.module)
 
+    def test_protocol_constants_use_static_views(self):
+        self.assertFalse(any(name.startswith('rtsp.words.') for name in self.functions))
+        request=self.functions['rtsp.request.make']
+        self.assertEqual(request.params[0]['type'],'View<u8>')
+        constants=[op for block in request.blocks for op in block.operations if op.op=='bytes.literal']
+        self.assertIn('\r\nTransport: RTP/AVP/TCP;unicast;interleaved=0-1',[op.args[0] for op in constants])
+        for name in ('rtsp.bytes.equal','rtsp.bytes.prefix','rtsp.bytes.parameter'):
+            fn=self.functions[name]
+            self.assertEqual([p['type'] for p in fn.params],['View<u8>','View<u8>'])
+            body=function_body(self.text,name)
+            self.assertNotRegex(body,r'alloca|memcpy|memmove|\[1024 x i8\]')
+
     def test_no_parser_snapshots_or_loop_carried_event(self):
         step=self.functions['rtsp.tcp.step']
         operations=[op for block in step.blocks for op in block.operations]

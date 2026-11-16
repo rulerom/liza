@@ -1,0 +1,12 @@
+fn first(data:View<u8>)->u8 {
+    return data[0]
+}
+
+fn main()->u32 {
+    method=b"PLAY"
+    if method.len!=4||first(method)!=80 {return 1}
+    binary=b"\0\xff\r\n"
+    if binary.len!=4||binary[1]!=255 {return 2}
+    if first(b"Content-Length")!=67 {return 3}
+    return 0
+}

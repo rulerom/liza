@@ -35,6 +35,8 @@ def check():
     assert lexer.name == 'Liza', 'Liza Pygments entry point not installed'
     assert (Keyword, 'mut') in list(lexer.get_tokens('borrow mut value:Holder'))
     assert (Keyword, 'borrow') in list(lexer.get_tokens('borrow value:Holder'))
+    assert (String.Double, 'b"') in list(lexer.get_tokens('b"PLAY"'))
+    assert (String.Escape, '\\xff') in list(lexer.get_tokens('b"\\xff"'))
     sources = sorted((ROOT/'examples').rglob('*.liza'))
     for source in sources:
         errors = [(t, text) for t, text in lexer.get_tokens(source.read_text(encoding='utf-8')) if t in Error]

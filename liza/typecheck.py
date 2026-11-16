@@ -48,7 +48,9 @@ def infer_expression(expr, names, value_types, signatures, expected=None, struct
         token = node.token
         if node.kind == "call" and node.type_args and not token.text.startswith(("memory.", "vec.")) and (mono is None or token.text not in mono.templates):
             raise CompileError(token, "non-generic declaration does not accept type arguments")
-        if node.kind == 'text':
+        if node.kind == 'bytes':
+            bind(var, 'View<u8>', token)
+        elif node.kind == 'text':
             bind(var, 'Text', token)
         elif node.kind == 'literal':
             integers.append((var, token))

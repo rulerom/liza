@@ -42,6 +42,10 @@ def check_borrows(fn, types, match_types=None, variants=None, structs=None, sign
             binding = replace(binding, owners=frozenset({('view_parameter', binding.identity)}))
         initial[token.text] = binding
     depths = {b.identity:b.depth for b in initial.values()}
+    # Static bytes have no movable source owner. Descriptor scopes do not
+    # shorten the backing lifetime, including nested subviews and assignments.
+    static_bytes = ('static_bytes',)
+    depths[static_bytes] = 0
     for binding in initial.values():
         for owner in binding.owners:
             depths[owner] = 0
@@ -50,6 +54,8 @@ def check_borrows(fn, types, match_types=None, variants=None, structs=None, sign
         return any(identity in scope for scope in loans)
 
     def expr(node, env):
+        if node.kind == 'bytes':
+            return {static_bytes}
         if node.kind == 'borrow_mut':
             raise CompileError(node.token, 'borrow mut is only allowed for a mutable call argument')
         if node.kind == 'name':

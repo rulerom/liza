@@ -1,4 +1,3 @@
-import rtsp.words
 import rtsp.bytes
 import can.text
 pub struct Nal {pub bytes:[u8;256];pub length:u32}
@@ -27,16 +26,16 @@ pub fn parse(data:View<u8>)->Result<Video,u32> {
         var end=pos;while end<data.len&&data[end]!=10&&data[end]!=13 {end=end+1}
         line=view data[pos..end]
         if line.len>=2&&line[0]==109&&line[1]==61 {
-            if video {break};video=rtsp.bytes.prefix(line,rtsp.words.video())
+            if video {break};video=rtsp.bytes.prefix(line,b"m=video ")
         } else if video {
-            if rtsp.bytes.prefix(line,rtsp.words.rtpmap()) {
+            if rtsp.bytes.prefix(line,b"a=rtpmap:") {
                 var space:u32=9;while space<line.len&&line[space]!=32 {space=space+1}
-                if space<line.len&&rtsp.bytes.equal(view line[space+1..line.len],rtsp.words.h264()) {
+                if space<line.len&&rtsp.bytes.equal(view line[space+1..line.len],b"H264/90000") {
                     if chosen {return Err(1)};match rtsp.bytes.number(view line[9..space],127) {Err(e)=>{return Err(1)} Ok(n)=>{pt=n;result.pt=u8(n);chosen=true}}
                 }
             }
-            if rtsp.bytes.prefix(line,rtsp.words.control()) {if result.control.length!=0 {return Err(1)};match can.text.from_view(view line[10..line.len],1024) {Err(e)=>{return Err(1)} Ok(v)=>{result.control=v}}}
-            if rtsp.bytes.prefix(line,rtsp.words.fmtp())&&chosen {
+            if rtsp.bytes.prefix(line,b"a=control:") {if result.control.length!=0 {return Err(1)};match can.text.from_view(view line[10..line.len],1024) {Err(e)=>{return Err(1)} Ok(v)=>{result.control=v}}}
+            if rtsp.bytes.prefix(line,b"a=fmtp:")&&chosen {
                 var space:u32=7;while space<line.len&&line[space]!=32 {space=space+1}
                 if space<line.len {var number:u32=128;match rtsp.bytes.number(view line[7..space],127) {Err(e)=>{return Err(1)} Ok(n)=>{number=n}}
                 if number==pt {
@@ -44,9 +43,9 @@ pub fn parse(data:View<u8>)->Result<Video,u32> {
                     while at<line.len {
                         while at<line.len&&line[at]==32 {at=at+1};var stop=at;while stop<line.len&&line[stop]!=59 {stop=stop+1}
                         var finish=stop;while finish>at&&line[finish-1]==32 {finish=finish-1};part=view line[at..finish]
-                        if rtsp.bytes.prefix(part,rtsp.words.mode()) {if have_mode {return Err(1)};have_mode=true;match rtsp.bytes.number(view part[19..part.len],2) {Err(e)=>{return Err(1)} Ok(n)=>{mode=n}}}
-                        if rtsp.bytes.prefix(part,rtsp.words.profile()) {if have_profile {return Err(1)};have_profile=true;if part.len!=23 {return Err(1)};var h:u32=17;while h<23 {b=part[h];if !((b>=48&&b<=57)||(b>=65&&b<=70)||(b>=97&&b<=102)) {return Err(1)};h=h+1};match can.text.from_view(view part[17..23],6) {Err(e)=>{return Err(1)} Ok(v)=>{result.profile=v}}}
-                        if rtsp.bytes.prefix(part,rtsp.words.sprop()) {
+                        if rtsp.bytes.prefix(part,b"packetization-mode=") {if have_mode {return Err(1)};have_mode=true;match rtsp.bytes.number(view part[19..part.len],2) {Err(e)=>{return Err(1)} Ok(n)=>{mode=n}}}
+                        if rtsp.bytes.prefix(part,b"profile-level-id=") {if have_profile {return Err(1)};have_profile=true;if part.len!=23 {return Err(1)};var h:u32=17;while h<23 {b=part[h];if !((b>=48&&b<=57)||(b>=65&&b<=70)||(b>=97&&b<=102)) {return Err(1)};h=h+1};match can.text.from_view(view part[17..23],6) {Err(e)=>{return Err(1)} Ok(v)=>{result.profile=v}}}
+                        if rtsp.bytes.prefix(part,b"sprop-parameter-sets=") {
                             if have_sprop {return Err(1)};have_sprop=true
                             var comma:u32=21;while comma<part.len&&part[comma]!=44 {comma=comma+1};if comma==part.len {return Err(1)}
                             match decode(view part[21..comma]) {Err(e)=>{return Err(1)} Ok(n)=>{result.sps=n}}
@@ -56,7 +55,7 @@ pub fn parse(data:View<u8>)->Result<Video,u32> {
                     }
                 }}
             }
-            if rtsp.bytes.prefix(line,rtsp.words.framesize())&&chosen {
+            if rtsp.bytes.prefix(line,b"a=framesize:")&&chosen {
                 var space:u32=12;while space<line.len&&line[space]!=32 {space=space+1}
                 if space<line.len {var number:u32=128;match rtsp.bytes.number(view line[12..space],127) {Err(e)=>{return Err(1)} Ok(n)=>{number=n}}
                 if number==pt {var dash=space+1;while dash<line.len&&line[dash]!=45 {dash=dash+1};if dash==line.len {return Err(1)}
@@ -72,7 +71,7 @@ pub fn parse(data:View<u8>)->Result<Video,u32> {
     return Ok(result)
 }
 pub fn resolve(base:can.text.Value,control:can.text.Value)->Result<can.text.Value,u32> {
-    part=control.bytes;if rtsp.bytes.prefix(view part[0..control.length],rtsp.words.rtsp_url()) {return Ok(control)}
+    part=control.bytes;if rtsp.bytes.prefix(view part[0..control.length],b"rtsp://") {return Ok(control)}
     if control.length==0||part[0]==47||control.length+base.length+1>1024 {return Err(1)}
     var result=base;if result.length==0 {return Err(1)}
     if result.bytes[result.length-1]!=47 {result.bytes[result.length]=47;result.length=result.length+1}
