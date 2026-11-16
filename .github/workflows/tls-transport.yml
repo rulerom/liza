@@ -1,10 +1,10 @@
 name: TLS transport and clients
 on:
   pull_request:
-    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_can*.py', 'tests/test_recorder_agent.py', 'tests/native/recorder_fixture.c', 'examples/recorder/**', 'examples/apps/liza_recorder.liza', 'examples/can/**', 'examples/apps/liza_can.liza', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
+    paths: ['liza/**', 'examples/rtsp/**', 'examples/vg/**', 'examples/apps/liza_rtsp.liza', 'examples/apps/rtp/packet.liza', 'tests/test_rtsp*.py', 'tests/test_tls*.py', 'tests/test_can*.py', 'tests/test_recorder_agent.py', 'tests/native/recorder_fixture.c', 'examples/recorder/**', 'examples/apps/liza_recorder.liza', 'examples/can/**', 'examples/apps/liza_can.liza', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
   push:
     branches: [main]
-    paths: ['liza/**', 'tests/test_tls*.py', 'tests/test_can*.py', 'tests/test_recorder_agent.py', 'tests/native/recorder_fixture.c', 'examples/recorder/**', 'examples/apps/liza_recorder.liza', 'examples/can/**', 'examples/apps/liza_can.liza', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
+    paths: ['liza/**', 'examples/rtsp/**', 'examples/vg/**', 'examples/apps/liza_rtsp.liza', 'examples/apps/rtp/packet.liza', 'tests/test_rtsp*.py', 'tests/test_tls*.py', 'tests/test_can*.py', 'tests/test_recorder_agent.py', 'tests/native/recorder_fixture.c', 'examples/recorder/**', 'examples/apps/liza_recorder.liza', 'examples/can/**', 'examples/apps/liza_can.liza', 'tests/test_httpws.py', 'examples/httpws/**', 'examples/apps/liza_https.liza', 'examples/apps/liza_wss.liza', 'examples/apps/proxy/config.liza', 'tests/native/tls_transport.c', 'tests/fixtures/tls_backpressure.h', '.github/workflows/tls-transport.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -49,3 +49,4 @@ jobs:
       - run: python -m unittest discover -s tests -p "test_tls*.py" -v
       - run: python -m unittest discover -s tests -p "test_can*.py" -v
       - run: python -m unittest discover -s tests -p "test_recorder_agent.py" -v
+      - run: python -m unittest discover -s tests -p "test_rtsp*.py" -v

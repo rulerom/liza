@@ -1,0 +1,52 @@
+import can.text
+pub struct Packet {pub bytes:[u8;80]}
+pub struct State {pub key:can.text.Value;pub ssrc:u32;pub client:[u8;16];pub server:[u8;16];pub ready:bool;pub waiting:bool;pub responding:bool;pub next:u64;pub deadline:u64}
+pub struct Poll {pub state:State;pub packet:Option<Packet>;pub valid:bool}
+fn key_valid(key:can.text.Value)->bool {
+    if key.length!=64 {return false};var i:u32=0;while i<64 {b=key.bytes[i];if !((b>=48&&b<=57)||(b>=97&&b<=102)) {return false};i=i+1};return true
+}
+pub fn create(key:can.text.Value,ssrc:u32)->State {return State(key,ssrc,[0;16],[0;16],false,false,false,0,0)}
+pub fn packet(key:can.text.Value,ssrc:u32,phase:u8,client:[u8;16],server:[u8;16])->Result<Packet,u32>:io,alloc {
+    if !key_valid(key)||ssrc==0||phase<1||phase>4 {return Err(1)}
+    var out:[u8;80]=[0;80];out[0]=128;out[1]=204;out[3]=19
+    out[4]=u8.wrap(ssrc>>24);out[5]=u8.wrap(ssrc>>16);out[6]=u8.wrap(ssrc>>8);out[7]=u8.wrap(ssrc)
+    out[8]=86;out[9]=71;out[10]=66;out[11]=49;out[12]=phase;out[13]=1
+    var i:u32=0;while i<16 {out[16+i]=client[i];out[32+i]=server[i];i=i+1}
+    secret=key.bytes;var signature:[u8;32]=[0;32]
+    {match hmac.sha256(view secret[0..64],view out[0..48]) {Err(e)=>{return Err(1)} Ok(hash)=>{signature=hash}}}
+    i=0;while i<32 {out[48+i]=signature[i];i=i+1};return Ok(Packet(out))
+}
+pub fn verify(key:can.text.Value,ssrc:u32,data:View<u8>)->bool:io,alloc {
+    if data.len!=80||!key_valid(key)||ssrc==0 {return false}
+    if data[0]!=128||data[1]!=204||data[2]!=0||data[3]!=19||data[8]!=86||data[9]!=71||data[10]!=66||data[11]!=49||data[12]<1||data[12]>4||data[13]!=1||data[14]!=0||data[15]!=0 {return false}
+    id=(u32(data[4])<<24)|(u32(data[5])<<16)|(u32(data[6])<<8)|u32(data[7]);if id!=ssrc {return false}
+    secret=key.bytes;var signature:[u8;32]=[0;32]
+    match hmac.sha256(view secret[0..64],view data[0..48]) {Err(e)=>{return false} Ok(hash)=>{signature=hash}}
+    var difference:u8=0;var i:u32=0;while i<32 {difference=difference|(signature[i]^data[48+i]);i=i+1};return difference==0
+}
+pub fn poll(initial:State,now:u64)->Poll:io,alloc {
+    var state=initial;if !key_valid(state.key)||state.ssrc==0 {return Poll(state,None,false)}
+    if now<state.next {return Poll(state,None,true)}
+    if !state.waiting||now>=state.deadline {
+        var nonce:[u8;16]=[0;16];var i:u32=0
+        while i<4 {match net.random_u32() {Err(e)=>{return Poll(state,None,false)} Ok(n)=>{nonce[i*4]=u8.wrap(n>>24);nonce[i*4+1]=u8.wrap(n>>16);nonce[i*4+2]=u8.wrap(n>>8);nonce[i*4+3]=u8.wrap(n)}};i=i+1}
+        state.client=nonce;state.server=[0;16];state.waiting=true;state.responding=false;state.deadline=now+5000
+    }
+    var phase:u8=1;if state.responding {phase=3};state.next=now+1000
+    match packet(state.key,state.ssrc,phase,state.client,state.server) {Err(e)=>{return Poll(state,None,false)} Ok(p)=>{return Poll(state,Some(p),true)}}
+}
+pub fn receive(initial:State,data:View<u8>,now:u64)->Poll:io,alloc {
+    var state=initial
+    if !state.waiting||now>=state.deadline||!verify(state.key,state.ssrc,data) {return Poll(state,None,true)}
+    var difference:u8=0;var i:u32=0;while i<16 {difference=difference|(data[16+i]^state.client[i]);i=i+1}
+    if difference!=0 {return Poll(state,None,true)}
+    if data[12]==2 {
+        var server:[u8;16]=[0;16];i=0;while i<16 {server[i]=data[32+i];i=i+1};state.server=server;state.responding=true
+        match packet(state.key,state.ssrc,3,state.client,state.server) {Err(e)=>{return Poll(state,None,false)} Ok(p)=>{return Poll(state,Some(p),true)}}
+    }
+    if data[12]==4&&state.responding {
+        difference=0;i=0;while i<16 {difference=difference|(data[32+i]^state.server[i]);i=i+1}
+        if difference==0 {state.ready=true;state.waiting=false;state.next=now+5000}
+    }
+    return Poll(state,None,true)
+}

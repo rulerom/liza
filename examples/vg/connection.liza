@@ -1,0 +1,30 @@
+import rtsp.config
+import httpws.bytes
+import httpws.crypto
+import httpws.http
+pub enum Error {Tls(TlsError);Protocol}
+pub struct Connection {pub crypto:tls.Session;pub reactor:net.Reactor;pub id:net.Connection;pub request:httpws.bytes.Wire;pub proof:[u8;28];pub camera:net.Connection}
+fn start(crypto:tls.Session,config:rtsp.config.Config,request:httpws.bytes.Wire,proof:[u8;28])->Result<Connection,Error>:io,alloc {
+    match net.reactor_udp_create(net.ipv4(0,0,0,0,0),2) {Err(e)=>{log=console.errln("UDP create failed");d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(r)=>{
+        match net.reactor_stop_accepting(r) {Err(e)=>{log=console.errln("Reactor setup failed");c=net.reactor_close(move r);d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(n)=>{}}
+        match net.reactor_watch_shutdown(r) {Err(e)=>{log=console.errln("Reactor setup failed");c=net.reactor_close(move r);d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(n)=>{}}
+        match net.reactor_connect_at(r,config.vg) {Err(e)=>{log=console.errln("VG TCP connect failed");c=net.reactor_close(move r);d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(id)=>{
+            match net.reactor_connect_at(r,config.camera) {Err(e)=>{log=console.errln("Camera TCP connect failed");c=net.reactor_close(move r);d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(camera)=>{return Ok(Connection(move crypto,move r,id,request,proof,camera))}}
+        }}
+    }}
+}
+pub fn open(config:rtsp.config.Config,until:u64)->Result<Connection,Error>:io,alloc {
+    var now:u64=0;match net.monotonic_ms() {Err(e)=>{return Err(Error.Tls(TlsError.Transport(e)))} Ok(n)=>{now=n}}
+    var nonce:[u8;16]=[0;16];var i:u32=0
+    while i<4 {match net.random_u32() {Err(e)=>{return Err(Error.Protocol)} Ok(n)=>{nonce[i*4]=u8.wrap(n>>24);nonce[i*4+1]=u8.wrap(n>>16);nonce[i*4+2]=u8.wrap(n>>8);nonce[i*4+3]=u8.wrap(n)}};i=i+1}
+    key=httpws.crypto.key(nonce);proof=httpws.crypto.accept(key)
+    host=config.host.bytes;peer=config.peer.bytes;ca=config.ca.bytes;target:[u8;1]=[47]
+    var request=httpws.bytes.empty()
+    match httpws.http.request(view host[0..config.host.length],view target[0..1],key) {Err(e)=>{return Err(Error.Protocol)} Ok(w)=>{request=w}}
+    if config.ca.length!=0 {match tls.create_with_ca(view peer[0..config.peer.length],view ca[0..config.ca.length],tls.managed_bytes(),now,until) {Err(e)=>{log=console.errln("TLS configuration failed");return Err(Error.Tls(e))} Ok(crypto)=>{return start(move crypto,config,request,proof)}}}
+    match tls.create(view peer[0..config.peer.length],tls.managed_bytes(),now,until) {Err(e)=>{log=console.errln("TLS configuration failed");return Err(Error.Tls(e))} Ok(crypto)=>{return start(move crypto,config,request,proof)}}
+}
+pub fn close(connection:Connection)->u32:io,alloc {
+    (crypto,r,id,request,proof,camera)=move connection
+    destroyed=tls.destroy(move crypto);closed=net.reactor_close(move r);return 0
+}

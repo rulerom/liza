@@ -8,6 +8,7 @@ def attach(program):
     libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net', 'framing', 'json') if getattr(program, 'uses_'+name, False)]
     if getattr(program,'uses_process',False):
         libraries.extend(n for n in ('utf8','process') if n not in libraries)
+    if getattr(program,'uses_hmac',False): libraries.append('crypto')
     if getattr(program,'uses_tls',False):
         if 'net' not in libraries: libraries.append('net')
         libraries.append('tls')
@@ -46,7 +47,7 @@ def attach(program):
             fn.module = '__liza_framing'
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
             fn.module = '__liza_utf8_stream'
-        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_create_at','net.reactor_close')) or (fn.name.text.startswith('tls.') and fn.name.text not in ('tls.create','tls.create_with_ca','tls.destroy','tls.managed_bytes')) or (fn.name.text.startswith('process.') and fn.name.text in ('process.try_wait','process.wait','process.terminate','process.kill')) or fn.name.text in ('net.accept','net.local_port','net.write','net.udp_port','net.udp_send','file.read_chunk', 'file.write_chunk', 'file.flush'):
+        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_create_at','net.reactor_udp_create','net.reactor_close')) or (fn.name.text.startswith('tls.') and fn.name.text not in ('tls.create','tls.create_with_ca','tls.destroy','tls.managed_bytes')) or (fn.name.text.startswith('process.') and fn.name.text in ('process.try_wait','process.wait','process.terminate','process.kill')) or fn.name.text in ('net.accept','net.local_port','net.write','net.udp_port','net.udp_send','file.read_chunk', 'file.write_chunk', 'file.flush'):
             fn.borrowed_params = [0]
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
@@ -104,6 +105,7 @@ def attach(program):
         Function(Token('__liza_file_flush',1,1), [(Token('handle',1,1),'File')], [], 'u32', 'io', borrowed_params=[0]),
         Function(Token('__liza_file_open_path',1,1), [(Token('path',1,1),'Path')], [], '__liza_FileOpen', 'io'),
     ])
+    externals.append(Function(Token('__liza_crypto_hmac_sha256',1,1),[(Token('key',1,1),'View<u8>'),(Token('data',1,1),'View<u8>')],[],'__liza_Hmac','io,alloc'))
     from .types import product_type
     net_externals = [
         ('__liza_net_random',[],'u64',[]),
@@ -121,6 +123,10 @@ def attach(program):
         ('net.read',['net.Stream','memory.Buffer<u8>'],product_type('memory.Buffer<u8>','Result<u32,NetError>'),[0]),
     ]
     reactor_externals = [
+        ('__liza_reactor_udp_create',['u32','u16','u32'],'__liza_Reactor',[], 'io,alloc'),
+        ('__liza_reactor_udp_port',['net.Reactor'],'u64',[0], 'io'),
+        ('__liza_reactor_udp_send',['net.Reactor','View<u8>','u32','u32','u32','u16'],'u64',[0], 'io'),
+        ('net.reactor_udp_receive',['net.Reactor','memory.Buffer<u8>'],product_type('memory.Buffer<u8>','Result<u64,UdpError>'),[0], 'io'),
         ('__liza_reactor_clock',[],'__liza_Clock',[], 'io'),
         ('__liza_reactor_connect_at',['net.Reactor','u32','u16'],'__liza_Connection',[0], 'io'),
         ('__liza_reactor_create_at',['u32','u16','u32'],'__liza_Reactor',[], 'io,alloc'),
@@ -207,9 +213,10 @@ def link_flags(module):
     group_names = {n for n in names if n.startswith(('groups.', '__liza_group_'))}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
     tls_names = {n for n in names if n.startswith('__liza_tls_') or n=='tls.managed_bytes'}
+    crypto_names = {n for n in names if n.startswith('__liza_crypto_')}
     process_names = {n for n in names if n.startswith('__liza_process_')}
     fs_names = {n for n in names if n.startswith('__liza_fs_')}
-    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names-group_names-tls_names-process_names-fs_names else []) + (['file'] if names & file_names else [])
+    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names-group_names-tls_names-process_names-fs_names-crypto_names else []) + (['file'] if names & file_names else [])
     if process_names: libraries.append('process')
     if fs_names:
         libraries.append('fs')
@@ -224,10 +231,11 @@ def link_flags(module):
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if channel_names or group_names: files.append(str(Path(__file__).parent/'runtime'/'scoped_channel_core.c'))
     tls_flags = []
-    if tls_names:
+    if tls_names or crypto_names:
         from .tls_backend import link_flags as tls_link_flags
         tls_flags = tls_link_flags()
-        files += [str(Path(__file__).parent/'runtime'/name) for name in ('tls_openssl.c','tls_binding.c')]
+        if tls_names: files += [str(Path(__file__).parent/'runtime'/name) for name in ('tls_openssl.c','tls_binding.c')]
+        if crypto_names: files.append(str(Path(__file__).parent/'runtime'/'crypto_openssl.c'))
     if sys.platform == 'win32':
         return files + tls_flags + (['-lws2_32'] if net_names or group_names else []) + (['-lbcrypt'] if '__liza_net_random' in names else [])
     if sys.platform not in ('darwin','linux'):

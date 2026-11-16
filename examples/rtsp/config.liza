@@ -1,0 +1,56 @@
+import can.fields
+import can.text
+import vg.words
+pub struct Config {pub camera:net.Address;pub url:can.text.Value;pub vg:net.Address;pub peer:can.text.Value;pub host:can.text.Value;pub login:can.text.Value;pub password:can.text.Value;pub conference:can.text.Value;pub version:u32;pub run_ms:u32;pub ca:can.text.Value}
+pub fn wildcard(value:can.text.Value)->bool {
+    b=value.bytes;return value.length==7&&b[0]==48&&b[1]==46&&b[2]==48&&b[3]==46&&b[4]==48&&b[5]==46&&b[6]==48
+}
+pub fn address(value:can.text.Value,port:u16)->Result<net.Address,u32> {
+    bytes=value.bytes;var octets:[u8;4]=[0;4];var at:u32=0;var part:u32=0
+    while part<4 {
+        var n:u32=0;var digits:u32=0
+        while at<value.length&&bytes[at]!=46 {b=bytes[at];if b<48||b>57 {return Err(1)};n=n*10+u32(b)-48;digits=digits+1;if n>255||digits>3 {return Err(1)};at=at+1}
+        if digits==0 {return Err(1)};octets[part]=u8(n);part=part+1
+        if part<4 {if at>=value.length||bytes[at]!=46 {return Err(1)};at=at+1} else if at!=value.length {return Err(1)}
+    }
+    if port==0||octets[0]==0||octets[0]>=224 {return Err(1)}
+    return Ok(net.ipv4(octets[0],octets[1],octets[2],octets[3],port))
+}
+fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Parsed {
+    var cursor=can.fields.open(move buffer,length,move scratch);empty=can.text.empty()
+    (c1,camera)=can.fields.text(move cursor,empty,empty,vg.words.camera_ip(),true,15);cursor=move c1
+    (c2,url)=can.fields.text(move cursor,empty,empty,vg.words.camera_url(),true,1024);cursor=move c2
+    (c3,vg_ip)=can.fields.text(move cursor,empty,empty,vg.words.vg_ip(),true,15);cursor=move c3
+    (c4,peer)=can.fields.text(move cursor,empty,empty,vg.words.vg_peer(),true,64);cursor=move c4
+    (c5,login)=can.fields.text(move cursor,empty,empty,vg.words.login(),true,128);cursor=move c5
+    (c6,password)=can.fields.text(move cursor,empty,empty,vg.words.password(),true,512);cursor=move c6
+    (c7,conference)=can.fields.text(move cursor,empty,empty,vg.words.conference(),true,128);cursor=move c7
+    (c8,version)=can.fields.number(move cursor,empty,empty,vg.words.client_version(),false,617);cursor=move c8
+    (c9,run_ms)=can.fields.number(move cursor,empty,empty,vg.words.run_ms(),false,60000);cursor=move c9
+    (c10,camera_port)=can.fields.number(move cursor,empty,empty,vg.words.camera_port(),false,554);cursor=move c10
+    (c11,vg_port)=can.fields.number(move cursor,empty,empty,vg.words.vg_port(),false,443);cursor=move c11
+    (c12,ca)=can.fields.text(move cursor,empty,empty,vg.words.ca_file(),false,1024);cursor=move c12
+    (doc,temp,valid)=can.fields.finish(move cursor)
+    var first=net.ipv4(127,0,0,1,554);var second=net.ipv4(127,0,0,1,443);var ok=valid
+    if camera_port>65535||vg_port>65535||version>4294967295||run_ms<100||run_ms>3600000||peer.length==0||login.length==0||password.length==0||conference.length==0 {ok=false}
+    match address(camera,u16.wrap(camera_port)) {Err(e)=>{ok=false} Ok(v)=>{first=v}}
+    match address(vg_ip,u16.wrap(vg_port)) {Err(e)=>{ok=false} Ok(v)=>{second=v}}
+    var host=peer
+    if vg_port!=443 {host.bytes[host.length]=58;host.length=host.length+1;var digits:[u8;5]=[0;5];var at:u32=5;var n=vg_port;while true {at=at-1;digits[at]=u8(n%10)+48;n=n/10;if n==0 {break}};while at<5 {host.bytes[host.length]=digits[at];host.length=host.length+1;at=at+1}}
+    return Parsed(move doc,move temp,Config(first,url,second,peer,host,login,password,conference,u32.wrap(version),u32.wrap(run_ms),ca),ok)
+}
+struct Parsed {buffer:memory.Buffer<u8>;scratch:memory.Buffer<u8>;config:Config;valid:bool}
+pub fn read()->Result<Config,u32>:io,alloc {
+    if cli.count()!=2 {return Err(2)}
+    match cli.path_arg(1) {None=>{return Err(2)} Some(path)=>{
+    match file.open_path(path) {Err(e)=>{return Err(2)} Ok(input)=>{
+    match memory.create(8192) {Err(e)=>{closed=file.close(move input);return Err(2)} Ok(region)=>{
+    match memory.alloc<u8>(region,4096,0) {Err(e)=>{closed=file.close(move input);region_closed=memory.close(move region);return Err(2)} Ok(initial)=>{
+    match memory.alloc<u8>(region,1024,0) {Err(e)=>{released=memory.release(move initial);closed=file.close(move input);region_closed=memory.close(move region);return Err(2)} Ok(scratch)=>{
+        var buffer=move initial;var length:u32=0;var valid=true
+        while true {match file.read_chunk(input) {Err(e)=>{valid=false;break} Ok(chunk)=>{if chunk.eof {break};if chunk.len>4096-length {valid=false;break};var i:u32=0;while i<chunk.len {buffer=memory.set(move buffer,length+i,chunk.data[i]);i=i+1};length=length+chunk.len}}}
+        match file.close(move input) {Err(e)=>{valid=false} Ok(n)=>{}}
+        (last,temp,config,parsed)=parse(move buffer,length,move scratch);a=memory.release(move last);b=memory.release(move temp);closed=memory.close(move region)
+        if !valid||!parsed {return Err(2)};return Ok(config)
+    }}}}}}}}}}
+}

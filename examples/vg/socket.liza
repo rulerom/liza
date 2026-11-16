@@ -1,0 +1,171 @@
+import httpws.bytes
+import vg.websocket
+pub enum Error {Tls(TlsError);Protocol;Deadline}
+pub struct Frame {pub bytes:[u8;65536];pub length:u32}
+pub enum Event {Idle;Upgraded;Message(Frame);PeerClosed;Closed;Failed(Error)}
+struct State {pub app:vg.websocket.State;pub proof:[u8;28];pub connected:bool;pub state:u32;pub done:bool;pub incoming:u32;pub fed:u32;pub outgoing:u32;pub sent:u32;pub plaintext:u32;pub cursor:u32;pub tcp_eof:bool;pub write_blocked:bool;pub plaintext_blocked:bool;pub work_since_poll:u32;pub connect_due:u64;pub send_due:u64;pub close_due:u64;pub close_ms:u32;pub stopping:bool;pub failure:Option<Error>;}
+pub struct Session {crypto:tls.Session;id:net.Connection;buffer:memory.Buffer<u8>;state:State}
+pub struct Step {pub session:Session;pub reactor:net.Reactor;pub event:Event}
+pub struct Closed {pub reactor:net.Reactor;pub result:Result<u32,Error>}
+pub struct Send {pub session:Session;pub result:Result<bool,Error>}
+fn retry(e:ReactorError)->bool {
+    match e {ReactorError.Interrupted=>{return true} ReactorError.WouldBlock=>{return true}
+    ReactorError.AddressInUse=>{return false} ReactorError.PermissionDenied=>{return false}
+    ReactorError.Disconnected=>{return false} ReactorError.InvalidRange=>{return false}
+    ReactorError.Other=>{return false} ReactorError.InvalidCapacity=>{return false}
+    ReactorError.Full=>{return false} ReactorError.InvalidConnection=>{return false}
+    ReactorError.Exhausted=>{return false} ReactorError.OutOfMemory=>{return false}}
+}
+fn state_number(state:TlsState)->u32 {
+    match state {TlsState.Handshake=>{return 0} TlsState.Open=>{return 1} TlsState.Closing=>{return 2} TlsState.Done=>{return 3} TlsState.Dead=>{return 4} TlsState.Unavailable=>{return 5}}
+}
+fn closed(outcome:TlsOutcome)->bool {match outcome {TlsOutcome.Progress=>{return false} TlsOutcome.Want=>{return false} TlsOutcome.Closed=>{return true}}}
+
+pub fn create(crypto:tls.Session,id:net.Connection,buffer:memory.Buffer<u8>,request:httpws.bytes.Wire,proof:[u8;28],connect_due:u64,close_ms:u32)->Session {
+    state=State(vg.websocket.create(request),proof,false,0,false,0,0,0,0,0,0,false,false,false,0,connect_due,connect_due,0,close_ms,false,None)
+    return Session(move crypto,id,move buffer,state)
+}
+pub fn can_send(borrow session:Session)->bool {return session.state.app.upgraded&&session.state.app.pending.len==0&&!session.state.stopping}
+pub fn buffered(borrow session:Session)->bool {return session.state.cursor<session.state.plaintext}
+pub fn send(session:Session,opcode:u8,data:View<u8>,until:u64)->Send:io {
+    (crypto,id,buffer,initial)=move session;var state=initial
+    if state.app.pending.len!=0 {return Send(Session(move crypto,id,move buffer,state),Ok(false))}
+    var app=state.app
+    result=vg.websocket.frame(borrow mut app,opcode,data);state.app=app
+    if result!=0 {state.failure=Some(Error.Protocol);return Send(Session(move crypto,id,move buffer,state),Err(Error.Protocol))}
+    state.send_due=until
+    return Send(Session(move crypto,id,move buffer,state),Ok(true))
+}
+pub fn stop(session:Session,until:u64)->Session {
+    (crypto,id,buffer,initial)=move session;var state=initial
+    state.stopping=true;state.close_due=until
+    return Session(move crypto,id,move buffer,state)
+}
+pub fn close(session:Session,r:net.Reactor)->Closed:io,alloc {
+    (crypto,id,buffer,state)=move session
+    disconnected=net.reactor_disconnect(r,id)
+    released=memory.release(move buffer);destroyed=tls.destroy(move crypto)
+    match destroyed {Err(e)=>{return Closed(move r,Err(Error.Tls(e)))} Ok(n)=>{}}
+    match disconnected {Err(e)=>{return Closed(move r,Err(Error.Tls(TlsError.Transport(e))))} Ok(n)=>{}}
+    return Closed(move r,Ok(0))
+}
+pub fn step(owned:Session,r:net.Reactor,now:u64,until:u64)->Step:io {
+    (session,id,input_buffer,initial)=move owned
+    var input=move input_buffer
+    var app=initial.app
+    var proof=initial.proof
+    var connected=initial.connected
+    var state=initial.state
+    var done=initial.done
+    var incoming=initial.incoming
+    var fed=initial.fed
+    var outgoing=initial.outgoing
+    var sent=initial.sent
+    var plaintext=initial.plaintext
+    var cursor=initial.cursor
+    var tcp_eof=initial.tcp_eof
+    var write_blocked=initial.write_blocked
+    var plaintext_blocked=initial.plaintext_blocked
+    var work_since_poll=initial.work_since_poll
+    var connect_due=initial.connect_due
+    var send_due=initial.send_due
+    var close_due=initial.close_due
+    var close_ms=initial.close_ms
+    var stopping=initial.stopping
+    var failure=initial.failure
+    var event_result=Event.Idle
+    while true {
+        match failure {Some(error)=>{break} None=>{}}
+        if done {event_result=Event.Closed;break}
+        if !app.upgraded&&now>=connect_due {failure=Some(Error.Deadline);break}
+        if app.pending.len!=0&&now>=send_due {failure=Some(Error.Deadline);break}
+        if close_due!=0&&now>=close_due {failure=Some(Error.Deadline);break}
+        var progress=false
+        if !connected {match net.reactor_finish_connect(r,id) {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)));break}} Ok(ready)=>{connected=ready;progress=ready}}}
+        if connected {
+            if state==0 {match tls.handshake(session,now) {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{if state_number(step.state)!=state {progress=true};state=state_number(step.state)}}}
+            else if state==1 {
+                if app.pending.len!=0 {
+                    if !plaintext_blocked {
+                        wire=app.pending.data;var amount=app.pending.len-app.sent;if amount>4096 {amount=4096}
+                        match tls.write(session,view wire[0..app.pending.len],app.sent,amount,now) {
+                            Err(e)=>{failure=Some(Error.Tls(e));break}
+                            Ok(step)=>{state=state_number(step.state);if step.count==0&&(step.wants&2)!=0 {plaintext_blocked=true};if step.count!=0 {progress=true;app.sent=app.sent+step.count;if app.sent==app.pending.len {app.pending.len=0;app.sent=0}}}
+                        }
+                    }
+                } else if cursor<plaintext&&!app.closed {
+                    var batch:u32=0;var emitted=false
+                    while cursor<plaintext&&batch<256&&app.pending.len==0&&!app.closed {
+                    batch=batch+1
+                    var byte:u8=0;{data=memory.view(input);byte=data[8192+cursor]};cursor=cursor+1;progress=true
+                    match vg.websocket.feed(borrow mut app,byte,proof) {
+                        Err(e)=>{trace=console.errln("WSS parse rejected");failure=Some(Error.Protocol);break}
+                        Ok(event)=>{
+                            if event==2 {failure=Some(Error.Protocol);break}
+                            if event==11 {event_result=Event.Upgraded;emitted=true;break}
+                            if event==1&&!stopping {event_result=Event.Message(Frame(app.parser.message,app.parser.size));emitted=true;break}
+                            if event==9 {control=app.parser.control;control_length=app.parser.control_size;if vg.websocket.frame(borrow mut app,10,view control[0..control_length])!=0 {failure=Some(Error.Protocol);break};send_due=now+5000}
+                            if event==8 {
+                                if !stopping {stopping=true;close_due=now+u64(close_ms)}
+                                if !app.close_sent {control=app.parser.control;control_length=app.parser.control_size;if vg.websocket.frame(borrow mut app,8,view control[0..control_length])!=0 {failure=Some(Error.Protocol);break};send_due=close_due}
+                                event_result=Event.PeerClosed;emitted=true;break
+                            }
+                        }
+                    }
+                    }
+                    if emitted {break}
+                    match failure {Some(e)=>{break} None=>{}}
+                } else if !app.closed {
+                    (next,result)=tls.read(session,move input,8192,4096,now);input=move next
+                    match result {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{
+                        state=state_number(step.state);plaintext=step.count;cursor=0;if step.count!=0 {progress=true}
+                        if closed(step.outcome)&&!app.closed {trace=console.errln("WSS premature TLS close");failure=Some(Error.Protocol);break}
+                    }}
+                }
+                if app.closed&&app.pending.len==0 {state=2;progress=true}
+            }
+            if state==2&&(!app.closed||app.pending.len!=0) {trace=console.errln("WSS invalid closing state");failure=Some(Error.Protocol);break}
+            if state==2 {match tls.shutdown(session,now) {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{if state_number(step.state)!=state {progress=true};state=state_number(step.state)}}}
+            if fed<incoming {
+                {data=memory.view(input);match tls.feed(session,data,fed,incoming-fed,now) {Err(e)=>{failure=Some(Error.Tls(e))} Ok(step)=>{fed=fed+step.count;if step.count!=0 {progress=true}}}}
+                match failure {Some(e)=>{break} None=>{}}
+            }
+            if outgoing==0 {
+                (next,result)=tls.drain(session,move input,4096,4096,now);input=move next
+                match result {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{outgoing=step.count;sent=0;if outgoing!=0 {plaintext_blocked=false;progress=true}}}
+            }
+            if outgoing!=0&&!write_blocked {
+                {data=memory.view(input);match net.reactor_write(r,id,data,4096+sent,outgoing-sent) {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)))} else {write_blocked=true}} Ok(n)=>{if n==0 {failure=Some(Error.Tls(TlsError.Transport(ReactorError.Disconnected)))} else {sent=sent+n;progress=true;if sent==outgoing {outgoing=0;sent=0}}}}}
+                match failure {Some(e)=>{break} None=>{}}
+            }
+            if state==3&&outgoing==0 {
+                (next,result)=tls.drain(session,move input,4096,4096,now);input=move next
+                match result {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{outgoing=step.count;sent=0;if outgoing==0 {done=true;event_result=Event.Closed;break};progress=true}}
+            }
+            if fed==incoming&&!tcp_eof&&state!=3 {
+                (next,result)=net.reactor_read(r,id,move input,0,4096);input=move next
+                match result {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)));break}} Ok(n)=>{incoming=n;fed=0;if n!=0 {progress=true} else {tcp_eof=true;progress=true;match tls.eof(session,now) {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{}}}}}
+            }
+        }
+        if stopping&&app.upgraded&&!app.close_sent&&app.pending.len==0 {
+            code:[u8;2]=[3,232];if vg.websocket.frame(borrow mut app,8,view code[0..2])!=0 {failure=Some(Error.Protocol);break};send_due=close_due;progress=true
+        }
+        if progress&&write_blocked {work_since_poll=work_since_poll+1}
+        if !progress||(write_blocked&&work_since_poll>=256) {
+            work_since_poll=0
+            var interest:u32=0;if fed==incoming&&!tcp_eof&&state!=3 {interest=1};if outgoing!=0 {interest=interest|2};if !connected {interest=3}
+            var poll_until=until
+            if stopping&&close_due<poll_until {poll_until=close_due}
+            if !app.upgraded&&connect_due<poll_until {poll_until=connect_due}
+            if app.pending.len!=0&&send_due<poll_until {poll_until=send_due}
+            var wait_ms:u32=0;if !progress&&poll_until>now {wait_ms=u32(poll_until-now)}
+            match net.reactor_interest(r,id,interest) {Err(e)=>{failure=Some(Error.Tls(TlsError.Transport(e)));break} Ok(n)=>{}}
+            match net.reactor_poll(r,wait_ms) {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)));break}} Ok(n)=>{}}
+            if write_blocked {match net.reactor_ready(r,id) {Err(e)=>{failure=Some(Error.Tls(TlsError.Transport(e)));break} Ok(flags)=>{if (flags&6)!=0 {write_blocked=false}}}}
+        }
+            break
+    }
+    match failure {Some(error)=>{event_result=Event.Failed(error)} None=>{}}
+    next=State(app,proof,connected,state,done,incoming,fed,outgoing,sent,plaintext,cursor,tcp_eof,write_blocked,plaintext_blocked,work_since_poll,connect_due,send_due,close_due,close_ms,stopping,failure)
+    return Step(Session(move session,id,move input,next),move r,event_result)
+}

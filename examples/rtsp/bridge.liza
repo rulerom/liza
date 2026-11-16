@@ -1,0 +1,41 @@
+import rtsp.sdp
+import apps.rtp.packet
+pub struct State {pub pt:u8;pub ssrc:u32;pub sequence:u16;pub seen:bool;pub last:u16;pub open:bool;pub received:u64;pub rejected:u64;pub gated:u64;pub discontinuities:u64;pub attempted:u64;pub succeeded:u64;pub send_errors:u64}
+pub struct Action {pub state:State;pub send:bool;pub parameters:bool;pub offset:u32;pub length:u32;pub timestamp:u32;pub marker:bool}
+pub struct Output {pub buffer:memory.Buffer<u8>;pub state:State;pub reactor:net.Reactor}
+pub fn create(pt:u8,ssrc:u32,sequence:u16)->State {return State(pt,ssrc,sequence,false,0,false,0,0,0,0,0,0,0)}
+pub fn inspect(initial:State,data:View<u8>)->Action {
+    var state=initial;state.received=state.received+1
+    var offset:u32=12;var length:u32=0
+    match apps.rtp.packet.parse(data) {Err(e)=>{state.rejected=state.rejected+1;state.open=false;return Action(state,false,false,0,0,0,false)} Ok(header)=>{}}
+    if (data[1]&127)!=state.pt {state.rejected=state.rejected+1;return Action(state,false,false,0,0,0,false)}
+    offset=12+4*u32(data[0]&15);if (data[0]&16)!=0 {offset=offset+4+4*((u32(data[offset+2])<<8)|u32(data[offset+3]))}
+    length=data.len-offset;if (data[0]&32)!=0 {length=length-u32(data[data.len-1])}
+    if length==0 {state.rejected=state.rejected+1;state.open=false;return Action(state,false,false,0,0,0,false)}
+    sequence=(u16(data[2])<<8)|u16(data[3]);timestamp=(u32(data[4])<<24)|(u32(data[5])<<16)|(u32(data[6])<<8)|u32(data[7])
+    if state.seen&&sequence!=u16.wrap(u32(state.last)+1) {state.discontinuities=state.discontinuities+1;state.open=false}
+    state.seen=true;state.last=sequence
+    typ=data[offset]&31;var idr=typ==5;var valid=(data[offset]&128)==0
+    if typ==28 {
+        if length<3 {valid=false} else {fu=data[offset+1];if (fu&32)!=0||(fu&192)==192||(fu&31)==0||(fu&31)>23 {valid=false};idr=(fu&128)!=0&&(fu&31)==5}
+    } else if typ==24 {
+        var at=offset+1;end=offset+length
+        while at+2<=end {n=(u32(data[at])<<8)|u32(data[at+1]);at=at+2;if n==0||n>end-at {valid=false;break};inner=data[at]&31;if inner<1||inner>23||(data[at]&128)!=0 {valid=false};if inner==5 {idr=true};at=at+n}
+        if at!=end {valid=false}
+    } else if typ<1||typ>23 {valid=false}
+    if !valid {state.rejected=state.rejected+1;state.open=false;return Action(state,false,false,0,0,0,false)}
+    var parameters=false
+    if !state.open {if !idr {state.gated=state.gated+1;return Action(state,false,false,0,0,0,false)};state.open=true;parameters=true}
+    return Action(state,true,parameters,offset,length,timestamp,(data[1]&128)!=0)
+}
+pub fn send(buffer:memory.Buffer<u8>,initial:State,r:net.Reactor,address:net.Address,payload:View<u8>,timestamp:u32,marker:bool)->Output:io {
+    var out=move buffer;var state=initial
+    if payload.len>4084 {state.send_errors=state.send_errors+1;state.open=false;return Output(move out,state,move r)}
+    state.sequence=u16.wrap(u32(state.sequence)+1);state.attempted=state.attempted+1
+    out=memory.set(move out,0,128);var pt:u8=102;if marker {pt=pt|128};out=memory.set(move out,1,pt)
+    out=memory.set(move out,2,u8.wrap(state.sequence>>8));out=memory.set(move out,3,u8.wrap(state.sequence))
+    var i:u32=0;while i<4 {shift=24-i*8;out=memory.set(move out,4+i,u8.wrap(timestamp>>shift));out=memory.set(move out,8+i,u8.wrap(state.ssrc>>shift));i=i+1}
+    i=0;while i<payload.len {out=memory.set(move out,12+i,payload[i]);i=i+1}
+    {bytes=memory.view(out);match net.reactor_udp_send(r,bytes,0,payload.len+12,address) {Err(e)=>{state.send_errors=state.send_errors+1;state.open=false} Ok(n)=>{if n==payload.len+12 {state.succeeded=state.succeeded+1} else {state.send_errors=state.send_errors+1;state.open=false}}}}
+    return Output(move out,state,move r)
+}

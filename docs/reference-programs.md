@@ -22,6 +22,7 @@ description: "Три задачи для проверки Liza: парсер RTP
 | Один или два независимых RTP owner | [Single/dual UDP workload](sg4-b2-dual-owners.md) |
 | HTTP GET и WebSocket | [HTTP/WS: сборка, протокол и лимиты](http-websocket.md) |
 | Аутентифицированный HTTPS/WSS | [TLS: сборка, ошибки и владение](tls-transport.md) |
+| RTSP H.264 → VideoGrace | [Клиент камеры без CAN и декодирования](rtsp-client.md) |
 
 [CAN Echo Worker](can-worker.md) — bounded приложение в
 `examples/apps/liza_can.liza`: регистрация, heartbeat, echo, отмена и generation.

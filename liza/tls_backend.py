@@ -31,6 +31,18 @@ def link_flags():
 
 def external(fn, lines, types):
     name = fn.name.text
+    if name == '__liza_crypto_hmac_sha256':
+        result=types[fn.result_type]
+        lines.extend(['declare i32 @liza_rt_hmac_sha256(ptr, i32, ptr, i32, ptr)',
+            f'define internal {result} @liza_{name}({{ ptr, i32 }} %key, {{ ptr, i32 }} %data) {{',
+            '  %kp = extractvalue { ptr, i32 } %key, 0','  %kn = extractvalue { ptr, i32 } %key, 1',
+            '  %dp = extractvalue { ptr, i32 } %data, 0','  %dn = extractvalue { ptr, i32 } %data, 1',
+            '  %out = alloca [32 x i8]','  store [32 x i8] zeroinitializer, ptr %out',
+            '  %code = call i32 @liza_rt_hmac_sha256(ptr %kp, i32 %kn, ptr %dp, i32 %dn, ptr %out)',
+            '  %bytes = load [32 x i8], ptr %out',
+            f'  %r0 = insertvalue {result} zeroinitializer, [32 x i8] %bytes, 0',
+            f'  %r1 = insertvalue {result} %r0, i32 %code, 1',f'  ret {result} %r1','}'])
+        return True
     if name == 'tls.managed_bytes':
         lines.extend(['declare i64 @liza_rt_tls_bytes()', 'define internal i64 @liza_tls.managed_bytes() {',
                       '  %r = call i64 @liza_rt_tls_bytes()', '  ret i64 %r', '}'])

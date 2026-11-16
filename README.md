@@ -62,7 +62,7 @@ HTTP/1.1 и WebSocket реализованы на Liza поверх Reactor. HTT
 те же протоколы и move-only `tls.Session` с обязательной проверкой цепочки
 сертификатов и DNS/IP SAN. TLS 1.2/1.3 выполняет OpenSSL 3; системное доверие
 проверяется через SecTrust на macOS, CryptoAPI на Windows и OpenSSL verify paths
-на Linux. OpenSSL нужен только программам с TLS.
+на Linux. OpenSSL нужен программам с TLS или HMAC-SHA256.
 
 [Выбор сетевой модели](docs/networking.md) · [HTTP/WS](docs/http-websocket.md) ·
 [Сборка HTTPS/WSS и ограничения](docs/tls-transport.md).
@@ -72,6 +72,10 @@ heartbeat, одно назначение `example.echo`, отмену и пер�
 Есть независимая локальная приёмка и подтверждённое администратором
 завершение `example.echo` на настоящем CAN-сервере. Адрес TCP и имя TLS peer задаются
 раздельно; DNS в язык не добавлен.
+
+[RTSP Camera Client](docs/rtsp-client.md) передаёт H.264 с камеры в VideoGrace
+как обычный WSS-клиент, без CAN, декодирования и внешнего медиапроцесса.
+Движущееся видео подтверждено при live-приёмке; ограничения и запуск описаны отдельно.
 
 ## Редактор
 

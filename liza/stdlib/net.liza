@@ -190,3 +190,17 @@ fn net.udp_send(socket:net.DatagramSocket,data:View<u8>,start:u32,count:u32,addr
 fn net.udp_length(meta:u64)->u32 {return u32.wrap(meta & 65535)}
 fn net.udp_source_ip(meta:u64)->u32 {return u32.wrap(meta >> 32)}
 fn net.udp_source_port(meta:u64)->u16 {return u16.wrap(meta >> 16)}
+
+// The same single owned UDP endpoint already used by SG3, with outbound TCP slots.
+fn net.reactor_udp_create(address:net.Address,capacity:u32)->Result<net.Reactor,ReactorError>:io,alloc {
+    raw=__liza_reactor_udp_create(net.ipv4_bits(address),address.port,capacity)
+    if raw.error==0 {return Ok(raw.handle)};return Err(__liza_reactor_error(raw.error))
+}
+fn net.reactor_udp_port(reactor:net.Reactor)->Result<u16,UdpError>:io {
+    raw=__liza_reactor_udp_port(reactor)
+    if raw>>32==0 {return Ok(u16(raw))};return Err(__liza_udp_error(u32(raw>>32)))
+}
+fn net.reactor_udp_send(reactor:net.Reactor,data:View<u8>,start:u32,count:u32,address:net.Address)->Result<u32,UdpError>:io {
+    raw=__liza_reactor_udp_send(reactor,data,start,count,net.ipv4_bits(address),address.port)
+    if raw>>32==0 {return Ok(u32(raw))};return Err(__liza_udp_error(u32(raw>>32)))
+}

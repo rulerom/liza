@@ -1,0 +1,80 @@
+import rtsp.words
+import rtsp.bytes
+import can.text
+pub struct Nal {pub bytes:[u8;256];pub length:u32}
+pub struct Video {pub pt:u8;pub profile:can.text.Value;pub control:can.text.Value;pub sps:Nal;pub pps:Nal;pub width:u32;pub height:u32}
+fn digit(b:u8)->u32 {
+    if b>=65&&b<=90 {return u32(b)-65};if b>=97&&b<=122 {return u32(b)-71};if b>=48&&b<=57 {return u32(b)+4};if b==43 {return 62};if b==47 {return 63};return 64
+}
+pub fn decode(data:View<u8>)->Result<Nal,u32> {
+    if data.len==0||data.len%4!=0 {return Err(1)};var result=Nal([0;256],0);var i:u32=0
+    while i<data.len {
+        a=digit(data[i]);b=digit(data[i+1]);var c:u32=0;var d:u32=0;var count:u32=3
+        if a>63||b>63 {return Err(1)}
+        if data[i+2]==61 {if data[i+3]!=61||i+4!=data.len||b%16!=0 {return Err(1)};count=1}
+        else {c=digit(data[i+2]);if c>63 {return Err(1)};if data[i+3]==61 {if i+4!=data.len||c%4!=0 {return Err(1)};count=2} else {d=digit(data[i+3]);if d>63 {return Err(1)}}}
+        if result.length+count>256 {return Err(1)}
+        result.bytes[result.length]=u8((a<<2)|(b>>4));result.length=result.length+1
+        if count>=2 {result.bytes[result.length]=u8(((b&15)<<4)|(c>>2));result.length=result.length+1}
+        if count==3 {result.bytes[result.length]=u8(((c&3)<<6)|d);result.length=result.length+1};i=i+4
+    }
+    return Ok(result)
+}
+pub fn parse(data:View<u8>)->Result<Video,u32> {
+    var video=false;var chosen=false;var have_fmtp=false;var have_mode=false;var have_profile=false;var have_sprop=false;var mode:u32=0;var pt:u32=128
+    var result=Video(0,can.text.empty(),can.text.empty(),Nal([0;256],0),Nal([0;256],0),0,0);var pos:u32=0
+    while pos<data.len {
+        var end=pos;while end<data.len&&data[end]!=10&&data[end]!=13 {end=end+1}
+        line=view data[pos..end]
+        if line.len>=2&&line[0]==109&&line[1]==61 {
+            if video {break};video=rtsp.bytes.prefix(line,rtsp.words.video())
+        } else if video {
+            if rtsp.bytes.prefix(line,rtsp.words.rtpmap()) {
+                var space:u32=9;while space<line.len&&line[space]!=32 {space=space+1}
+                if space<line.len&&rtsp.bytes.equal(view line[space+1..line.len],rtsp.words.h264()) {
+                    if chosen {return Err(1)};match rtsp.bytes.number(view line[9..space],127) {Err(e)=>{return Err(1)} Ok(n)=>{pt=n;result.pt=u8(n);chosen=true}}
+                }
+            }
+            if rtsp.bytes.prefix(line,rtsp.words.control()) {if result.control.length!=0 {return Err(1)};match can.text.from_view(view line[10..line.len],1024) {Err(e)=>{return Err(1)} Ok(v)=>{result.control=v}}}
+            if rtsp.bytes.prefix(line,rtsp.words.fmtp())&&chosen {
+                var space:u32=7;while space<line.len&&line[space]!=32 {space=space+1}
+                if space<line.len {var number:u32=128;match rtsp.bytes.number(view line[7..space],127) {Err(e)=>{return Err(1)} Ok(n)=>{number=n}}
+                if number==pt {
+                    if have_fmtp {return Err(1)};have_fmtp=true;var at=space+1
+                    while at<line.len {
+                        while at<line.len&&line[at]==32 {at=at+1};var stop=at;while stop<line.len&&line[stop]!=59 {stop=stop+1}
+                        var finish=stop;while finish>at&&line[finish-1]==32 {finish=finish-1};part=view line[at..finish]
+                        if rtsp.bytes.prefix(part,rtsp.words.mode()) {if have_mode {return Err(1)};have_mode=true;match rtsp.bytes.number(view part[19..part.len],2) {Err(e)=>{return Err(1)} Ok(n)=>{mode=n}}}
+                        if rtsp.bytes.prefix(part,rtsp.words.profile()) {if have_profile {return Err(1)};have_profile=true;if part.len!=23 {return Err(1)};var h:u32=17;while h<23 {b=part[h];if !((b>=48&&b<=57)||(b>=65&&b<=70)||(b>=97&&b<=102)) {return Err(1)};h=h+1};match can.text.from_view(view part[17..23],6) {Err(e)=>{return Err(1)} Ok(v)=>{result.profile=v}}}
+                        if rtsp.bytes.prefix(part,rtsp.words.sprop()) {
+                            if have_sprop {return Err(1)};have_sprop=true
+                            var comma:u32=21;while comma<part.len&&part[comma]!=44 {comma=comma+1};if comma==part.len {return Err(1)}
+                            match decode(view part[21..comma]) {Err(e)=>{return Err(1)} Ok(n)=>{result.sps=n}}
+                            match decode(view part[comma+1..part.len]) {Err(e)=>{return Err(1)} Ok(n)=>{result.pps=n}}
+                        }
+                        at=stop+1
+                    }
+                }}
+            }
+            if rtsp.bytes.prefix(line,rtsp.words.framesize())&&chosen {
+                var space:u32=12;while space<line.len&&line[space]!=32 {space=space+1}
+                if space<line.len {var number:u32=128;match rtsp.bytes.number(view line[12..space],127) {Err(e)=>{return Err(1)} Ok(n)=>{number=n}}
+                if number==pt {var dash=space+1;while dash<line.len&&line[dash]!=45 {dash=dash+1};if dash==line.len {return Err(1)}
+                    match rtsp.bytes.number(view line[space+1..dash],8192) {Err(e)=>{return Err(1)} Ok(n)=>{result.width=n}}
+                    match rtsp.bytes.number(view line[dash+1..line.len],8192) {Err(e)=>{return Err(1)} Ok(n)=>{result.height=n}}
+                }}
+            }
+        }
+        pos=end;while pos<data.len&&(data[pos]==10||data[pos]==13) {pos=pos+1}
+    }
+    if !chosen||!have_fmtp||mode!=1||result.control.length==0||result.sps.length==0||result.pps.length==0||result.width==0||result.height==0 {return Err(1)}
+    if (result.sps.bytes[0]&31)!=7||(result.pps.bytes[0]&31)!=8 {return Err(1)}
+    return Ok(result)
+}
+pub fn resolve(base:can.text.Value,control:can.text.Value)->Result<can.text.Value,u32> {
+    part=control.bytes;if rtsp.bytes.prefix(view part[0..control.length],rtsp.words.rtsp_url()) {return Ok(control)}
+    if control.length==0||part[0]==47||control.length+base.length+1>1024 {return Err(1)}
+    var result=base;if result.length==0 {return Err(1)}
+    if result.bytes[result.length-1]!=47 {result.bytes[result.length]=47;result.length=result.length+1}
+    var i:u32=0;while i<control.length {result.bytes[result.length]=part[i];result.length=result.length+1;i=i+1};return Ok(result)
+}

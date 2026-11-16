@@ -4,6 +4,7 @@ from .types import product_args
 
 def external(fn, lines, types):
     name = fn.name.text
+    if name in ('net.reactor_udp_receive','__liza_reactor_udp_send'): return False
     group = name.startswith('__liza_group_') or name == 'groups.read'
     prelude = ['  %r = call ptr @liza_rt_group_reactor()'] if group else []
     if name == 'net.connection_slot':
@@ -25,14 +26,14 @@ def external(fn, lines, types):
                       f'  %r1 = insertvalue {result} %r0, i32 %code, 1',
                       f'  ret {result} %r1', '}'])
         return True
-    if operation in ('create', 'accept', 'connect', 'create_at', 'connect_at'):
-        create = operation in ('create', 'create_at')
+    if operation in ('create', 'accept', 'connect', 'create_at', 'connect_at', 'udp_create'):
+        create = operation in ('create', 'create_at', 'udp_create')
         params = 'i16 %port, i32 %capacity' if create else 'ptr %r'
         abi = 'i16, i32, ptr' if create else 'ptr, ptr'
         args = 'i16 %port, i32 %capacity, ptr %out' if create else 'ptr %r, ptr %out'
         if operation == 'connect':
             params='ptr %r, i16 %port';abi='ptr, i16, ptr';args='ptr %r, i16 %port, ptr %out'
-        if operation == 'create_at':
+        if operation in ('create_at','udp_create'):
             params='i32 %ip, i16 %port, i32 %capacity';abi='i32, i16, i32, ptr';args='i32 %ip, i16 %port, i32 %capacity, ptr %out'
         if operation == 'connect_at':
             params='ptr %r, i32 %ip, i16 %port';abi='ptr, i32, i16, ptr';args='ptr %r, i32 %ip, i16 %port, ptr %out'

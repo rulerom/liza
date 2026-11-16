@@ -4,15 +4,16 @@ from .types import product_args
 
 def external(fn, lines, types):
     name=fn.name.text
+    reactor = name in ('net.reactor_udp_receive','__liza_reactor_udp_send')
     group = name in ('groups.udp_receive', '__liza_group_udp_send')
-    handle = '' if group else 'i64 %handle, '
-    handle_abi = '' if group else 'i64, '
-    udp_prefix = 'liza_rt_group_' if group else 'liza_rt_net_'
+    handle = '' if group else ('ptr %handle, ' if reactor else 'i64 %handle, ')
+    handle_abi = '' if group else ('ptr, ' if reactor else 'i64, ')
+    udp_prefix = 'liza_rt_group_' if group else ('liza_rt_reactor_' if reactor else 'liza_rt_net_')
     if name == '__liza_net_random':
         lines.extend(['declare i64 @liza_rt_net_random()',
             'define internal i64 @liza___liza_net_random() {',
             '  %r = call i64 @liza_rt_net_random()', '  ret i64 %r', '}'])
-    elif name in ('net.udp_receive','groups.udp_receive'):
+    elif name in ('net.udp_receive','groups.udp_receive','net.reactor_udp_receive'):
         result=types[fn.result_type]
         status=types[product_args(fn.result_type)[1]]
         error=types['UdpError']
@@ -48,7 +49,7 @@ def external(fn, lines, types):
         if declaration not in lines:lines.append(declaration)
         lines.extend([f'define internal {ret} @liza_{name}(i64 %handle) {{',
             f'  %r = call {ret} @{symbol}(i64 %handle)',f'  ret {ret} %r','}'])
-    elif name in ('__liza_net_udp_send','__liza_group_udp_send'):
+    elif name in ('__liza_net_udp_send','__liza_group_udp_send','__liza_reactor_udp_send'):
         lines.extend([f'declare i64 @{udp_prefix}udp_send({handle_abi}ptr, i32, i32, i32, i32, i16)',
             f'define internal i64 @liza_{name}({handle}{{ ptr, i32 }} %data, i32 %start, i32 %count, i32 %ip, i16 %port) {{',
             '  %p = extractvalue { ptr, i32 } %data, 0',

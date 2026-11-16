@@ -160,7 +160,8 @@ uint32_t liza_rt_reactor_accept(reactor *r,uint64_t *id) {
 /* phase: 0 connected, 1 connecting, 2 failed (sticky SO_ERROR result). */
 uint32_t liza_rt_reactor_connect_at(reactor *r,uint32_t ip,uint16_t port,uint64_t *id) {
     id[0]=id[1]=id[2]=0;
-    if (r->udp_open) return 6;
+    /* Outbound TCP slots remain owned by this Reactor alongside its UDP
+     * endpoint. Listener/UDP exclusivity does not restrict outbound sockets. */
     if (!port || !ip || ip==UINT32_MAX || (ip>>24)>=224) return 6;
     uint32_t index=r->capacity;
     for (uint32_t i=0;i<r->capacity;i++)

@@ -253,3 +253,15 @@ flowchart LR
 ```
 
 Следующий контракт владения источниками: [SG2: Scoped Runtime Ownership](sg2-scoped-runtime-ownership.md).
+
+## Собственный UDP endpoint и исходящие TCP
+
+Для [RTSP-клиента](rtsp-client.md) доступен `net.reactor_udp_create(address, capacity)`:
+один owned UDP endpoint и до `capacity` исходящих TCP slots. TCP listener
+при этом отсутствует. `net.reactor_udp_port`, `net.reactor_udp_send` и
+`net.reactor_udp_receive` заимствуют Reactor; receive потребляет Buffer и
+возвращает тот же Buffer вместе с `Result<u64,UdpError>`, включая ошибки.
+Метаданные разбираются существующими `net.udp_length/source_ip/source_port`.
+Datagram boundaries, truncation и нулевой пакет имеют семантику [UDP](udp.md).
+Readiness UDP входит в общий poll; numeric socket handles не раскрываются.
+Закрытие Reactor освобождает UDP endpoint и все TCP slots.
