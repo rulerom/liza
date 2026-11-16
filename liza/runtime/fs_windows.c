@@ -34,3 +34,22 @@ uint32_t liza_rt_fs_op(const wchar_t *path,uint32_t op) {
     }
     return 6;
 }
+
+static uint32_t utf8_path(const uint8_t *p,uint32_t n,wchar_t *out) {
+    if(!p||!n||n>4096)return 6;
+    for(uint32_t i=0;i<n;i++)if(!p[i])return 6;
+    if(!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,(const char*)p,(int)n,out,4096))return 6;out[MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,(const char*)p,(int)n,0,0)]=0;return 0;
+}
+extern uint32_t liza_rt_file_open_native(const wchar_t*,uint64_t*);
+extern uint32_t liza_rt_file_create_native(const wchar_t*,uint64_t*);
+uint32_t liza_rt_fs_utf8_stat(const uint8_t *p,uint32_t n,uint32_t *kind,uint64_t *size) {
+    wchar_t path[4097];*kind=0;*size=0;uint32_t e=utf8_path(p,n,path);
+    return e?e:liza_rt_fs_stat(path,kind,size);
+}
+uint32_t liza_rt_fs_utf8_op(const uint8_t *p,uint32_t n,uint32_t op) {
+    wchar_t path[4097];uint32_t e=utf8_path(p,n,path);return e?e:liza_rt_fs_op(path,op);
+}
+uint32_t liza_rt_fs_utf8_file(const uint8_t *p,uint32_t n,uint32_t create,uint64_t *handle) {
+    wchar_t path[4097];*handle=0;uint32_t e=utf8_path(p,n,path);
+    if(e)return 4;return create?liza_rt_file_create_native(path,handle):liza_rt_file_open_native(path,handle);
+}

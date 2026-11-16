@@ -1,0 +1,53 @@
+import can.text
+import can.messages
+import can.fields
+import recorder.words
+pub struct Start {pub job:can.text.Value;pub assignment:can.text.Value;pub tag:can.text.Value;pub session:u64;pub token:can.text.Value;pub upload_token:can.text.Value;pub profile:can.text.Value;pub video:bool;pub audio:bool;pub bitrate:u64;pub max_sec:u64;pub upload:bool}
+pub struct Stop {pub job:can.text.Value;pub assignment:can.text.Value;pub target:can.text.Value;pub tag:can.text.Value}
+pub struct Receipt {pub job:can.text.Value;pub assignment:can.text.Value;pub status:can.text.Value;pub ok:bool}
+pub struct Identity {pub job:can.text.Value;pub assignment:can.text.Value}
+pub enum Message {Rejected(Identity);Other(can.messages.Message);Start(Start);Stop(Stop);Receipt(Receipt)}
+pub struct Parsed {pub document:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub result:Result<Message,u32>}
+pub fn parse(buffer:memory.Buffer<u8>,length:u32,scratch_buffer:memory.Buffer<u8>)->Parsed {
+    (first,initial_scratch,envelope)=can.messages.parse(move buffer,length,move scratch_buffer)
+    var document=move first;var scratch=move initial_scratch
+    var initial=can.messages.Message.Unknown(can.text.empty())
+    match envelope {Err(e)=>{return Parsed(move document,move scratch,Err(1))} Ok(value)=>{initial=value}}
+    var kind:u32=0;var job=can.text.empty();var assignment=can.text.empty()
+    match initial {can.messages.Message.Job(v)=>{job=v.job;assignment=v.assignment;if can.text.equal(v.operation,recorder.words.word_recording_start()) {kind=1};if can.text.equal(v.operation,recorder.words.word_recording_stop()) {kind=2}}
+        can.messages.Message.Unknown(v)=>{if can.text.equal(v,recorder.words.word_job_event_ack()) {kind=3}}
+        can.messages.Message.Hello(v)=>{} can.messages.Message.Ready(v)=>{} can.messages.Message.Heartbeat(v)=>{} can.messages.Message.HeartbeatOk(v)=>{} can.messages.Message.Ack(v)=>{} can.messages.Message.Event(v)=>{} can.messages.Message.Cancel(v)=>{} can.messages.Message.Control(v)=>{} can.messages.Message.Failure(v)=>{}}
+    if kind==0 {return Parsed(move document,move scratch,Ok(Message.Other(initial)))}
+    var cursor=can.fields.open(move document,length,move scratch)
+    empty=can.text.empty();payload=recorder.words.word_payload()
+    if kind==1 {
+        (c1,tag)=can.fields.text(move cursor,payload,empty,recorder.words.word_conference_tag(),true,128);cursor=move c1
+        (c2,session)=can.fields.number(move cursor,payload,empty,recorder.words.word_conference_session_id(),true,0);cursor=move c2
+        (c3,token)=can.fields.text(move cursor,payload,recorder.words.word_auth(),recorder.words.word_access_token(),true,512);cursor=move c3
+        (c4,upload_token)=can.fields.text(move cursor,payload,recorder.words.word_storage_auth(),recorder.words.word_access_token(),false,512);cursor=move c4
+        (c5,profile)=can.fields.text(move cursor,payload,empty,recorder.words.word_profile(),false,64);cursor=move c5
+        (c6,video)=can.fields.boolean(move cursor,payload,empty,recorder.words.word_include_video(),false,true);cursor=move c6
+        (c7,audio)=can.fields.boolean(move cursor,payload,empty,recorder.words.word_include_audio(),false,true);cursor=move c7
+        (c8,bitrate)=can.fields.number(move cursor,payload,empty,recorder.words.word_bitrate(),false,2500);cursor=move c8
+        (c9,max_sec)=can.fields.number(move cursor,payload,empty,recorder.words.word_max_sec(),false,0);cursor=move c9
+        (c10,storage)=can.fields.boolean(move cursor,payload,empty,recorder.words.word_storage_required(),false,false);cursor=move c10
+        (c11,upload)=can.fields.boolean(move cursor,payload,empty,recorder.words.word_upload_to_storage(),false,false);cursor=move c11
+        (last,last_scratch,valid)=can.fields.finish(move cursor)
+        if !valid {return Parsed(move last,move last_scratch,Ok(Message.Rejected(Identity(job,assignment))))}
+        return Parsed(move last,move last_scratch,Ok(Message.Start(Start(job,assignment,tag,session,token,upload_token,profile,video,audio,bitrate,max_sec,storage||upload))))
+    }
+    if kind==2 {
+        (c12,target)=can.fields.text(move cursor,payload,empty,recorder.words.word_job_id(),false,128);cursor=move c12
+        (c13,tag)=can.fields.text(move cursor,payload,empty,recorder.words.word_conference_tag(),false,128);cursor=move c13
+        (last2,scratch2,valid2)=can.fields.finish(move cursor)
+        if !valid2 {return Parsed(move last2,move scratch2,Ok(Message.Rejected(Identity(job,assignment))))}
+        return Parsed(move last2,move scratch2,Ok(Message.Stop(Stop(job,assignment,target,tag))))
+    }
+    (c14,receipt_job)=can.fields.text(move cursor,empty,empty,recorder.words.word_job_id(),true,128);cursor=move c14
+    (c15,receipt_assignment)=can.fields.text(move cursor,empty,empty,recorder.words.word_assignment_id(),true,128);cursor=move c15
+    (c16,status)=can.fields.text(move cursor,empty,empty,recorder.words.word_status(),true,64);cursor=move c16
+    (c17,ok)=can.fields.boolean(move cursor,empty,empty,recorder.words.word_ok(),true,false);cursor=move c17
+    (last3,scratch3,valid3)=can.fields.finish(move cursor)
+    if !valid3 {return Parsed(move last3,move scratch3,Err(2))}
+    return Parsed(move last3,move scratch3,Ok(Message.Receipt(Receipt(receipt_job,receipt_assignment,status,ok))))
+}

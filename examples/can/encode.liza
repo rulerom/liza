@@ -1,34 +1,34 @@
 import can.text
 import can.words
 import can.logic
-struct Builder {writer:JsonWriter;status:Result<JsonDone,JsonAccessError>}
-fn key(builder:Builder,name:can.text.Value)->Builder {
+pub struct Builder {writer:JsonWriter;status:Result<JsonDone,JsonAccessError>}
+pub fn key(builder:Builder,name:can.text.Value)->Builder {
     (writer,status)=move builder
     match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
     bytes=name.bytes;(next,result)=json.key(move writer,view bytes[0..name.length]);return Builder(move next,result)
 }
-fn text(builder:Builder,value:can.text.Value)->Builder {
+pub fn text(builder:Builder,value:can.text.Value)->Builder {
     (writer,status)=move builder
     match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
     bytes=value.bytes;(next,result)=json.write_string(move writer,view bytes[0..value.length]);return Builder(move next,result)
 }
-fn integer(builder:Builder,value:u64)->Builder {
+pub fn integer(builder:Builder,value:u64)->Builder {
     (writer,status)=move builder;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
     (next,result)=json.write_u64(move writer,value);return Builder(move next,result)
 }
-fn boolean(builder:Builder,value:bool)->Builder {
+pub fn boolean(builder:Builder,value:bool)->Builder {
     (writer,status)=move builder;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
     (next,result)=json.write_bool(move writer,value);return Builder(move next,result)
 }
-fn container(builder:Builder,kind:u32)->Builder {
+pub fn container(builder:Builder,kind:u32)->Builder {
     (writer,status)=move builder;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
     if kind==0 {(next,result)=json.begin_object(move writer);return Builder(move next,result)}
     if kind==1 {(next,result)=json.end_object(move writer);return Builder(move next,result)}
     if kind==2 {(next,result)=json.begin_array(move writer);return Builder(move next,result)}
     (next,result)=json.end_array(move writer);return Builder(move next,result)
 }
-fn string_field(builder:Builder,name:can.text.Value,value:can.text.Value)->Builder {return text(key(move builder,name),value)}
-fn number_field(builder:Builder,name:can.text.Value,value:u64)->Builder {return integer(key(move builder,name),value)}
+pub fn string_field(builder:Builder,name:can.text.Value,value:can.text.Value)->Builder {return text(key(move builder,name),value)}
+pub fn number_field(builder:Builder,name:can.text.Value,value:u64)->Builder {return integer(key(move builder,name),value)}
 pub fn message(buffer:memory.Buffer<u8>,output:can.logic.Output,token:can.text.Value)->JsonOutput {
     (writer,status)=json.writer(move buffer,4096,8);var builder=Builder(move writer,status)
     builder=container(move builder,0)
@@ -63,4 +63,13 @@ pub fn message(buffer:memory.Buffer<u8>,output:can.logic.Output,token:can.text.V
     (final,status_result)=move builder
     (bytes,length,finished)=json.finish_writer(move final)
     match status_result {Err(e)=>{return JsonOutput(move bytes,length,Err(e))} Ok(n)=>{return JsonOutput(move bytes,length,finished)}}
+}
+
+pub fn begin(buffer:memory.Buffer<u8>)->Builder {
+    (writer,status)=json.writer(move buffer,4096,12);return Builder(move writer,status)
+}
+pub fn finish(builder:Builder)->JsonOutput {
+    (writer,status)=move builder
+    (buffer,length,result)=json.finish_writer(move writer)
+    match status {Err(e)=>{return JsonOutput(move buffer,length,Err(e))} Ok(done)=>{return JsonOutput(move buffer,length,result)}}
 }

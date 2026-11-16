@@ -28,3 +28,23 @@ uint32_t liza_rt_fs_op(const char *path,uint32_t op) {
     if(op==2) {if(!unlink(path))return 0;return error_code(errno);}
     return 6;
 }
+#include <string.h>
+
+static uint32_t utf8_path(const uint8_t *p,uint32_t n,char *out) {
+    if(!p||!n||n>4096)return 6;
+    for(uint32_t i=0;i<n;i++)if(!p[i])return 6;
+    if(n)memcpy(out,p,n);out[n]=0;return 0;
+}
+extern uint32_t liza_rt_file_open_native(const char*,uint64_t*);
+extern uint32_t liza_rt_file_create_native(const char*,uint64_t*);
+uint32_t liza_rt_fs_utf8_stat(const uint8_t *p,uint32_t n,uint32_t *kind,uint64_t *size) {
+    char path[4097];*kind=0;*size=0;uint32_t e=utf8_path(p,n,path);
+    return e?e:liza_rt_fs_stat(path,kind,size);
+}
+uint32_t liza_rt_fs_utf8_op(const uint8_t *p,uint32_t n,uint32_t op) {
+    char path[4097];uint32_t e=utf8_path(p,n,path);return e?e:liza_rt_fs_op(path,op);
+}
+uint32_t liza_rt_fs_utf8_file(const uint8_t *p,uint32_t n,uint32_t create,uint64_t *handle) {
+    char path[4097];*handle=0;uint32_t e=utf8_path(p,n,path);
+    if(e)return 4;return create?liza_rt_file_create_native(path,handle):liza_rt_file_open_native(path,handle);
+}

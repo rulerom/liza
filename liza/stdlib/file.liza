@@ -116,3 +116,39 @@ fn file.remove(path:Path)->Result<u32,FsError>:io {
     code=__liza_fs_op(path,2)
     if code!=0 {return Err(__liza_fs_error(code))};return Ok(0)
 }
+
+// Dynamic bounded UTF-8 names for application-owned artifact directories.
+fn __liza_fs_valid_name(path:View<u8>)->bool {
+    if path.len==0||path.len>4096 {return false}
+    var i:u32=0;while i<path.len {if path[i]==0 {return false};i=i+1}
+    match utf8.validate(path) {Err(e)=>{return false} Ok(done)=>{return true}}
+}
+fn file.stat_utf8(path:View<u8>)->Result<FileInfo,FsError>:io {
+    if !__liza_fs_valid_name(path) {return Err(FsError.InvalidPath)}
+    raw=__liza_fs_utf8_stat(path)
+    if raw.error!=0 {return Err(__liza_fs_error(raw.error))}
+    var kind=FileKind.Other
+    if raw.kind==0 {kind=FileKind.Missing};if raw.kind==1 {kind=FileKind.Regular}
+    if raw.kind==2 {kind=FileKind.Directory};if raw.kind==3 {kind=FileKind.Symlink}
+    return Ok(FileInfo(kind,raw.size))
+}
+fn file.mkdir_utf8(path:View<u8>)->Result<u32,FsError>:io {
+    if !__liza_fs_valid_name(path) {return Err(FsError.InvalidPath)}
+    code=__liza_fs_utf8_op(path,1);if code!=0 {return Err(__liza_fs_error(code))};return Ok(0)
+}
+fn file.remove_utf8(path:View<u8>)->Result<u32,FsError>:io {
+    if !__liza_fs_valid_name(path) {return Err(FsError.InvalidPath)}
+    code=__liza_fs_utf8_op(path,2);if code!=0 {return Err(__liza_fs_error(code))};return Ok(0)
+}
+fn file.create_utf8(path:View<u8>)->Result<File,FileCreateError>:io {
+    if !__liza_fs_valid_name(path) {return Err(FileCreateError.Failure(FileError.InvalidPath))}
+    raw=__liza_fs_utf8_file(path,true)
+    if raw.error==0 {return Ok(raw.handle)}
+    if raw.error==8 {return Err(FileCreateError.AlreadyExists)}
+    return Err(FileCreateError.Failure(__liza_file_error(raw.error)))
+}
+fn file.open_utf8(path:View<u8>)->Result<File,FileError>:io {
+    if !__liza_fs_valid_name(path) {return Err(FileError.InvalidPath)}
+    raw=__liza_fs_utf8_file(path,false)
+    if raw.error==0 {return Ok(raw.handle)};return Err(__liza_file_error(raw.error))
+}

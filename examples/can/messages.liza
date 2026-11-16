@@ -177,7 +177,8 @@ pub fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Par
         (next176,assignment)=text(move cursor,11,0,true,128);cursor=move next176
         (next177,operation)=text(move cursor,12,0,true,128);cursor=move next177
         (next178,time)=integer(move cursor,7,0,true,0);cursor=move next178
-        (next179,value)=text(move cursor,14,13,can.text.equal(operation,can.words.literal_example_echo()),512);cursor=move next179
+        var value=can.text.empty()
+        if can.text.equal(operation,can.words.literal_example_echo()) {(next179,decoded_value)=text(move cursor,14,13,true,512);cursor=move next179;value=decoded_value}
         return finish(move cursor,Message.Job(Assignment(job,assignment,operation,value,time)))
     }
     if can.text.equal(kind,can.words.literal_job_ack()) {

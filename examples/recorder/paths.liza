@@ -1,0 +1,30 @@
+import can.text
+pub fn component(value:can.text.Value)->bool {
+    if value.length==0||value.length>64 {return false}
+    data=value.bytes;var i:u32=0
+    while i<value.length {b=data[i];if !((b>=48&&b<=57)||(b>=65&&b<=90)||(b>=97&&b<=122)||b==45||b==95) {return false};i=i+1}
+    return true
+}
+pub fn join(root:can.text.Value,part:can.text.Value)->can.text.Value {
+    var result=root
+    if result.length+part.length+1>1024 {return can.text.empty()}
+    if result.length!=0 {b=result.bytes[result.length-1];if b!=47&&b!=92 {result.bytes[result.length]=47;result.length=result.length+1}}
+    data=part.bytes;var i:u32=0;while i<part.length {result.bytes[result.length]=data[i];result.length=result.length+1;i=i+1};return result
+}
+pub fn mkdir(path:can.text.Value)->bool:io {
+    data=path.bytes;match file.mkdir_utf8(view data[0..path.length]) {Err(e)=>{return false} Ok(done)=>{return true}}
+}
+pub fn marker(path:can.text.Value)->bool:io {
+    data=path.bytes
+    match file.create_utf8(view data[0..path.length]) {Err(e)=>{return false} Ok(f)=>{
+        bytes:[u8;5]=[115,116,111,112,10];written=file.write_chunk(f,view bytes[0..5]);closed=file.close(move f)
+        match written {Err(e)=>{return false} Ok(n)=>{if n!=5 {return false}}};match closed {Err(e)=>{return false} Ok(done)=>{return true}}
+    }}
+}
+pub fn size(path:can.text.Value)->Result<u64,u32>:io {
+    data=path.bytes;match file.stat_utf8(view data[0..path.length]) {Err(e)=>{return Err(1)} Ok(info)=>{
+        match info.kind {FileKind.Regular=>{return Ok(info.size)} FileKind.Missing=>{return Err(2)} FileKind.Directory=>{return Err(1)} FileKind.Symlink=>{return Err(1)} FileKind.Other=>{return Err(1)}}}
+}}
+pub fn remove(path:can.text.Value)->bool:io {
+    data=path.bytes;match file.remove_utf8(view data[0..path.length]) {Err(e)=>{match e {FsError.NotFound=>{return true} FsError.PermissionDenied=>{return false} FsError.AlreadyExists=>{return false} FsError.NotDirectory=>{return false} FsError.IsDirectory=>{return false} FsError.InvalidPath=>{return false} FsError.NoSpace=>{return false} FsError.Other=>{return false}}} Ok(done)=>{return true}}
+}

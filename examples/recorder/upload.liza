@@ -1,0 +1,130 @@
+import recorder.https
+import recorder.request
+import recorder.paths
+import recorder.words
+import recorder.messages
+import can.config
+import can.fields
+import can.text
+import httpws.bytes
+pub struct State {pub mode:u32;pub offset:u64;pub size:u64;pub count:u32;pub limit:u32;pub upload_id:can.text.Value;pub blob:can.text.Value;pub url:can.text.Value;pub waiting:bool;pub deadline:u64;pub failed:bool}
+pub struct Transfer {connection:recorder.https.Session;file:Option<File>;state:State}
+pub struct Step {pub transfer:Transfer;pub reactor:net.Reactor;pub document:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub state:State}
+pub struct Reset {pub transfer:Transfer;pub reactor:net.Reactor}
+struct Reply {ok:bool;offset:u64;limit:u64;id:can.text.Value;blob:can.text.Value;url:can.text.Value}
+struct Parsed {document:memory.Buffer<u8>;scratch:memory.Buffer<u8>;reply:Reply}
+pub fn create(buffer:memory.Buffer<u8>)->Transfer {
+    blank=can.text.empty();return Transfer(recorder.https.empty(move buffer),None,State(0,0,0,0,2048,blank,blank,blank,false,0,false))
+}
+fn parse(document:memory.Buffer<u8>,scratch:memory.Buffer<u8>,frame:recorder.https.Frame,mode:u32)->Parsed {
+    var buffer=move document;var i:u32=0;bytes=frame.bytes
+    while i<frame.length {buffer=memory.set(move buffer,i,bytes[i]);i=i+1}
+    var cursor=can.fields.open(move buffer,frame.length,move scratch);empty=can.text.empty()
+    (c1,ok)=can.fields.boolean(move cursor,empty,empty,recorder.words.word_ok(),true,false);cursor=move c1
+    (c2,offset)=can.fields.number(move cursor,empty,empty,recorder.words.word_offset(),true,0);cursor=move c2
+    (c3,limit)=can.fields.number(move cursor,empty,empty,recorder.words.word_max_chunk_size(),mode==1,0);cursor=move c3
+    (c4,id)=can.fields.text(move cursor,empty,empty,recorder.words.word_upload_id(),mode==1,64);cursor=move c4
+    (c5,blob)=can.fields.text(move cursor,empty,empty,recorder.words.word_blob_id(),mode==3,128);cursor=move c5
+    (c6,url)=can.fields.text(move cursor,empty,empty,recorder.words.word_url(),mode==3,512);cursor=move c6
+    (last,last_scratch,valid)=can.fields.finish(move cursor)
+    return Parsed(move last,move last_scratch,Reply(valid&&ok,offset,limit,id,blob,url))
+}
+fn crypto(config:can.config.Config,now:u64,until:u64)->Result<tls.Session,TlsError>:io,alloc {
+    peer=config.peer.bytes;ca=config.ca.bytes
+    if config.custom {return tls.create_with_ca(view peer[0..config.peer.length],view ca[0..config.ca.length],tls.managed_bytes(),now,until)}
+    return tls.create(view peer[0..config.peer.length],tls.managed_bytes(),now,until)
+}
+pub fn tick(transfer:Transfer,r:net.Reactor,document:memory.Buffer<u8>,scratch:memory.Buffer<u8>,config:can.config.Config,job:recorder.messages.Start,output:can.text.Value,size:u64,enabled:bool,now:u64)->Step:io,alloc {
+    (initial_connection,initial_file,initial_state)=move transfer
+    var connection=move initial_connection;var input=move initial_file;var state=initial_state;var reactor=move r
+    var doc=move document;var temp=move scratch
+    if state.mode==0&&enabled {
+        state.mode=1;state.size=size;state.deadline=now+600000
+        bytes=output.bytes
+        match move input {None=>{
+            match file.open_utf8(view bytes[0..output.length]) {Err(e)=>{input=None;state.failed=true} Ok(handle)=>{input=Some(move handle)}}
+        } Some(previous)=>{input=Some(move previous);state.failed=true}}
+    }
+    if state.mode!=0&&now>=state.deadline {state.failed=true}
+    if state.mode>=1&&state.mode<=3&&!state.waiting&&!state.failed {
+        var data:[u8;4096]=[0;4096];var length:u32=0
+        var target=recorder.words.word_upload_path();var filename=recorder.words.word_output_mp4();var content_type=recorder.words.word_video_mp4()
+        if job.audio&&!job.video {filename=recorder.words.word_output_m4a();content_type=recorder.words.word_audio_mp4()}
+        if state.mode!=1 {
+            target=recorder.paths.join(target,state.upload_id)
+            if state.mode==3 {target=recorder.paths.join(target,recorder.words.word_complete())}
+
+        }
+        if state.mode==2 {
+            content_type=recorder.words.word_binary_type()
+            match move input {None=>{input=None;state.failed=true} Some(handle)=>{
+                var desired=state.limit;if u64(desired)>state.size-state.offset {desired=u32(state.size-state.offset)}
+                (with_body,retained,count,failed)=recorder.https.body(move connection,move handle,desired);connection=move with_body
+                length=count;if failed {state.failed=true}
+
+                input=Some(move retained)
+            }}
+        }
+        if !state.failed {
+            state.count=length
+            match recorder.request.make(config.host,job.upload_token,target,state.mode,filename,size,state.offset,content_type,length,view data[0..0]) {
+                Err(e)=>{state.failed=true}
+                Ok(request)=>{
+                    if state.mode==1 {
+                        match crypto(config,now,state.deadline) {Err(e)=>{state.failed=true} Ok(session)=>{
+                            match net.reactor_connect_at(reactor,config.address) {Err(e)=>{destroyed=tls.destroy(move session);state.failed=true} Ok(id)=>{
+                                connection=recorder.https.start(move connection,move session,id,request,now+15000)
+                            }}
+                        }}
+                    } else {
+                        (next,sent)=recorder.https.send(move connection,request,now+15000);connection=move next
+                        match sent {Err(e)=>{state.failed=true} Ok(accepted)=>{if !accepted {state.failed=true}}}
+                    }
+                    state.waiting=true
+                }
+            }
+        }
+    }
+    if !state.failed {
+        {
+            (next,next_reactor,event)=recorder.https.step(move connection,move reactor,now,now);reactor=move next_reactor;connection=move next
+            match event {
+                recorder.https.Event.Message(frame)=>{
+                    (next_doc,next_temp,reply)=parse(move doc,move temp,frame,state.mode);doc=move next_doc;temp=move next_temp
+                    if !state.waiting||!reply.ok {state.failed=true}
+                    else if state.mode==1 {
+                        if reply.offset!=0||!recorder.paths.component(reply.id)||reply.limit<2048 {state.failed=true}
+                        else {state.upload_id=reply.id;state.limit=65536;if reply.limit<65536 {state.limit=u32(reply.limit)/2048*2048};state.mode=2;state.waiting=false}
+                    } else if state.mode==2 {
+                        if reply.offset!=state.offset+u64(state.count) {state.failed=true}
+                        else {state.offset=reply.offset;state.waiting=false;if state.offset==state.size {state.mode=3}}
+                    } else if state.mode==3 {
+                        if reply.offset!=state.size||!recorder.paths.component(reply.blob)||reply.url.length==0 {state.failed=true}
+                        else {state.blob=reply.blob;state.url=reply.url;state.mode=4;state.waiting=false
+                            connection=recorder.https.stop(move connection,now+3000)
+                        }
+                    } else {state.failed=true}
+                }
+                recorder.https.Event.Closed=>{if state.mode==4 {state.mode=5} else {state.failed=true}}
+                recorder.https.Event.Failed(e)=>{state.failed=true}
+                recorder.https.Event.Idle=>{}
+            }
+        }
+    }
+    return Step(Transfer(move connection,move input,state),move reactor,move doc,move temp,state)
+}
+pub fn close(transfer:Transfer,r:net.Reactor)->net.Reactor:io,alloc {
+    (connection,input,state)=move transfer
+    (reactor,result)=recorder.https.close(move connection,move r)
+    match move input {None=>{} Some(handle)=>{closed=file.close(move handle)}}
+    return move reactor
+}
+pub fn reset(transfer:Transfer,r:net.Reactor)->Reset:io,alloc {
+    (connection,input,state)=move transfer
+    (session,reactor)=recorder.https.reset(move connection,move r)
+    match move input {None=>{} Some(handle)=>{closed=file.close(move handle)}}
+    blank=can.text.empty()
+    return Reset(Transfer(move session,None,State(0,0,0,0,2048,blank,blank,blank,false,0,false)),move reactor)
+}
+
+pub fn buffered(borrow transfer:Transfer)->bool {return recorder.https.buffered(transfer.connection)}

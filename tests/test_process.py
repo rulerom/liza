@@ -110,6 +110,33 @@ match process.spawn(executable,command) {{Err(e)=>{{return 4}} Ok(child)=>{{
                 run=subprocess.run([str(exe),str(self.child),str(marker)],capture_output=True,timeout=12)
                 self.assertEqual(run.returncode,0,(opt,run.stdout,run.stderr))
 
+    def test_owned_files_with_utf8_names_and_invalid_input(self):
+        with tempfile.TemporaryDirectory(dir=self.root) as folder:
+            directory=(Path(folder)/'данные 🚀').as_posix().encode()
+            filename=(Path(folder)/'данные 🚀'/'запись.mp4').as_posix().encode()
+            program='fn main()->u32:io {\n'
+            for name,data in (('directory',directory),('filename',filename)):
+                program+=f'{name}:[u8;{len(data)}]={array(data)}\n'
+            program+=f'folder=view directory[0..{len(directory)}];path=view filename[0..{len(filename)}]\n'
+            program+='''match file.mkdir_utf8(folder) {Err(e)=>{return 1} Ok(n)=>{}}
+match file.create_utf8(path) {Err(e)=>{return 2} Ok(output)=>{
+ data:[u8;3]=[1,2,3];written=file.write_chunk(output,view data[0..3]);closed=file.close(move output)
+}}
+match file.create_utf8(path) {Ok(unexpected)=>{closed=file.close(move unexpected);return 3} Err(e)=>{}}
+match file.stat_utf8(path) {Err(e)=>{return 4} Ok(info)=>{if info.size!=3 {return 5}}}
+match file.open_utf8(path) {Err(e)=>{return 6} Ok(input)=>{
+ var failed=false;match file.read_chunk(input) {Err(e)=>{failed=true} Ok(chunk)=>{if chunk.len!=3||chunk.data[2]!=3 {failed=true}}}
+ closed=file.close(move input);if failed {return 7}
+}}
+match file.remove_utf8(path) {Err(e)=>{return 8} Ok(n)=>{}}
+zero:[u8;1]=[0];bad:[u8;1]=[255]
+match file.stat_utf8(view zero[0..1]) {Ok(info)=>{return 9} Err(e)=>{}}
+match file.stat_utf8(view bad[0..1]) {Ok(info)=>{return 10} Err(e)=>{}}
+match file.stat_utf8(view bad[0..0]) {Ok(info)=>{return 11} Err(e)=>{}}
+return 0
+}'''
+            self.run_program(program)
+
     def test_filesystem_metadata_and_nonrecursive_operations(self):
         program='''fn main()->u32:io {match cli.path_arg(1) {None=>{return 1} Some(path)=>{
  match file.stat(path) {Err(e)=>{return 2} Ok(info)=>{match info.kind {FileKind.Missing=>{} FileKind.Regular=>{return 3} FileKind.Directory=>{return 3} FileKind.Symlink=>{return 3} FileKind.Other=>{return 3}}}}

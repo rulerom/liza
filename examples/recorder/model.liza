@@ -1,0 +1,108 @@
+import can.text
+import can.words
+import can.messages
+import recorder.messages
+import recorder.paths
+import recorder.words
+import recorder.launch
+import recorder.config
+pub struct Data {pub path:can.text.Value;pub size:u64;pub code:u32;pub published:bool;pub local_only:bool;pub blob:can.text.Value;pub url:can.text.Value;pub filename:can.text.Value;pub mime:can.text.Value;pub tag:can.text.Value;pub session:u64;pub duration:u64}
+pub struct Output {pub kind:u32;pub job:can.text.Value;pub assignment:can.text.Value;pub status:can.text.Value;pub note:can.text.Value;pub data:Data;pub request:can.text.Value;pub jobs:u64;pub generation:u64}
+pub struct State {pub node:can.text.Value;pub generation:u64;pub connected:bool;pub registered:bool;pub failed:bool;pub policy:bool;pub phase:u32;pub current:recorder.messages.Start;pub paths:recorder.launch.Paths;pub started:u64;pub stop_requested:bool;pub stop_due:u64;pub term_due:u64;pub heartbeat_ms:u64;pub heartbeat_due:u64;pub heartbeat_ack_due:u64;pub waiting_heartbeat:bool;pub queue:[Output;8];pub head:u32;pub count:u32;pub completed:u64;pub stopped:u64;pub receipt_due:u64;pub artifact:Data}
+pub fn empty_data()->Data {blank=can.text.empty();return Data(blank,0,0,false,false,blank,blank,blank,blank,blank,0,0)}
+fn empty_output()->Output {return Output(0,can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),empty_data(),can.text.empty(),0,0)}
+pub fn enqueue(borrow mut state:State,output:Output)->u32 {
+    if !state.connected {return 0}
+    if state.count==8 {state.failed=true;return 1}
+    state.queue[(state.head+state.count)%8]=output;state.count=state.count+1;return 0
+}
+pub fn create(node:can.text.Value,generation:u64)->State {
+    blank=can.text.empty();data=empty_output()
+    job=recorder.messages.Start(blank,blank,blank,0,blank,blank,blank,false,false,2500,0,false)
+    return State(node,generation,true,false,false,false,0,job,recorder.launch.Paths(blank,blank,blank),0,false,0,0,0,0,0,false,[data;8],0,0,0,0,0,empty_data())
+}
+pub fn take(borrow mut state:State)->Option<Output> {
+    if state.count==0 {return None};output=state.queue[state.head];state.head=(state.head+1)%8;state.count=state.count-1;return Some(output)
+}
+pub fn event(borrow mut state:State,job:can.text.Value,assignment:can.text.Value,status:can.text.Value,note:can.text.Value,data:Data)->u32 {
+    output=Output(4,job,assignment,status,note,data,can.text.empty(),0,state.generation);return enqueue(borrow mut state,output)
+}
+fn ack(borrow mut state:State,job:can.text.Value,assignment:can.text.Value)->u32 {
+    output=Output(3,job,assignment,recorder.words.word_accepted(),can.text.empty(),empty_data(),can.text.empty(),0,state.generation);return enqueue(borrow mut state,output)
+}
+fn matches(borrow state:State,job:can.text.Value,assignment:can.text.Value)->bool {
+    return state.phase!=0&&can.text.equal(state.current.job,job)&&can.text.equal(state.current.assignment,assignment)
+}
+pub fn receive(borrow mut state:State,message:recorder.messages.Message,generation:u64,now:u64,config:recorder.config.Config)->u32 {
+    if generation!=state.generation {return 0}
+    match message {
+        recorder.messages.Message.Start(job)=>{
+            if !state.registered {state.failed=true;return 1}
+            var reason=can.text.empty()
+            if state.phase!=0 {reason=recorder.words.word_already_active()}
+            else if !recorder.launch.valid(job) {reason=recorder.words.word_invalid_payload()}
+            else if config.local_only&&job.upload {reason=recorder.words.word_storage_required()}
+            else if !config.local_only&&job.upload_token.length==0 {reason=recorder.words.word_storage_required()}
+            if reason.length!=0 {n=event(borrow mut state,job.job,job.assignment,recorder.words.word_failed(),reason,empty_data());return 0}
+            state.current=job;state.phase=1;state.stop_requested=false;state.started=now
+            n=ack(borrow mut state,job.job,job.assignment)
+        }
+        recorder.messages.Message.Stop(stop)=>{
+            if !state.registered {state.failed=true;return 1}
+            n=ack(borrow mut state,stop.job,stop.assignment)
+            var found=state.phase!=0
+            if stop.target.length!=0 {found=found&&can.text.equal(stop.target,state.current.job)}
+            if stop.tag.length!=0 {found=found&&can.text.equal(stop.tag,state.current.tag)}
+            var note=recorder.words.word_no_recording_matched()
+            if found {state.stop_requested=true;note=recorder.words.word_stop_requested()}
+            n2=event(borrow mut state,stop.job,stop.assignment,recorder.words.word_completed(),note,empty_data())
+        }
+        recorder.messages.Message.Rejected(identity)=>{n=event(borrow mut state,identity.job,identity.assignment,recorder.words.word_failed(),recorder.words.word_invalid_payload(),empty_data())}
+        recorder.messages.Message.Receipt(receipt)=>{
+            if matches(state,receipt.job,receipt.assignment) {
+                expected=(state.phase==6&&can.text.equal(receipt.status,recorder.words.word_finalizing()))||(state.phase==8&&can.text.equal(receipt.status,recorder.words.word_artifact_ready()))
+                if expected {
+                    if !receipt.ok {state.phase=0;state.current.upload_token=can.text.empty();data=state.artifact;n=event(borrow mut state,receipt.job,receipt.assignment,recorder.words.word_failed(),recorder.words.word_upload_failed(),data)}
+                    else if state.phase==6 {state.phase=7}
+                    else {state.phase=0;state.completed=state.completed+1;state.current.upload_token=can.text.empty();state.artifact.published=true;data=state.artifact;n=event(borrow mut state,receipt.job,receipt.assignment,recorder.words.word_completed(),recorder.words.word_artifact_ready(),data)}
+                }
+            }
+        }
+        recorder.messages.Message.Other(other)=>{
+            match other {
+                can.messages.Message.Ready(ready)=>{
+                    if state.registered||!can.text.equal(ready.node,state.node)||!can.text.equal(ready.role,recorder.words.word_recorder())||ready.protocol!=1||ready.max_jobs!=1||ready.heartbeat_ms==0||ready.heartbeat_ms>60000||ready.lease_ms<=ready.heartbeat_ms {state.failed=true;return 1}
+                    state.registered=true;state.heartbeat_ms=ready.heartbeat_ms;state.heartbeat_due=now+ready.heartbeat_ms
+                }
+                can.messages.Message.HeartbeatOk(time)=>{if !state.registered {state.failed=true;return 1};state.waiting_heartbeat=false}
+                can.messages.Message.Cancel(cancel)=>{if matches(state,cancel.job,cancel.assignment) {state.stop_requested=true}}
+                can.messages.Message.Job(job)=>{n=event(borrow mut state,job.job,job.assignment,recorder.words.word_failed(),recorder.words.word_unsupported_job(),empty_data())}
+                can.messages.Message.Control(control)=>{if control.reply {output=Output(5,can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),empty_data(),control.request,0,state.generation);n=enqueue(borrow mut state,output)}}
+                can.messages.Message.Failure(failure)=>{state.failed=true;state.stop_requested=true;state.policy=true;return 1}
+                can.messages.Message.Hello(hello)=>{state.failed=true;return 1} can.messages.Message.Heartbeat(heartbeat)=>{state.failed=true;return 1}
+                can.messages.Message.Ack(report)=>{state.failed=true;return 1} can.messages.Message.Event(report)=>{state.failed=true;return 1}
+                can.messages.Message.Unknown(kind)=>{}
+            }
+        }
+    }
+    if state.failed {return 1};return 0
+}
+pub fn heartbeat(borrow mut state:State,now:u64,operation_ms:u64)->u32 {
+    if !state.registered||!state.connected {return 0}
+    if state.waiting_heartbeat&&now>=state.heartbeat_ack_due {state.failed=true;state.stop_requested=true;return 1}
+    if now>=state.heartbeat_due {
+        var jobs:u64=0;if state.phase!=0 {jobs=1}
+        output=Output(2,can.text.empty(),can.text.empty(),can.text.empty(),can.text.empty(),empty_data(),can.text.empty(),jobs,state.generation);n=enqueue(borrow mut state,output)
+        state.heartbeat_due=now+state.heartbeat_ms;if !state.waiting_heartbeat {state.heartbeat_ack_due=now+operation_ms};state.waiting_heartbeat=true
+    }
+    if state.failed {return 1};return 0
+}
+pub fn invalidate(borrow mut state:State)->u32 {state.connected=false;state.registered=false;state.stop_requested=true;state.count=0;state.head=0;return 0}
+
+pub fn publication(borrow mut state:State,now:u64)->u32 {
+    if (state.phase==6||state.phase==8)&&now>=state.receipt_due {
+        state.phase=0;state.current.upload_token=can.text.empty();job=state.current.job;assignment=state.current.assignment;data=state.artifact
+        return event(borrow mut state,job,assignment,recorder.words.word_failed(),recorder.words.word_ack_timeout(),data)
+    }
+    return 0
+}
