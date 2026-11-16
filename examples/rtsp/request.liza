@@ -1,0 +1,24 @@
+import rtsp.words
+import rtsp.bytes
+import recorder.request
+import can.text
+import httpws.bytes
+pub fn make(method:can.text.Value,target:can.text.Value,cseq:u32,session:can.text.Value)->Result<httpws.bytes.Wire,u32> {
+    values:[can.text.Value;3]=[method,target,session];var i:u32=0
+    while i<3 {v=values[i];var j:u32=0;while j<v.length {b=v.bytes[j];if b<33||b>126 {return Err(1)};j=j+1};i=i+1}
+    var out=httpws.bytes.empty();space:[u8;1]=[32]
+    match rtsp.bytes.append(out,method) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+    n=httpws.bytes.append(borrow mut out,view space[0..1])
+    match rtsp.bytes.append(out,target) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+    match rtsp.bytes.append(out,rtsp.words.rtsp()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+    match rtsp.bytes.append(out,recorder.request.decimal(u64(cseq))) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+    match rtsp.bytes.append(out,rtsp.words.ua()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+    if session.length!=0 {
+        match rtsp.bytes.append(out,rtsp.words.session_header()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+        match rtsp.bytes.append(out,session) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}
+    }
+    method_data=method.bytes
+    if rtsp.bytes.equal(view method_data[0..method.length],rtsp.words.describe()) {match rtsp.bytes.append(out,rtsp.words.accept()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}}
+    if rtsp.bytes.equal(view method_data[0..method.length],rtsp.words.setup()) {match rtsp.bytes.append(out,rtsp.words.transport()) {Err(e)=>{return Err(e)} Ok(v)=>{out=v}}}
+    return rtsp.bytes.append(out,rtsp.words.end())
+}

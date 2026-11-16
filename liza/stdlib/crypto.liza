@@ -1,0 +1,11 @@
+enum HmacError {InvalidRange;Failure}
+struct __liza_Hmac {bytes:[u8;32];error:u32}
+// OpenSSL performs cryptography; views are used only for this synchronous call.
+// Input limits bound the adapter, not all internal provider allocations.
+fn hmac.sha256(key:View<u8>,data:View<u8>)->Result<[u8;32],HmacError>:io,alloc {
+    if key.len==0||key.len>1024||data.len>4096 {return Err(HmacError.InvalidRange)}
+    raw=__liza_crypto_hmac_sha256(key,data)
+    if raw.error==0 {return Ok(raw.bytes)}
+    if raw.error==1 {return Err(HmacError.InvalidRange)}
+    return Err(HmacError.Failure)
+}

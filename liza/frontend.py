@@ -432,6 +432,7 @@ class Parser:
         functions.uses_json = any(t.text in ('JsonState','JsonError','JsonErrorKind','JsonAccessError','JsonKind','JsonDone','JsonLimits','JsonDocument','JsonRead','JsonDecoded','JsonWriter','JsonWritten','JsonOutput') or (t.text == 'json' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_framing = any(t.text in ('FrameState','FrameStep','FrameError') or (t.text == 'framing' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_process = any(t.text in ('ProcessError','ProcessExitKind','ProcessExit','ProcessCommand','ProcessDone','ProcessCloseFailure') or (t.text == 'process' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
+        functions.uses_hmac = any(t.text == 'HmacError' or (t.text == 'hmac' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_tls = any(t.text in ('TlsState','TlsStep','TlsError','TlsOutcome','TlsRead') or (t.text == 'tls' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_net = any(t.text in ('NetError','ReactorError') or (t.text == 'net' and self.tokens[i+1].text == '.') for i,t in enumerate(self.tokens[:-1]))
         functions.uses_cli = any(t.text in ('Arg', 'Path') or (t.text == 'cli' and self.tokens[i+1].text == '.')

@@ -1,0 +1,245 @@
+"""Independent RTSP, ordinary VG WSS and authenticated UDP wire peers."""
+import base64
+import hashlib
+import hmac
+import json
+import os
+from pathlib import Path
+import socket
+import ssl
+import struct
+import subprocess
+import threading
+import time
+import unittest
+
+from test_httpws import build, client_frame, receive
+from test_tls_transport import TlsTransport as _Fixture
+
+setup_fixture = _Fixture.setUpClass.__func__
+fixture_command = _Fixture.command.__func__
+del _Fixture
+ROOT = Path(__file__).resolve().parents[1]
+KEY = b'0123456789abcdef' * 4
+SPS, PPS = b'\x67\x64\x00\x28', b'\x68\xee\x3c\x80'
+
+
+def ws(data, first=0x81):
+    if len(data) < 126:
+        return bytes([first, len(data)]) + data
+    return bytes([first, 126]) + struct.pack('!H', len(data)) + data
+
+
+def message(value):
+    return ws(json.dumps(value, separators=(',', ':')).encode())
+
+
+def signed(packet, phase):
+    packet = bytearray(packet)
+    packet[12] = phase
+    packet[48:] = hmac.digest(KEY, packet[:48], 'sha256')
+    return packet
+
+
+@unittest.skipUnless(os.environ.get('LIZA_TEST_TLS') == '1', 'LIZA_TEST_TLS=1 requires OpenSSL')
+class RtspClient(unittest.TestCase):
+    command = classmethod(fixture_command)
+
+    @classmethod
+    def setUpClass(cls):
+        setup_fixture(cls)
+        cls.clients = []
+        for opt in ('0', '2'):
+            folder = cls.root / ('rtsp' + opt)
+            folder.mkdir()
+            cls.clients.append(build(ROOT / 'examples/apps/liza_rtsp.liza', folder, opt, ROOT / 'examples'))
+
+    def scenario(self, exe, bad_cseq=False, drop_after=None):
+        errors, packets, methods, commands = [], [], [], []
+        stopped = threading.Event()
+        listeners = [socket.socket() for _ in range(2)]
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        for listener in listeners:
+            listener.bind(('127.0.0.1', 0))
+            listener.listen(1)
+            listener.settimeout(12)
+        udp.bind(('127.0.0.1', 0))
+        udp.settimeout(.1)
+        camera, control = listeners
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(self.root / 'server.pem', self.root / 'server.key')
+
+        def camera_peer():
+            with camera.accept()[0] as conn:
+                conn.settimeout(.03)
+                pending = b''
+                playing = False
+                sequence = 0
+                while not stopped.is_set():
+                    try:
+                        chunk = conn.recv(8192)
+                        if not chunk:
+                            break
+                        pending += chunk
+                    except socket.timeout:
+                        pass
+                    while b'\r\n\r\n' in pending:
+                        request, pending = pending.split(b'\r\n\r\n', 1)
+                        method = request.split(b' ', 1)[0]
+                        methods.append(method)
+                        cseq = next(line.split(b':', 1)[1].strip() for line in request.split(b'\r\n') if line.lower().startswith(b'cseq:'))
+                        if bad_cseq:
+                            cseq = str(int(cseq) + 1).encode()
+                        body = b''
+                        headers = b''
+                        if method == b'DESCRIBE':
+                            body = (b'v=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\n'
+                                    b'a=fmtp:96 packetization-mode=1;profile-level-id=640028;sprop-parameter-sets='
+                                    + base64.b64encode(SPS) + b',' + base64.b64encode(PPS)
+                                    + b'\r\na=framesize:96 1920-1080\r\na=control:trackID=1\r\n')
+                            headers = b'Content-Type: application/sdp\r\nContent-Base: rtsp://127.0.0.1/stream1/\r\n'
+                        if method == b'SETUP':
+                            self.assertIn(b'Transport: RTP/AVP/TCP;unicast;interleaved=0-1', request)
+                            headers = b'Session: fixture;timeout=60\r\nTransport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n'
+                        response = b'RTSP/1.0 200 OK\r\nCSeq: ' + cseq + b'\r\n' + headers + b'Content-Length: ' + str(len(body)).encode() + b'\r\n\r\n' + body
+                        # Fragment the header independently of RTP record framing.
+                        conn.sendall(response[:7])
+                        conn.sendall(response[7:])
+                        if method == b'PLAY':
+                            playing = True
+                        if method == b'TEARDOWN':
+                            return
+                    if playing:
+                        sequence += 1
+                        # Every fifth packet is an IDR; payload must survive unchanged.
+                        payload = (b'\x65' if sequence % 5 == 0 else b'\x61') + b'camera-payload'
+                        packet = struct.pack('!BBHII', 128, 224, sequence, sequence * 3600, 777) + payload
+                        record = b'$\0' + struct.pack('!H', len(packet)) + packet
+                        conn.sendall(record[:3])
+                        conn.sendall(record[3:] + b'$\1\0\4\x80\xc8\0\0')
+                        if drop_after is not None and sequence == drop_after:
+                            return
+
+        def control_peer():
+            with control.accept()[0] as raw, context.wrap_socket(raw, server_side=True) as conn:
+                conn.settimeout(12)
+                request = b''
+                while not request.endswith(b'\r\n\r\n'):
+                    request += receive(conn, 1)
+                self.assertTrue(request.startswith(b'GET / HTTP/1.1\r\n'))
+                key = next(line.split(b':', 1)[1].strip() for line in request.split(b'\r\n') if line.lower().startswith(b'sec-websocket-key:'))
+                proof = base64.b64encode(hashlib.sha1(key + b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest())
+                conn.sendall(b'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + proof + b'\r\n\r\n')
+                while True:
+                    opcode, data = client_frame(conn)
+                    if opcode == 8:
+                        conn.sendall(b'\x88\x02\x03\xe8')
+                        conn.unwrap().close()
+                        return
+                    if opcode == 9:
+                        conn.sendall(bytes([138, len(data)]) + data)
+                        continue
+                    self.assertEqual(opcode, 1)
+                    value = json.loads(data)
+                    commands.append(next(iter(value)))
+                    if 'connect_request' in value:
+                        self.assertEqual(value['connect_request']['login'], 'fixture-login')
+                        conn.sendall(message({'connect_response': {'result': 1, 'id': 123}}))
+                        large = json.dumps({'conferences_list': {'unused': 'x' * 34000}}).encode()
+                        conn.sendall(ws(large[:4096], 1) + ws(large[4096:], 128))
+                    elif 'connect_to_conference_request' in value:
+                        self.assertEqual(value['connect_to_conference_request']['tag'], 'radio')
+                        conn.sendall(message({'connect_to_conference_response': {'result': 1}}))
+                    elif 'device_params' in value:
+                        conn.sendall(message({'device_params': {'id': 7, 'ssrc': 456}}))
+                    elif 'device_connect' in value:
+                        self.assertEqual(value['device_connect']['video_codec'], 2)
+                        conn.sendall(message({'device_connect': {'connect_type': 1, 'device_id': 7, 'author_ssrc': 456, 'address': '0.0.0.0', 'port': udp.getsockname()[1], 'rtp_binding_key': KEY.decode()}}))
+
+        def udp_peer():
+            while not stopped.is_set():
+                try:
+                    data, source = udp.recvfrom(8192)
+                except socket.timeout:
+                    continue
+                if len(data) == 80 and data[8:12] == b'VGB1':
+                    self.assertEqual(data[48:], hmac.digest(KEY, data[:48], 'sha256'))
+                    self.assertEqual(data[13:16], b'\1\0\0')
+                    self.assertEqual(struct.unpack('!I', data[4:8])[0], 456)
+                    if data[12] == 1:
+                        challenge = bytearray(data)
+                        challenge[32:48] = b'server-nonce-123'
+                        udp.sendto(signed(challenge, 2), source)
+                    elif data[12] == 3:
+                        self.assertEqual(data[32:48], b'server-nonce-123')
+                        udp.sendto(signed(data, 4), source)
+                else:
+                    packets.append(data)
+
+        def guarded(fn):
+            try:
+                fn()
+            except BaseException as error:
+                errors.append(repr(error))
+
+        threads = [threading.Thread(target=guarded, args=(fn,), daemon=True) for fn in (camera_peer, control_peer, udp_peer)]
+        config = dict(camera_ip='127.0.0.1', camera_port=camera.getsockname()[1], camera_url='rtsp://127.0.0.1/stream1', vg_ip='127.0.0.1', vg_port=control.getsockname()[1], vg_peer='localhost', login='fixture-login', password='fixture-password', conference='radio', ca_file=str(self.root / 'ca.pem'), run_ms=4000)
+        path = self.root / 'rtsp-config.json'
+        path.write_text(json.dumps(config))
+        for thread in threads:
+            thread.start()
+        try:
+            run = subprocess.run([str(exe), str(path)], capture_output=True, timeout=15)
+        finally:
+            stopped.set()
+            for listener in listeners:
+                listener.close()
+            for thread in threads:
+                thread.join(2)
+            udp.close()
+        self.assertFalse(any(t.is_alive() for t in threads), ('peer leaked', run.returncode, run.stdout, run.stderr, errors, methods, commands))
+        self.assertFalse(errors, (errors, run.returncode, run.stdout, run.stderr, methods, commands))
+        self.assertNotIn(b'fixture-password', run.stdout + run.stderr)
+        return run, packets, methods, commands
+
+    def test_publish_and_cleanup(self):
+        for exe in self.clients:
+            with self.subTest(exe=exe.name):
+                run, packets, methods, commands = self.scenario(exe)
+                self.assertEqual(run.returncode, 0, (run.stdout, run.stderr))
+                self.assertGreater(len(packets), 10)
+                self.assertEqual(packets[0][12:], SPS)
+                self.assertEqual(packets[1][12:], PPS)
+                self.assertEqual(packets[2][12:], b'\x65camera-payload')
+                previous = None
+                for packet in packets:
+                    _, pt, sequence, timestamp, ssrc = struct.unpack('!BBHII', packet[:12])
+                    self.assertEqual(pt & 127, 102)
+                    self.assertEqual(ssrc, 456)
+                    self.assertEqual(timestamp % 3600, 0)
+                    if previous is not None:
+                        self.assertEqual(sequence, (previous + 1) % 65536)
+                    previous = sequence
+                    if packet[12:] not in (SPS, PPS):
+                        self.assertIn(packet[12:], (b'\x61camera-payload', b'\x65camera-payload'))
+                        self.assertTrue(pt & 128)
+                self.assertEqual(methods, [b'OPTIONS', b'DESCRIBE', b'SETUP', b'PLAY', b'TEARDOWN'])
+                self.assertIn('device_disconnect', commands)
+                self.assertIn('disconnect_from_conference', commands)
+
+    def test_wrong_cseq_rejected(self):
+        for exe in self.clients:
+            run, packets, methods, commands = self.scenario(exe, bad_cseq=True)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertFalse(packets)
+            self.assertEqual(methods, [b'OPTIONS'])
+
+    def test_camera_disconnect_stops_publication_and_cleans_up(self):
+        for exe in self.clients:
+            run, packets, methods, commands = self.scenario(exe, drop_after=35)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertGreater(len(packets), 0, (run.stdout, run.stderr))
+            self.assertEqual(methods, [b'OPTIONS', b'DESCRIBE', b'SETUP', b'PLAY'])
+            self.assertEqual(commands.count('connect_request'), 1)
+            self.assertIn('device_disconnect', commands)
+            self.assertIn('disconnect_from_conference', commands)

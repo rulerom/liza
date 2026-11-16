@@ -1,0 +1,58 @@
+import vg.words
+import vg.fields
+import can.text
+import can.encode
+pub struct Message {pub kind:u32;pub result:u32;pub client:u64;pub device:u32;pub ssrc:u32;pub address:can.text.Value;pub port:u16;pub key:can.text.Value}
+pub struct Parsed {pub document:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub message:Message;pub valid:bool}
+pub fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Parsed {
+    var cursor=vg.fields.open(move buffer,length,move scratch);var kind:u32=0;var scope=can.text.empty();empty=can.text.empty()
+    names:[can.text.Value;6]=[vg.words.connect_response(),vg.words.joined(),vg.words.device_params(),vg.words.device_connect(),vg.words.device_disconnect(),vg.words.leave()];var i:u32=0
+    while i<6 {(next,present)=vg.fields.present(move cursor,names[i]);cursor=move next;if present {if kind!=0 {kind=99;break};kind=i+1;scope=names[i]};i=i+1}
+    var result:u64=0;var client:u64=0;var device:u64=0;var ssrc:u64=0;var port:u64=0;var address=can.text.empty();var key=can.text.empty()
+    if kind==1||kind==2 {(next,n)=vg.fields.number(move cursor,scope,empty,vg.words.result(),true,0);cursor=move next;result=n}
+    if kind==1&&result==1 {(next,n)=vg.fields.number(move cursor,scope,empty,vg.words.id(),true,0);cursor=move next;client=n}
+    if kind==3 {
+        (a,value_a)=vg.fields.number(move cursor,scope,empty,vg.words.id(),true,0);cursor=move a;device=value_a
+        (b,value_b)=vg.fields.number(move cursor,scope,empty,vg.words.ssrc(),true,0);cursor=move b;ssrc=value_b
+    }
+    if kind==4 {
+        (a,value_a)=vg.fields.number(move cursor,scope,empty,vg.words.connect_type(),true,0);cursor=move a;result=value_a
+        if result==1 {
+            (b,value_b)=vg.fields.number(move cursor,scope,empty,vg.words.device_id(),true,0);cursor=move b;device=value_b
+            (c,value_c)=vg.fields.number(move cursor,scope,empty,vg.words.author_ssrc(),true,0);cursor=move c;ssrc=value_c
+            (d,value_d)=vg.fields.number(move cursor,scope,empty,vg.words.port(),true,0);cursor=move d;port=value_d
+            (e,value_e)=vg.fields.text(move cursor,scope,empty,vg.words.address(),true,64);cursor=move e;address=value_e
+            (f,value_f)=vg.fields.text(move cursor,scope,empty,vg.words.rtp_binding_key(),true,64);cursor=move f;key=value_f
+        }
+    }
+    if kind==5 {(next,n)=vg.fields.number(move cursor,scope,empty,vg.words.device_id(),true,0);cursor=move next;device=n}
+    (document,last_scratch,valid)=vg.fields.finish(move cursor)
+    valid_numbers=kind!=99&&result<=4294967295&&device<=4294967295&&ssrc<=4294967295&&port<=65535
+    return Parsed(move document,move last_scratch,Message(kind,u32.wrap(result),client,u32.wrap(device),u32.wrap(ssrc),address,u16.wrap(port),key),valid&&valid_numbers)
+}
+pub fn encode(buffer:memory.Buffer<u8>,kind:u32,login:can.text.Value,password:can.text.Value,tag:can.text.Value,version:u32,client:u64,device:u32,ssrc:u32,width:u32,height:u32)->JsonOutput {
+    var writer=can.encode.begin(move buffer);writer=can.encode.container(move writer,0)
+    var name=vg.words.connect_request()
+    if kind==2 {name=vg.words.join()};if kind==3 {name=vg.words.device_params()};if kind==4 {name=vg.words.device_connect()};if kind==5 {name=vg.words.device_disconnect()};if kind==6 {name=vg.words.leave()}
+    writer=can.encode.container(can.encode.key(move writer,name),0)
+    if kind==1 {
+        writer=can.encode.number_field(move writer,vg.words.client_type(),0);writer=can.encode.number_field(move writer,vg.words.channel_type(),0)
+        writer=can.encode.number_field(move writer,vg.words.client_version(),u64(version))
+        writer=can.encode.string_field(move writer,vg.words.system(),vg.words.camera_name());writer=can.encode.string_field(move writer,vg.words.login(),login);writer=can.encode.string_field(move writer,vg.words.password(),password)
+    } else if kind==2 {
+        writer=can.encode.string_field(move writer,vg.words.tag(),tag);writer=can.encode.number_field(move writer,vg.words.connect_members(),0)
+    } else if kind==3||kind==4 {
+        resolution=(height<<16)|width
+        writer=can.encode.number_field(move writer,vg.words.device_type(),1)
+        writer=can.encode.number_field(move writer,vg.words.resolution(),u64(resolution))
+        writer=can.encode.number_field(move writer,vg.words.color_space(),1)
+        writer=can.encode.string_field(move writer,vg.words.name(),vg.words.camera_name())
+        if kind==3 {writer=can.encode.number_field(move writer,vg.words.id(),0);writer=can.encode.number_field(move writer,vg.words.ssrc(),0)}
+        else {
+            writer=can.encode.number_field(move writer,vg.words.connect_type(),1);writer=can.encode.number_field(move writer,vg.words.device_id(),u64(device))
+            writer=can.encode.number_field(move writer,vg.words.client_id(),client);writer=can.encode.number_field(move writer,vg.words.author_ssrc(),u64(ssrc))
+            writer=can.encode.number_field(move writer,vg.words.video_codec(),2);writer=can.encode.number_field(move writer,vg.words.audio_codec(),0)
+        }
+    } else if kind==5 {writer=can.encode.number_field(move writer,vg.words.device_id(),u64(device));writer=can.encode.number_field(move writer,vg.words.device_type(),1)}
+    writer=can.encode.container(move writer,1);writer=can.encode.container(move writer,1);return can.encode.finish(move writer)
+}

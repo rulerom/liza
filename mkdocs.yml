@@ -144,6 +144,7 @@ nav:
       - Дочерние процессы: child-process.md
       - CAN Echo Worker: can-worker.md
       - Recorder Agent: recorder-agent.md
+      - RTSP Camera Client: rtsp-client.md
       - Scoped-группы: scoped-groups.md
       - Изолированные workers: scoped-workers.md
       - Scoped-канал u32: scoped-channels.md

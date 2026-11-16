@@ -43,6 +43,10 @@ TCP endpoint пока числовой IPv4. Проверяемое DNS-имя �
 
 ## Практический маршрут
 
+[RTSP Camera Client](rtsp-client.md) публикует H.264 из камеры в VideoGrace
+как обычный WSS-клиент: один Reactor, два исходящих TCP-соединения и собственный
+UDP endpoint, без CAN и внешнего медиапроцесса.
+
 Для первого сетевого приложения изучите [Region/Buffer](regions.md), затем
 [UDP](udp.md) или [TCP](tcp.md). Для работы с несколькими соединениями нужен
 [Reactor](reactor.md); для команд, notification и ограниченного shutdown —

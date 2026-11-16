@@ -1,0 +1,54 @@
+import can.text
+pub struct Cursor {document:JsonDocument;scratch:memory.Buffer<u8>;failed:bool}
+pub struct TextRead {pub cursor:Cursor;pub value:can.text.Value}
+pub struct NumberRead {pub cursor:Cursor;pub value:u64}
+pub struct BoolRead {pub cursor:Cursor;pub value:bool}
+pub struct Finished {pub document:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub valid:bool}
+pub fn open(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Cursor {
+    (document,result)=json.parse(move buffer,length,JsonLimits(65536,16,1024))
+    var failed=false;match result {Ok(done)=>{} Err(e)=>{failed=true}}
+    return Cursor(move document,move scratch,failed)
+}
+fn select(document:JsonDocument,first:can.text.Value,second:can.text.Value,key:can.text.Value)->JsonRead {
+    var current=json.root(move document)
+    if first.length!=0 {bytes=first.bytes;(next,result)=json.field(move current,view bytes[0..first.length]);current=move next;match result {Err(e)=>{return JsonRead(move current,Err(e))} Ok(done)=>{}}}
+    if second.length!=0 {bytes=second.bytes;(next2,result2)=json.field(move current,view bytes[0..second.length]);current=move next2;match result2 {Err(e)=>{return JsonRead(move current,Err(e))} Ok(done)=>{}}}
+    bytes=key.bytes;return json.field(move current,view bytes[0..key.length])
+}
+fn bad(error:JsonAccessError,required:bool)->bool {
+    match error {JsonAccessError.Missing=>{return required} JsonAccessError.WrongType=>{return true} JsonAccessError.InvalidUnicode=>{return true} JsonAccessError.TooLarge=>{return true} JsonAccessError.Syntax=>{return true} JsonAccessError.DuplicateKey=>{return true} JsonAccessError.NumberOutOfRange=>{return true} JsonAccessError.InvalidDocument=>{return true} JsonAccessError.IndexOutOfRange=>{return true}}
+}
+pub fn text(cursor:Cursor,first:can.text.Value,second:can.text.Value,key:can.text.Value,required:bool,limit:u32)->TextRead {
+    (initial,scratch_buffer,failed)=move cursor;var doc=move initial;var scratch=move scratch_buffer;var failure=failed;var value=can.text.empty()
+    if !failure {
+        (next,result)=select(move doc,first,second,key);doc=move next
+        match result {Err(e)=>{failure=bad(e,required)} Ok(done)=>{
+            (next2,decoded,status)=json.decode_string(move doc,move scratch);doc=move next2;scratch=move decoded
+            match status {Err(e)=>{failure=true} Ok(length)=>{
+                if length>limit {failure=true} else {data=memory.view(scratch);match can.text.from_view(view data[0..length],limit) {Err(e)=>{failure=true} Ok(v)=>{value=v}}}
+            }}
+        }}
+    }
+    return TextRead(Cursor(move doc,move scratch,failure),value)
+}
+pub fn number(cursor:Cursor,first:can.text.Value,second:can.text.Value,key:can.text.Value,required:bool,fallback:u64)->NumberRead {
+    (initial,scratch,failed)=move cursor;var doc=move initial;var failure=failed;var value=fallback
+    if !failure {(next,result)=select(move doc,first,second,key);doc=move next;match result {Err(e)=>{failure=bad(e,required)} Ok(done)=>{match json.read_u64(doc) {Err(e)=>{failure=true} Ok(v)=>{value=v}}}}}
+    return NumberRead(Cursor(move doc,move scratch,failure),value)
+}
+pub fn boolean(cursor:Cursor,first:can.text.Value,second:can.text.Value,key:can.text.Value,required:bool,fallback:bool)->BoolRead {
+    (initial,scratch,failed)=move cursor;var doc=move initial;var failure=failed;var value=fallback
+    if !failure {(next,result)=select(move doc,first,second,key);doc=move next;match result {Err(e)=>{failure=bad(e,required)} Ok(done)=>{match json.read_bool(doc) {Err(e)=>{failure=true} Ok(v)=>{value=v}}}}}
+    return BoolRead(Cursor(move doc,move scratch,failure),value)
+}
+pub fn finish(cursor:Cursor)->Finished {
+    (document,scratch,failed)=move cursor;buffer=json.into_buffer(move document);return Finished(move buffer,move scratch,!failed)
+}
+
+pub struct Present {pub cursor:Cursor;pub found:bool}
+pub fn present(cursor:Cursor,key:can.text.Value)->Present {
+    (document,scratch,failed)=move cursor;var current=json.root(move document);var failure=failed;var found=false
+    bytes=key.bytes;(next,result)=json.field(move current,view bytes[0..key.length]);current=move next
+    match result {Ok(done)=>{found=true} Err(e)=>{failure=failure||bad(e,false)}}
+    return Present(Cursor(move current,move scratch,failure),found)
+}
