@@ -54,9 +54,10 @@ class RtspClient(unittest.TestCase):
             folder.mkdir()
             cls.clients.append(build(ROOT / 'examples/apps/liza_rtsp.liza', folder, opt, ROOT / 'examples'))
 
-    def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload'):
+    def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False):
         errors, packets, methods, commands = [], [], [], []
         stopped = threading.Event()
+        media_seen = threading.Event()
         listeners = [socket.socket() for _ in range(2)]
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         for listener in listeners:
@@ -155,6 +156,12 @@ class RtspClient(unittest.TestCase):
                     elif 'device_connect' in value:
                         self.assertEqual(value['device_connect']['video_codec'], 2)
                         conn.sendall(message({'device_connect': {'connect_type': 1, 'device_id': 7, 'author_ssrc': 456, 'address': '0.0.0.0', 'port': udp.getsockname()[1], 'rtp_binding_key': KEY.decode()}}))
+                        if stop_on_media:
+                            self.assertTrue(media_seen.wait(5), 'no authorized media')
+                            # Exercise TLS beyond the old zero-duration + 5 s
+                            # lifetime, then stop through the existing control API.
+                            time.sleep(6)
+                            conn.sendall(message({'device_disconnect': {'device_id': 7}}))
 
         def udp_peer():
             while not stopped.is_set():
@@ -175,6 +182,7 @@ class RtspClient(unittest.TestCase):
                         udp.sendto(signed(data, 4), source)
                 else:
                     packets.append(data)
+                    if len(packets)>=10:media_seen.set()
 
         def guarded(fn):
             try:
@@ -183,7 +191,7 @@ class RtspClient(unittest.TestCase):
                 errors.append(repr(error))
 
         threads = [threading.Thread(target=guarded, args=(fn,), daemon=True) for fn in (camera_peer, control_peer, udp_peer)]
-        config = dict(camera_ip='127.0.0.1', camera_port=camera.getsockname()[1], camera_url='rtsp://127.0.0.1/stream1', vg_ip='127.0.0.1', vg_port=control.getsockname()[1], vg_peer='localhost', login='fixture-login', password='fixture-password', conference='radio', ca_file=str(self.root / 'ca.pem'), run_ms=4000)
+        config = dict(camera_ip='127.0.0.1', camera_port=camera.getsockname()[1], camera_url='rtsp://127.0.0.1/stream1', vg_ip='127.0.0.1', vg_port=control.getsockname()[1], vg_peer='localhost', login='fixture-login', password='fixture-password', conference='radio', ca_file=str(self.root / 'ca.pem'), run_ms=run_ms)
         path = self.root / 'rtsp-config.json'
         path.write_text(json.dumps(config))
         for thread in threads:
@@ -257,3 +265,12 @@ class RtspClient(unittest.TestCase):
                 self.assertEqual(len(packet),4096)
                 self.assertIn(packet[12],(0x61,0x65))
                 self.assertEqual(packet[13:],payload)
+
+    def test_unlimited_survives_tls_then_stops_on_server_command(self):
+        for exe in self.clients:
+            run,packets,methods,commands=self.scenario(exe,run_ms=0,stop_on_media=True)
+            self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
+            self.assertGreater(len(packets),50)
+            self.assertIn(b'TEARDOWN',methods)
+            self.assertIn('device_disconnect',commands)
+            self.assertIn('disconnect_from_conference',commands)

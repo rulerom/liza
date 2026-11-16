@@ -73,7 +73,7 @@ fn exchange(link:vg.connection.Connection,bundle:Bundle,config:rtsp.config.Confi
     var state=initial();state.base=config.url;start=clock();var closed=false;var camera_dead=false;var socket_dead=false
     while true {
         now=clock();if now==0 {state.error=30;break}
-        if now>=until {state.stopping=true}
+        if until!=0&&now>=until {state.stopping=true}
         match net.reactor_shutdown_requested(reactor) {Err(e)=>{state.error=30;break} Ok(n)=>{if n!=0 {state.stopping=true}}}
         if state.error!=0 {state.stopping=true}
         if !state.stopping&&now>=start+20000&&state.vg_phase<6 {state.error=31;state.stopping=true}
@@ -195,6 +195,8 @@ fn allocate(link:vg.connection.Connection,config:rtsp.config.Config,until:u64)->
     }}
 }
 pub fn run(config:rtsp.config.Config)->u32:io,alloc {
-    now=clock();if now==0 {return 3};until=now+u64(config.run_ms)
-    match vg.connection.open(config,until+5000) {Err(e)=>{log=console.errln("VG connection setup failed");return 3} Ok(link)=>{return allocate(move link,config,until)}}
+    now=clock();if now==0 {return 3}
+    var until:u64=0;var tls_until:u64=18446744073709551615
+    if config.run_ms!=0 {until=now+u64(config.run_ms);tls_until=until+5000}
+    match vg.connection.open(config,tls_until) {Err(e)=>{log=console.errln("VG connection setup failed");return 3} Ok(link)=>{return allocate(move link,config,until)}}
 }
