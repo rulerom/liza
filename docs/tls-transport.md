@@ -168,6 +168,11 @@ caller buffer, TLS 1.3 key update, close, реальный TCP Reactor echo с �
 ciphertext writes и семибайтовыми reads, DNS/IP identity, неизвестный CA,
 просроченный сертификат, hostname/IP mismatch, deadline и abrupt EOF.
 Принудительно маленькие I/O — приёмка корректности, не benchmark эффективности.
+На Windows TLS-linker flags задают reserve основного стека PE-программы 8 МиБ,
+чтобы O0-сборки протокольных клиентов с ограниченными агрегатами не упирались
+в стандартный reserve 1 МиБ. Commit страниц происходит по необходимости.
+Этот reserve не входит в `tls.managed_bytes()` и не меняет размеры стеков workers.
+
 Workflow `TLS transport and clients` проверяет Linux/macOS/Windows.
 
 TLS-B дополнительно проверяет ownership, сохранение Buffer origin, HTTPS с

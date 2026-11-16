@@ -33,6 +33,13 @@ python3 -m liza build --project-root examples \
 миллисекундах (100..3600000), абсолютный путь Recorder и файл конфигурации.
 Адрес TCP и проверяемое имя TLS разделены; DNS resolver пока не нужен.
 
+На Windows TLS-linker flags задают reserve основного стека исполняемого файла
+8 МиБ (страницы commit по мере использования). На O0 снимки агрегатов ещё
+создают крупные фиксированные кадры: в исследованной x64-сборке кадр
+`recorder.child.tick` — около 2,7 МиБ. Стандартного PE reserve 1 МиБ недостаточно.
+Это отдельный бюджет процесса, не `tls.managed_bytes()` и не настройка workers;
+оптимизация копирования агрегатов остаётся отдельной задачей компилятора.
+
 Агент регистрирует роль `recorder`, capabilities `recording` и
 `consolidated_native`, один активный assignment. `conference_tag`, ID сессии и
 раздельные media/upload credentials приходят с заданием сервера. Параметры
