@@ -26,7 +26,7 @@ def llvm(module, target=None):
     types['memory.Region'] = 'ptr'
     types['Arg'] = types['Path'] = 'i32'  # Opaque indices into immutable process arguments.
     types['net.Listener'] = types['net.Stream'] = types['net.DatagramSocket'] = 'i64'
-    types['net.Reactor'] = types['tls.Session'] = 'ptr'
+    types['net.Reactor'] = types['tls.Session'] = types['process.Child'] = 'ptr'
     types['net.Connection'] = '[3 x i64]'
     types['File'] = 'i64'  # Private runtime token, never a source-level integer.
     types['Text'] = '{ ptr, i32 }'
@@ -121,6 +121,8 @@ def llvm(module, target=None):
                               f'  %result = call i64 @liza_rt_workers_run(i32 %count, ptr @liza_{module.worker_symbol})',
                               '  ret i64 %result', '}'])
                 continue
+            from .process_backend import external as process_external
+            if process_external(fn, lines): continue
             from .tls_backend import external as tls_external
             if tls_external(fn, lines, types): continue
             from .net_backend import external as net_external

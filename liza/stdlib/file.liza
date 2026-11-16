@@ -88,3 +88,31 @@ fn file.flush(handle:File)->Result<u32,FileWriteError>:io {
     if code==0 {return Ok(0)}
     return Err(__liza_file_write_error(code))
 }
+
+// Metadata never follows the final symlink. Missing is a successful observation.
+enum FsError {NotFound;PermissionDenied;AlreadyExists;NotDirectory;IsDirectory;InvalidPath;NoSpace;Other}
+enum FileKind {Missing;Regular;Directory;Symlink;Other}
+struct FileInfo {kind:FileKind;size:u64}
+struct __liza_FileInfo {error:u32;kind:u32;size:u64}
+fn __liza_fs_error(code:u32)->FsError {
+    if code==1 {return FsError.NotFound};if code==2 {return FsError.PermissionDenied}
+    if code==3 {return FsError.AlreadyExists};if code==4 {return FsError.NotDirectory}
+    if code==5 {return FsError.IsDirectory};if code==6 {return FsError.InvalidPath}
+    if code==7 {return FsError.NoSpace};return FsError.Other
+}
+fn file.stat(path:Path)->Result<FileInfo,FsError>:io {
+    raw=__liza_fs_stat(path)
+    if raw.error!=0 {return Err(__liza_fs_error(raw.error))}
+    var kind=FileKind.Other
+    if raw.kind==0 {kind=FileKind.Missing};if raw.kind==1 {kind=FileKind.Regular}
+    if raw.kind==2 {kind=FileKind.Directory};if raw.kind==3 {kind=FileKind.Symlink}
+    return Ok(FileInfo(kind,raw.size))
+}
+fn file.mkdir(path:Path)->Result<u32,FsError>:io {
+    code=__liza_fs_op(path,1)
+    if code!=0 {return Err(__liza_fs_error(code))};return Ok(0)
+}
+fn file.remove(path:Path)->Result<u32,FsError>:io {
+    code=__liza_fs_op(path,2)
+    if code!=0 {return Err(__liza_fs_error(code))};return Ok(0)
+}

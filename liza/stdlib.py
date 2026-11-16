@@ -6,6 +6,8 @@ from .frontend import Parser, Function, Token, Program, Expr
 
 def attach(program):
     libraries = [name for name in ('console', 'file', 'utf8', 'utf8_stream', 'cli', 'net', 'framing', 'json') if getattr(program, 'uses_'+name, False)]
+    if getattr(program,'uses_process',False):
+        libraries.extend(n for n in ('utf8','process') if n not in libraries)
     if getattr(program,'uses_tls',False):
         if 'net' not in libraries: libraries.append('net')
         libraries.append('tls')
@@ -27,6 +29,8 @@ def attach(program):
     library = Parser('\n'.join((Path(__file__).parent/'stdlib'/ (name+'.liza')).read_text(encoding='utf-8')
                                for name in libraries), internal=True).parse()
     for structure in library.structs:
+        if structure.name.text == 'ProcessCommand':
+            structure.module = '__liza_process'
         if structure.name.text in ('JsonState','JsonDocument','JsonWriter'):
             structure.module = '__liza_json'
         if structure.name.text == 'Utf8StreamState':
@@ -34,13 +38,15 @@ def attach(program):
         if structure.name.text == 'FrameState':
             structure.module = '__liza_framing'
     for fn in library:
+        if fn.name.text.startswith(('process.', '__liza_process_')):
+            fn.module = '__liza_process'
         if fn.name.text.startswith(('json.', '__liza_json_')):
             fn.module = '__liza_json'
         if fn.name.text.startswith('framing.'):
             fn.module = '__liza_framing'
         if fn.name.text.startswith(('utf8_stream.', '__liza_stream_')):
             fn.module = '__liza_utf8_stream'
-        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_create_at','net.reactor_close')) or (fn.name.text.startswith('tls.') and fn.name.text not in ('tls.create','tls.create_with_ca','tls.destroy','tls.managed_bytes')) or fn.name.text in ('net.accept','net.local_port','net.write','net.udp_port','net.udp_send','file.read_chunk', 'file.write_chunk', 'file.flush'):
+        if (fn.name.text.startswith('net.reactor_') and fn.name.text not in ('net.reactor_create','net.reactor_create_at','net.reactor_close')) or (fn.name.text.startswith('tls.') and fn.name.text not in ('tls.create','tls.create_with_ca','tls.destroy','tls.managed_bytes')) or (fn.name.text.startswith('process.') and fn.name.text in ('process.try_wait','process.wait','process.terminate','process.kill')) or fn.name.text in ('net.accept','net.local_port','net.write','net.udp_port','net.udp_send','file.read_chunk', 'file.write_chunk', 'file.flush'):
             fn.borrowed_params = [0]
     combined = Program()
     combined.module_names = getattr(program,"module_names",[])
@@ -165,6 +171,14 @@ def attach(program):
         ('__liza_tls_destroy',['tls.Session'],'u32',[], 'io,alloc'),
         ('tls.managed_bytes',[],'u64',[], 'pure'),
     ]
+    reactor_externals += [
+        ('__liza_process_spawn',['Path','bool','View<u8>','View<u8>'],'__liza_ProcessChild',[], 'io,alloc'),
+        ('__liza_process_poll',['process.Child','bool'],'__liza_ProcessPoll',[0], 'io'),
+        ('__liza_process_op',['process.Child','u32'],'u32',[0], 'io'),
+        ('__liza_process_close',['process.Child'],'u32',[], 'io,alloc'),
+        ('__liza_fs_stat',['Path'],'__liza_FileInfo',[], 'io'),
+        ('__liza_fs_op',['Path','u32'],'u32',[], 'io'),
+    ]
     reactor_externals += tls_externals
     reactor_externals += group_externals
     externals.extend(Function(Token(n,1,1),[(Token('p'+str(i),1,1),t) for i,t in enumerate(params)],[],result,effect,borrowed_params=borrowed)
@@ -190,14 +204,18 @@ def link_flags(module):
     group_names = {n for n in names if n.startswith(('groups.', '__liza_group_'))}
     cli_names = {n for n in names if n.startswith('__liza_cli_')}
     tls_names = {n for n in names if n.startswith('__liza_tls_') or n=='tls.managed_bytes'}
-    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names-group_names-tls_names else []) + (['file'] if names & file_names else [])
+    process_names = {n for n in names if n.startswith('__liza_process_')}
+    fs_names = {n for n in names if n.startswith('__liza_fs_')}
+    libraries = (['console'] if names-file_names-cli_names-net_names-worker_names-channel_names-group_names-tls_names-process_names-fs_names else []) + (['file'] if names & file_names else [])
+    if process_names: libraries.append('process')
+    if fs_names: libraries.append('fs')
     if worker_names: libraries.append('workers')
     if channel_names: libraries.append('channels')
     if group_names: libraries.append('sg3')
     if '__liza_net_random' in names: libraries.append('random')
     if net_names or group_names: libraries.append('net')
     if reactor_names or group_names: libraries.append('reactor')
-    if cli_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
+    if cli_names or process_names or fs_names or names & {'__liza_file_open_path','__liza_file_create_path'}: libraries.append('cli')
     files = memory_files + [str(Path(__file__).parent/'runtime'/ (name+'_'+suffix+'.c')) for name in libraries]
     if channel_names or group_names: files.append(str(Path(__file__).parent/'runtime'/'scoped_channel_core.c'))
     tls_flags = []
