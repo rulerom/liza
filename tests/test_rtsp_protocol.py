@@ -37,6 +37,8 @@ fn main()->u32 {
     if rtsp.reconnect.transient_tls(TlsError.Configuration) {return 8}
     if rtsp.reconnect.transient(10)||rtsp.reconnect.transient(44)||rtsp.reconnect.transient(2) {return 9}
     if !rtsp.reconnect.transient(32)||!rtsp.reconnect.transient(35)||!rtsp.reconnect.transient(43) {return 10}
+    if !rtsp.reconnect.transient_close(1001)||!rtsp.reconnect.transient_close(1012) {return 11}
+    if rtsp.reconnect.transient_close(1008)||rtsp.reconnect.transient_close(1002)||rtsp.reconnect.transient_close(4001) {return 12}
     return 0
 }'''
         self.run_liza(source)

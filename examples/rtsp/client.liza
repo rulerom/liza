@@ -164,7 +164,12 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                     if message.kind==4&&message.result==1 {route_label=console.write("VG RTP endpoint: ");route_bytes=message.address.bytes;route_name=console.write_bytes(view route_bytes[0..message.address.length]);route_separator=console.write(":");route_port=console.print_u64(u64(message.port));route_line=console.println("")}
                     if !valid {state.error=42;state.stopping=true} else {status=control_response(borrow mut state,message,now,config);if status!=0 {state.error=status;state.stopping=true};if state.stopping&&state.error==0 {requested=true}}}
                 }
-                vg.socket.Event.PeerClosed=>{state.stopping=true}
+                vg.socket.Event.PeerClosed(code)=>{
+                    label=console.err("WSS peer close code=");number=console.err_u64(u64(code));line=console.errln("")
+                    if !requested&&!rtsp.reconnect.transient_close(code) {state.error=44}
+                    else if !state.stopping {state.error=43}
+                    state.stopping=true
+                }
                 vg.socket.Event.Closed=>{socket_dead=true;if !closed&&state.error==0 {state.error=43};state.stopping=true}
                 vg.socket.Event.Failed(e)=>{socket_dead=true;state.stopping=true
                     if state.error==0 {state.error=44;match e {vg.socket.Error.Protocol=>{} vg.socket.Error.Disconnected=>{state.error=43} vg.socket.Error.Deadline=>{state.error=43} vg.socket.Error.Tls(t)=>{if rtsp.reconnect.transient_tls(t) {state.error=43}}}}

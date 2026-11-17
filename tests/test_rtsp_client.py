@@ -202,6 +202,12 @@ class RtspClient(unittest.TestCase):
                         conn.sendall(message({'device_connect': {'connect_type': 1, 'device_id': 7, 'author_ssrc': ssrc, 'address': '0.0.0.0', 'port': udp.getsockname()[1], 'rtp_binding_key': epoch_key(epoch).decode()}}))
                         if drop_wss and epoch==0:
                             self.assertTrue(media_seen[epoch].wait(5), 'no first-generation media')
+                            if drop_wss in ('close','policy'):
+                                conn.sendall(ws(struct.pack('!H',1008 if drop_wss=='policy' else 1001),8))
+                                opcode,data=client_frame(conn)
+                                self.assertEqual(opcode,8)
+                                conn.unwrap().close()
+                                return
                             if drop_wss!='eof':
                                 conn.setsockopt(socket.SOL_SOCKET,socket.SO_LINGER,struct.pack('hh' if os.name=='nt' else 'ii',1,0))
                             return
@@ -356,8 +362,15 @@ class RtspClient(unittest.TestCase):
 
     def test_wss_disconnect_recovers_with_new_login(self):
         for exe in self.clients:
-            for fault in ('reset','eof'):
+            for fault in ('reset','eof','close'):
                 self.recovered(exe,drop_wss=fault)
+
+    def test_wss_policy_close_is_fatal_without_retry(self):
+        for exe in self.clients:
+            run,packets,methods,commands=self.scenario(exe,drop_wss='policy',run_ms=0)
+            self.assertNotEqual(run.returncode,0,(run.stdout,run.stderr))
+            self.assertIn(b'WSS peer close code=1008',run.stderr)
+            self.assertNotIn(b'RTSP reconnect',run.stderr)
 
     def test_wrong_tls_identity_is_fatal_without_retry(self):
         for exe in self.clients:
