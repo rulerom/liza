@@ -1,0 +1,50 @@
+{
+  "pid": 75676,
+  "started_at_utc": "2026-11-17T05:39:18.176977+00:00",
+  "binary_sha256": "fd5efb91cd203aaf1b6a5f0d7f5e6f23259047003b88a63f249ad5b7df0b9900",
+  "revision": "84ae09d9f1ea5aacaf0cd8a576a021043f7c21ae",
+  "recovery_kind": "Initially unreachable camera restored by the user; same client process recovered without restart",
+  "recovered_generation": 11,
+  "visual_confirmation": "User confirmed video is present and moving",
+  "before_sample": {
+    "pid": 75676,
+    "uptime_s": 184.0,
+    "cpu_s": 1.63,
+    "cpu_recent_percent": 0.0,
+    "rss_bytes": 11780096,
+    "process_state": "Ss",
+    "sample_epoch_s": 1794894142.2779672,
+    "sampled_at_utc": "2026-11-17T05:42:22.277975+00:00",
+    "rtp_received": null,
+    "rtp_succeeded": null,
+    "rtp_sequence_discontinuities": null,
+    "errors": [
+      "network: nettop did not report the target PID"
+    ],
+    "open_fds": 3,
+    "tcp_sockets": 0,
+    "tcp_established": 0,
+    "udp_sockets": 0
+  },
+  "recovered_sample": {
+    "pid": 75676,
+    "uptime_s": 258.0,
+    "cpu_s": 10.57,
+    "cpu_recent_percent": 15.8,
+    "rss_bytes": 13598720,
+    "process_state": "Ss",
+    "sample_epoch_s": 1794894216.877248,
+    "sampled_at_utc": "2026-11-17T05:43:36.877257+00:00",
+    "rtp_received": null,
+    "rtp_succeeded": null,
+    "rtp_sequence_discontinuities": null,
+    "errors": [],
+    "open_fds": 6,
+    "tcp_sockets": 2,
+    "tcp_established": 2,
+    "udp_sockets": 1,
+    "bytes_in": 19390736,
+    "bytes_out": 17425551
+  },
+  "application_log": "RTSP session generation=1 uptime_ms=0\nRTSP response timeout cseq=1 phase=1\nRTP received=0 attempted=0 succeeded=0 gated=0 discontinuities=0\nRTSP/VG session stopped with error 32\nRTSP reconnect after error 32 delay_ms=1000 uptime_ms=5204\nRTSP session generation=2 uptime_ms=6205\nCamera TCP connect failed\nVG connection setup failed\nRTSP reconnect after error 36 delay_ms=2000 uptime_ms=6207\nRTSP session generation=3 uptime_ms=8207\nCamera TCP connect failed\nVG connection setup failed\nRTSP reconnect after error 36 delay_ms=4000 uptime_ms=8209\nRTSP session generation=4 uptime_ms=12210\nCamera TCP connect failed\nVG connection setup failed\nRTSP reconnect after error 36 delay_ms=8000 uptime_ms=12212\nRTSP session generation=5 uptime_ms=20213\nCamera TCP connect failed\nVG connection setup failed\nRTSP reconnect after error 36 delay_ms=16000 uptime_ms=20214\nRTSP session generation=6 uptime_ms=36215\nRTSP response timeout cseq=1 phase=1\nRTP received=0 attempted=0 succeeded=0 gated=0 discontinuities=0\nRTSP/VG session stopped with error 32\nRTSP reconnect after error 32 delay_ms=30000 uptime_ms=41389\nRTSP session generation=7 uptime_ms=71390\nRTSP response timeout cseq=1 phase=1\nRTP received=0 attempted=0 succeeded=0 gated=0 discontinuities=0\nRTSP/VG session stopped with error 32\nRTSP reconnect after error 32 delay_ms=30000 uptime_ms=76578\nRTSP session generation=8 uptime_ms=106579\nCamera TCP connect failed\nVG connection setup failed\nRTSP reconnect after error 36 delay_ms=30000 uptime_ms=106581\nRTSP session generation=9 uptime_ms=136582\nCamera TCP connect failed\nVG connection setup failed\nRTSP reconnect after error 36 delay_ms=30000 uptime_ms=136585\nRTSP session generation=10 uptime_ms=166585\nCamera TCP connect failed\nVG connection setup failed\nRTSP reconnect after error 36 delay_ms=30000 uptime_ms=166586\nRTSP session generation=11 uptime_ms=196587\nVG RTP endpoint: 0.0.0.0:5060\nVG RTP binding ready; waiting for camera IDR\n"
+}

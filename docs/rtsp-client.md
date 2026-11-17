@@ -157,8 +157,11 @@ VGB1 с Python HMAC oracle, точный RTP payload, SPS/PPS, PT/SSRC/sequence,
 а также `TEARDOWN`, удаление устройства и WSS/TLS close. Дополнительные
 тесты проверяют RFC 4231, изменение MAC, SDP/Base64, IDR recovery,
 truncation, нулевой datagram и сохранение Buffer.
-Обрыв камеры при активной передаче проверяется отдельно: ненулевой выход,
-удаление VG-устройства и закрытие WSS без автоматического reconnect.
+Обрывы камеры, WSS EOF/RST и пропущенный keepalive проверяются с повторным
+handshake, новым SSRC/ключом/nonce и восстановлением IDR gate. Есть три
+последовательные сессии в одном процессе, общий deadline, SIGTERM в backoff,
+отказ login/TLS identity без retry и удалённая остановка при timeout TEARDOWN.
+Если восстановления до конца общего бюджета нет, процесс возвращает ошибку.
 
 ```sh
 LIZA_TEST_TLS=1 python3 -m unittest discover -s tests -p 'test_rtsp*.py' -v
