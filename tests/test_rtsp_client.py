@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 from pathlib import Path
+import re
 import select
 import signal
 import socket
@@ -58,7 +59,7 @@ class RtspClient(unittest.TestCase):
 
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
-                 stall_teardown=False, reject_login=False):
+                 stall_teardown=False, reject_login=False, client_version=617, required_version=None):
         errors, packets, methods, commands = [], [], [], []
         stopped = threading.Event()
         media_seen = [threading.Event() for _ in range(cycles)]
@@ -189,7 +190,10 @@ class RtspClient(unittest.TestCase):
                     commands.append(next(iter(value)))
                     if 'connect_request' in value:
                         self.assertEqual(value['connect_request']['login'], 'fixture-login')
-                        conn.sendall(message({'connect_response': {'result': 0 if reject_login else 1, 'id': 123}}))
+                        result=2 if reject_login else 1
+                        if required_version is not None and value['connect_request']['client_version']<required_version:
+                            result=3  # VideoGrace UpdateRequired; not a transport failure.
+                        conn.sendall(message({'connect_response': {'result': result, 'id': 123}}))
                         large = json.dumps({'conferences_list': {'unused': 'x' * 34000}}).encode()
                         conn.sendall(ws(large[:4096], 1) + ws(large[4096:], 128))
                     elif 'connect_to_conference_request' in value:
@@ -258,6 +262,7 @@ class RtspClient(unittest.TestCase):
 
         threads = [threading.Thread(target=guarded, args=(fn,), daemon=True) for fn in (camera_peer, control_peer, udp_peer)]
         config = dict(camera_ip='127.0.0.1', camera_port=camera.getsockname()[1], camera_url='rtsp://127.0.0.1/stream1', vg_ip='127.0.0.1', vg_port=control.getsockname()[1], vg_peer='localhost', login='fixture-login', password='fixture-password', conference='radio', ca_file=str(self.root / 'ca.pem'), run_ms=run_ms)
+        config['client_version']=client_version
         if wrong_peer:
             config['vg_peer']='wrong.example'
         path = self.root / 'rtsp-config.json'
@@ -388,6 +393,16 @@ class RtspClient(unittest.TestCase):
             self.assertEqual(commands.count('connect_request'),1)
             self.assertNotIn(b'RTSP reconnect',run.stderr)
 
+    def test_server_version_upgrade_needs_updated_client_configuration(self):
+        for exe in self.clients:
+            run,packets,methods,commands=self.scenario(exe,client_version=617,required_version=618,run_ms=0)
+            self.assertEqual(run.returncode,20,(run.stdout,run.stderr))
+            self.assertFalse(packets)
+            self.assertNotIn(b'RTSP reconnect',run.stderr)
+            run,packets,methods,commands=self.scenario(exe,client_version=618,required_version=618,run_ms=1000)
+            self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
+            self.assertGreater(len(packets),10)
+
     def test_remote_stop_does_not_reconnect_when_teardown_times_out(self):
         for exe in self.clients:
             run,packets,methods,commands=self.scenario(exe,stall_teardown=True,run_ms=0,stop_on_media=True,stop_delay=.2)
@@ -417,9 +432,18 @@ class RtspClient(unittest.TestCase):
             run=subprocess.run([str(exe),str(path)],capture_output=True,timeout=8)
             self.assertNotEqual(run.returncode,0,(run.stdout,run.stderr))
             self.assertGreaterEqual(time.monotonic()-start,3.3)
-            self.assertEqual(run.stdout.count(b'RTSP session generation='),3,(run.stdout,run.stderr))
-            for delay in (1000,2000,4000):
-                self.assertIn(('delay_ms='+str(delay)).encode(),run.stderr)
+            starts=[int(value) for value in re.findall(rb'RTSP session generation=\d+ uptime_ms=(\d+)',run.stdout)]
+            pauses=[(int(delay),int(at)) for delay,at in re.findall(rb'RTSP reconnect after error \d+ delay_ms=(\d+) uptime_ms=(\d+)',run.stderr)]
+            # Windows can spend ~2 s refusing a TCP connect. The budget limits
+            # time and attempt spacing, not an OS-independent attempt count.
+            self.assertGreaterEqual(len(starts),1,(run.stdout,run.stderr))
+            self.assertLessEqual(len(starts),3,(run.stdout,run.stderr))
+            self.assertTrue(all(at<3500 for at in starts),starts)
+            for index,(delay,at) in enumerate(pauses):
+                self.assertEqual(delay,(1000,2000,4000)[index])
+            for index,at in enumerate(starts[1:]):
+                self.assertLess(index,len(pauses))
+                self.assertGreaterEqual(at,pauses[index][1]+pauses[index][0])
 
     @unittest.skipUnless(os.name=='posix','POSIX shutdown signal')
     def test_sigterm_during_backoff_stops_without_another_attempt(self):
