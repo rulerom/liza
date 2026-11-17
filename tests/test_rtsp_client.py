@@ -93,6 +93,12 @@ class RtspClient(unittest.TestCase):
                     try:
                         chunk = conn.recv(8192)
                         if not chunk:
+                            if stall_keepalive and epoch==0:
+                                # Linux may report ECONNRESET instead of EOF
+                                # when the client discards unread interleaved
+                                # RTP after the control deadline. Exercise both
+                                # platforms through the same session boundary.
+                                raise ConnectionResetError('deadline closed the streaming camera connection')
                             break
                         pending += chunk
                     except socket.timeout:
@@ -142,7 +148,14 @@ class RtspClient(unittest.TestCase):
 
         def camera_peer():
             for _ in range(cycles):
-                camera_session()
+                try:
+                    camera_session()
+                except (ConnectionResetError,BrokenPipeError,ConnectionAbortedError):
+                    if not (stall_keepalive or stall_teardown or drop_wss):
+                        raise
+                    # Expected end of this faulted session, not end of the
+                    # camera listener. The next connection must be accepted.
+                    camera_runs[-1]['peer_reset']=True
 
         def control_session():
             with control.accept()[0] as raw, context.wrap_socket(raw, server_side=True) as conn:
@@ -339,6 +352,7 @@ class RtspClient(unittest.TestCase):
             run=self.recovered(exe,stall_keepalive=True)
             self.assertIn(b'phase=6',run.stderr)
             self.assertIn(b'after error 32',run.stderr)
+            self.assertTrue(self.attempts[0][0].get('peer_reset'))
 
     def test_wss_disconnect_recovers_with_new_login(self):
         for exe in self.clients:
