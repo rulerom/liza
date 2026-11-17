@@ -389,6 +389,7 @@ class RtspClient(unittest.TestCase):
         for exe in self.clients:
             run,packets,methods,commands=self.scenario(exe,reject_login=True,run_ms=0)
             self.assertNotEqual(run.returncode,0)
+            self.assertIn(b'invalid login or password',run.stderr)
             self.assertFalse(packets)
             self.assertEqual(commands.count('connect_request'),1)
             self.assertNotIn(b'RTSP reconnect',run.stderr)
@@ -397,6 +398,9 @@ class RtspClient(unittest.TestCase):
         for exe in self.clients:
             run,packets,methods,commands=self.scenario(exe,client_version=617,required_version=618,run_ms=0)
             self.assertEqual(run.returncode,20,(run.stdout,run.stderr))
+            self.assertIn(b'UpdateRequired',run.stderr)
+            self.assertIn(b'client_version=617',run.stderr)
+            self.assertIn(b'update client_version in config and restart',run.stderr)
             self.assertFalse(packets)
             self.assertNotIn(b'RTSP reconnect',run.stderr)
             run,packets,methods,commands=self.scenario(exe,client_version=618,required_version=618,run_ms=1000)

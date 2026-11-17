@@ -22,6 +22,22 @@ SDP = (b'v=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\n'
 
 @unittest.skipUnless(shutil.which('clang'), 'Clang required')
 class RtspProtocol(unittest.TestCase):
+    def test_diagnostics_explain_version_timeout_and_unknown_errors(self):
+        self.run_liza('''import rtsp.diagnostics
+fn main()->u32:io {
+    a=rtsp.diagnostics.login(3,617)
+    b=rtsp.diagnostics.login(2,618)
+    c=rtsp.diagnostics.rtsp_timeout(6,5)
+    d=rtsp.diagnostics.session_error(32)
+    e=rtsp.diagnostics.session_error(999)
+    f=rtsp.diagnostics.rtsp_response(401,2,2)
+    g=rtsp.diagnostics.exit_error(999)
+    return 0
+}''',expected_stderr=[b'UpdateRequired',b'client_version=617',b'update client_version in config and restart',
+                     b'invalid login or password',b'no answer to GET_PARAMETER within 5000 ms',b'cseq=5, phase=6',
+                     b'Timed out waiting for an RTSP camera response (code=32)',b'Unknown connector error (code=999)',
+                     b'camera requires RTSP authentication',b'RTSP connector stopped: Unknown connector error (exit_code=999)'])
+
     def test_reconnect_limits_and_fatal_error_policy(self):
         source='''import rtsp.reconnect
 fn main()->u32 {
@@ -60,7 +76,7 @@ fn main()->u32 {
             with self.assertRaisesRegex(CompileError, 'region'):
                 lower(load_program(entry))
 
-    def run_liza(self, source):
+    def run_liza(self, source, expected_stderr=None):
         with tempfile.TemporaryDirectory(prefix='liza-rtsp-protocol-') as folder:
             root = Path(folder)
             shutil.copytree(ROOT / 'examples', root / 'project')
@@ -72,6 +88,9 @@ fn main()->u32 {
                 exe = build(entry, out, opt, root / 'project')
                 run = subprocess.run([str(exe)], capture_output=True, timeout=10)
                 self.assertEqual(run.returncode, 0, (opt, run.returncode, run.stdout, run.stderr))
+                if expected_stderr is not None:
+                    for message in expected_stderr:
+                        self.assertIn(message,run.stderr,(opt,run.stderr))
 
     def test_sdp_unicode_free_bounds_and_rtp_recovery(self):
         cases = [(SDP, True), (SDP.replace(b'mode=1', b'mode=2'), False),

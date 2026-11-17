@@ -6,6 +6,7 @@ import rtsp.bytes
 import rtsp.tcp
 import rtsp.bridge
 import rtsp.reconnect
+import rtsp.diagnostics
 import vg.connection
 import vg.socket
 import vg.control
@@ -19,9 +20,9 @@ fn initial()->State {
     b=can.text.empty();video=rtsp.sdp.Video(0,b,b,rtsp.sdp.Nal([0;256],0),rtsp.sdp.Nal([0;256],0),0,0)
     return State(0,0,false,0,0,b,b,b,video,0,0,0,0,0,net.ipv4(127,0,0,1,1),vg.binding.create(b,0),rtsp.bridge.create(0,0,0),false,0,0,0,0,0,0)
 }
-fn camera_response(borrow mut state:State,response:rtsp.tcp.Response,now:u64)->u32 {
+fn camera_response(borrow mut state:State,response:rtsp.tcp.Response,now:u64)->u32:io {
     head=response.head
-    if !state.waiting||head.cseq!=state.cseq||head.status!=200 {return 10}
+    if !state.waiting||head.cseq!=state.cseq||head.status!=200 {log=rtsp.diagnostics.rtsp_response(head.status,head.cseq,state.cseq);return 10}
     state.waiting=false
     if state.camera_phase==1 {state.camera_phase=2}
     else if state.camera_phase==2 {
@@ -43,15 +44,17 @@ fn camera_response(borrow mut state:State,response:rtsp.tcp.Response,now:u64)->u
     else {return 10}
     return 0
 }
-fn control_response(borrow mut state:State,message:vg.control.Message,now:u64,config:rtsp.config.Config)->u32 {
+fn control_response(borrow mut state:State,message:vg.control.Message,now:u64,config:rtsp.config.Config)->u32:io {
     if message.kind==0 {return 0}
     if message.kind==5 {if state.device!=0&&message.device==state.device {state.stopping=true};return 0}
     if message.kind==6 {state.stopping=true;return 0}
     if message.kind==1 {
-        if state.vg_phase!=1||message.result!=1||message.client==0 {return 20}
+        if state.vg_phase!=1 {log=console.err_bytes(b"VideoGrace login response arrived in an unexpected state\n");return 20}
+        if message.result!=1 {log=rtsp.diagnostics.login(message.result,config.version);return 20}
+        if message.client==0 {log=console.err_bytes(b"VideoGrace login response has no valid client ID\n");return 20}
         state.client=message.client;state.vg_phase=2;state.command=2
     } else if message.kind==2 {
-        if state.vg_phase!=2||message.result!=1 {return 21};state.vg_phase=3
+        if state.vg_phase!=2||message.result!=1 {log=rtsp.diagnostics.join(message.result);return 21};state.vg_phase=3
     } else if message.kind==3 {
         if state.vg_phase!=4||message.device==0||message.ssrc==0 {return 22}
         state.device=message.device;state.ssrc=message.ssrc;state.command=4;state.vg_phase=5
@@ -81,7 +84,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
         if state.error!=0 {state.stopping=true}
         if !state.stopping&&now>=start+20000&&state.vg_phase<6 {state.error=31;state.stopping=true}
         if state.waiting&&now>=state.camera_due {
-            label=console.err("RTSP response timeout cseq=");number=console.err_u64(u64(state.cseq));label2=console.err(" phase=");number2=console.err_u64(u64(state.camera_phase));line=console.errln("")
+            log=rtsp.diagnostics.rtsp_timeout(state.camera_phase,state.cseq)
             state.error=32;state.stopping=true;camera_dead=true;state.waiting=false
         }
         if !state.stopping&&state.camera_phase==5&&now>=state.last_rtp+10000 {state.error=33;state.stopping=true}
@@ -173,9 +176,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                 vg.socket.Event.Closed=>{socket_dead=true;if !closed&&state.error==0 {state.error=43};state.stopping=true}
                 vg.socket.Event.Failed(e)=>{socket_dead=true;state.stopping=true
                     if state.error==0 {state.error=44;match e {vg.socket.Error.Protocol=>{} vg.socket.Error.Disconnected=>{state.error=43} vg.socket.Error.Deadline=>{state.error=43} vg.socket.Error.Tls(t)=>{if rtsp.reconnect.transient_tls(t) {state.error=43}}}}
-                    match e {vg.socket.Error.Protocol=>{log=console.errln("WSS protocol failure")} vg.socket.Error.Disconnected=>{log=console.errln("WSS disconnected")} vg.socket.Error.Deadline=>{log=console.errln("WSS deadline")} vg.socket.Error.Tls(t)=>{
-                        match t {TlsError.Invalid=>{log=console.errln("TLS invalid")} TlsError.ManagedBudget=>{log=console.errln("TLS budget")} TlsError.OutOfMemory=>{log=console.errln("TLS allocation")} TlsError.WrongThread=>{log=console.errln("TLS thread")} TlsError.Configuration=>{log=console.errln("TLS configuration")} TlsError.Verification(code)=>{log=console.errln("TLS verification")} TlsError.Deadline=>{log=console.errln("TLS deadline")} TlsError.Protocol(code)=>{log=console.errln("TLS protocol")} TlsError.Transport(code)=>{log=console.errln("TCP transport")} TlsError.Output=>{log=console.errln("TLS output")}}
-                    }}
+                    match e {vg.socket.Error.Protocol=>{log=console.err_bytes(b"WSS protocol failure: invalid HTTP upgrade or WebSocket frame\n")} vg.socket.Error.Disconnected=>{log=console.err_bytes(b"WSS disconnected before a complete WebSocket close handshake\n")} vg.socket.Error.Deadline=>{log=console.err_bytes(b"WSS deadline expired while connecting, sending or closing\n")} vg.socket.Error.Tls(t)=>{log=rtsp.diagnostics.tls_failure(t)}}
                 }
             }
         } else {waited=net.reactor_poll(reactor,2)}
@@ -184,7 +185,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     reactor=rtsp.tcp.close(move camera,move reactor);(last,closed_socket)=vg.socket.close(move socket,move reactor);closed_reactor=net.reactor_close(move last)
     a=memory.release(move document);b=memory.release(move scratch);c=memory.release(move output);d=memory.release(move udp)
     log=console.write("RTP received=");n1=console.print_u64(state.bridge.received);l1=console.write(" attempted=");n2=console.print_u64(state.bridge.attempted);l2=console.write(" succeeded=");n3=console.print_u64(state.bridge.succeeded);l3=console.write(" gated=");n4=console.print_u64(state.bridge.gated);l4=console.write(" discontinuities=");n5=console.print_u64(state.bridge.discontinuities);line=console.println("")
-    if state.error!=0 {error_log=console.err("RTSP/VG session stopped with error ");error_code=console.err_u64(u64(state.error));error_line=console.errln("")}
+    if state.error!=0 {error_detail=rtsp.diagnostics.session_error(state.error)}
     healthy=clock()>=start+30000&&state.bridge.succeeded!=0
     return Attempt(move supervisor,state.error,healthy,requested)
 }
@@ -212,7 +213,7 @@ fn attempt(supervisor:net.Reactor,config:rtsp.config.Config,until:u64,tls_until:
     match vg.connection.open(config,tls_until) {
         Err(e)=>{log=console.errln("VG connection setup failed")
             match e {vg.connection.Error.Protocol=>{return Attempt(move supervisor,3,false,false)}
-            vg.connection.Error.Tls(t)=>{if rtsp.reconnect.transient_tls(t) {return Attempt(move supervisor,36,false,false)};return Attempt(move supervisor,3,false,false)}}
+            vg.connection.Error.Tls(t)=>{detail=rtsp.diagnostics.tls_failure(t);if rtsp.reconnect.transient_tls(t) {return Attempt(move supervisor,36,false,false)};return Attempt(move supervisor,3,false,false)}}
         }
         Ok(link)=>{return allocate(move supervisor,move link,config,until)}
     }
@@ -244,16 +245,17 @@ fn supervise(supervisor:net.Reactor,config:rtsp.config.Config)->Pause:io,alloc {
             last=code;if healthy {delay=1000}
             stamp=clock();if stamp==0 {return Pause(move control,3)}
             next_try=stamp+u64(delay)
-            label2=console.err("RTSP reconnect after error ");number2=console.err_u64(u64(code));label3=console.err(" delay_ms=");number3=console.err_u64(u64(delay));time_label2=console.err(" uptime_ms=");time_value2=console.err_u64(stamp-started);line2=console.errln("")
+            label2=console.err("RTSP reconnect after error ");number2=console.err_u64(u64(code));label3=console.err(" delay_ms=");number3=console.err_u64(u64(delay));time_label2=console.err(" uptime_ms=");time_value2=console.err_u64(stamp-started);separator=console.err_bytes(b": ");description=rtsp.diagnostics.reason(code);line2=console.errln("")
             delay=rtsp.reconnect.next_delay(delay)
         }
     }
 }
 pub fn run(config:rtsp.config.Config)->u32:io,alloc {
-    match net.reactor_create(0,1) {Err(e)=>{return 3} Ok(supervisor)=>{
-        match net.reactor_stop_accepting(supervisor) {Err(e)=>{closed=net.reactor_close(move supervisor);return 3} Ok(n)=>{}}
-        match net.reactor_watch_shutdown(supervisor) {Err(e)=>{closed=net.reactor_close(move supervisor);return 3} Ok(n)=>{}}
+    match net.reactor_create(0,1) {Err(e)=>{detail=rtsp.diagnostics.network(e);message=rtsp.diagnostics.exit_error(3);return 3} Ok(supervisor)=>{
+        match net.reactor_stop_accepting(supervisor) {Err(e)=>{detail=rtsp.diagnostics.network(e);message=rtsp.diagnostics.exit_error(3);closed=net.reactor_close(move supervisor);return 3} Ok(n)=>{}}
+        match net.reactor_watch_shutdown(supervisor) {Err(e)=>{label=console.err_bytes(b"Could not install shutdown signal watcher\n");detail=rtsp.diagnostics.network(e);closed=net.reactor_close(move supervisor);return 3} Ok(n)=>{}}
         (last,code)=supervise(move supervisor,config);closed=net.reactor_close(move last)
-        label=console.write("RTSP connector finished code=");number=console.print_u64(u64(code));line=console.println("");return code
+        label=console.write("RTSP connector finished code=");number=console.print_u64(u64(code));line=console.println("")
+        if code!=0 {description=rtsp.diagnostics.exit_error(code)};return code
     }}
 }

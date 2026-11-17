@@ -1,0 +1,114 @@
+// Static byte views only. Never log credentials, TLS secrets or raw messages.
+pub fn reason(code:u32)->u32:io {
+    var text=b"Unknown connector error"
+    if code==0 {text=b"Stopped normally"}
+    else if code==2 {text=b"Could not allocate bounded connection buffers"}
+    else if code==3 {text=b"Could not initialize networking, TLS or shutdown supervision"}
+    else if code==10 {text=b"RTSP response or interleaved framing was not accepted"}
+    else if code==11 {text=b"Camera SDP does not describe a supported H.264 video track"}
+    else if code==12 {text=b"Camera SETUP returned an unsupported transport or invalid Session header"}
+    else if code==20 {text=b"VideoGrace login failed; see login details above"}
+    else if code==21 {text=b"Could not join the VideoGrace conference; see join details above"}
+    else if code==22 {text=b"Invalid VideoGrace device registration response"}
+    else if code==30 {text=b"Could not read monotonic clock or shutdown state"}
+    else if code==31 {text=b"Timed out waiting for VideoGrace registration and RTP binding"}
+    else if code==32 {text=b"Timed out waiting for an RTSP camera response"}
+    else if code==33 {text=b"No RTP packets received from camera for 10000 ms"}
+    else if code==34 {text=b"Graceful shutdown deadline expired"}
+    else if code==35 {text=b"RTSP camera TCP connection failed or closed"}
+    else if code==36 {text=b"Could not open camera or VideoGrace network connections"}
+    else if code==40 {text=b"VideoGrace RTP binding timed out or failed authentication"}
+    else if code==41 {text=b"Could not encode or queue a VideoGrace control command"}
+    else if code==42 {text=b"Received an invalid or unsupported VideoGrace control message"}
+    else if code==43 {text=b"VideoGrace WSS connection closed or became unavailable"}
+    else if code==44 {text=b"WSS/TLS protocol, verification or server policy failure"}
+    else if code==230 {text=b"RTP binding response does not match the registered device and SSRC"}
+    else if code==231 {text=b"VideoGrace returned an invalid RTP destination port"}
+    else if code==232 {text=b"VideoGrace returned an invalid RTP binding key"}
+    else if code==233 {text=b"Unsupported RTP destination; expected a numeric IPv4 address"}
+    written=console.err_bytes(text);return 0
+}
+pub fn session_error(code:u32)->u32:io {
+    prefix=console.err_bytes(b"RTSP/VG session stopped: ");description=reason(code)
+    label=console.err_bytes(b" (code=");number=console.err_u64(u64(code));line=console.err_bytes(b")\n");return 0
+}
+pub fn exit_error(code:u32)->u32:io {
+    prefix=console.err_bytes(b"RTSP connector stopped: ");description=reason(code)
+    label=console.err_bytes(b" (exit_code=");number=console.err_u64(u64(code));line=console.err_bytes(b")\n");return 0
+}
+pub fn login(result:u32,version:u32)->u32:io {
+    var text=b"unknown server result"
+    if result==0 {text=b"server returned an undefined login result"}
+    else if result==2 {text=b"invalid login or password (InvalidCredentials)"}
+    else if result==3 {text=b"client version is too old (UpdateRequired); update client_version in config and restart"}
+    else if result==4 {text=b"server requested a redirect; configure the destination server explicitly"}
+    else if result==5 {text=b"server connection limit reached (ServerFull)"}
+    else if result==6 {text=b"server internal error during login (InternalServerError)"}
+    else if result==7 {text=b"account is banned (Banned)"}
+    else if result==8 {text=b"account not found (AccountNotFound)"}
+    prefix=console.err_bytes(b"VideoGrace login rejected: ");message=console.err_bytes(text)
+    label=console.err_bytes(b" (result=");number=console.err_u64(u64(result))
+    label2=console.err_bytes(b", client_version=");number2=console.err_u64(u64(version));line=console.err_bytes(b")\n");return 0
+}
+pub fn join(result:u32)->u32:io {
+    var text=b"unexpected conference join response"
+    if result==2 {text=b"conference does not exist (NotExists)"}
+    else if result==3 {text=b"access to conference denied (NotAllowed)"}
+    else if result==4 {text=b"conference license capacity reached (LicenseFull)"}
+    else if result==5 {text=b"conference time limit expired (TimeLimitExpired)"}
+    prefix=console.err_bytes(b"VideoGrace conference join failed: ");message=console.err_bytes(text)
+    label=console.err_bytes(b" (result=");number=console.err_u64(u64(result));line=console.err_bytes(b")\n");return 0
+}
+pub fn rtsp_timeout(phase:u32,cseq:u32)->u32:io {
+    var method=b"unknown RTSP command"
+    if phase==1 {method=b"OPTIONS"} else if phase==2 {method=b"DESCRIBE"}
+    else if phase==3 {method=b"SETUP"} else if phase==4 {method=b"PLAY"}
+    else if phase==6 {method=b"GET_PARAMETER"} else if phase==7 {method=b"TEARDOWN"}
+    prefix=console.err_bytes(b"RTSP camera timeout: no answer to ");name=console.err_bytes(method)
+    label=console.err_bytes(b" within 5000 ms (cseq=");number=console.err_u64(u64(cseq))
+    label2=console.err_bytes(b", phase=");number2=console.err_u64(u64(phase));line=console.err_bytes(b")\n");return 0
+}
+pub fn rtsp_response(status:u32,cseq:u32,expected:u32)->u32:io {
+    var text=b"unexpected response while no command was pending"
+    if status==401 {text=b"camera requires RTSP authentication; this profile does not support it"}
+    else if status==403 {text=b"camera denied RTSP access"}
+    else if status!=200 {text=b"camera returned a status other than 200 OK"}
+    else if cseq!=expected {text=b"response CSeq does not match the pending command"}
+    prefix=console.err_bytes(b"RTSP error: ");message=console.err_bytes(text)
+    label=console.err_bytes(b" (status=");number=console.err_u64(u64(status))
+    label2=console.err_bytes(b", cseq=");number2=console.err_u64(u64(cseq))
+    label3=console.err_bytes(b", expected_cseq=");number3=console.err_u64(u64(expected));line=console.err_bytes(b")\n");return 0
+}
+pub fn network(error:ReactorError)->u32:io {
+    var text=b"operating system socket error; check endpoint reachability"
+    match error {
+    ReactorError.Interrupted=>{text=b"socket operation interrupted"}
+    ReactorError.WouldBlock=>{text=b"socket is not ready for the operation"}
+    ReactorError.Disconnected=>{text=b"remote peer disconnected"}
+    ReactorError.AddressInUse=>{text=b"socket address is already in use"}
+    ReactorError.PermissionDenied=>{text=b"permission denied for socket operation"}
+    ReactorError.InvalidRange=>{text=b"invalid socket address, range or timeout"}
+    ReactorError.InvalidCapacity=>{text=b"invalid Reactor capacity"}
+    ReactorError.Full=>{text=b"Reactor connection capacity reached"}
+    ReactorError.InvalidConnection=>{text=b"invalid or stale Reactor connection"}
+    ReactorError.Exhausted=>{text=b"Reactor identity or generation limit reached"}
+    ReactorError.OutOfMemory=>{text=b"out of memory for networking resources"}
+    ReactorError.Other=>{}
+    }
+    prefix=console.err_bytes(b"Network error: ");message=console.err_bytes(text);line=console.err_bytes(b"\n");return 0
+}
+pub fn tls_failure(error:TlsError)->u32:io {
+    match error {
+    TlsError.Invalid=>{message=console.err_bytes(b"TLS invalid: session is unavailable or arguments are invalid\n")}
+    TlsError.ManagedBudget=>{message=console.err_bytes(b"TLS budget: adapter managed-memory budget is insufficient\n")}
+    TlsError.OutOfMemory=>{message=console.err_bytes(b"TLS allocation failed: out of memory\n")}
+    TlsError.WrongThread=>{message=console.err_bytes(b"TLS session used from the wrong owner thread\n")}
+    TlsError.Configuration=>{message=console.err_bytes(b"TLS configuration failed; check peer name and CA configuration\n")}
+    TlsError.Verification(code)=>{message=console.err_bytes(b"TLS verification failed: server certificate or peer identity rejected (verify_code=");number=console.err_u64(u64(code));line=console.err_bytes(b")\n")}
+    TlsError.Deadline=>{message=console.err_bytes(b"TLS deadline expired\n")}
+    TlsError.Protocol(code)=>{message=console.err_bytes(b"TLS protocol error (backend_reason=");number=console.err_u64(code);line=console.err_bytes(b")\n")}
+    TlsError.Transport(code)=>{message=network(code)}
+    TlsError.Output=>{message=console.err_bytes(b"TLS output could not be drained or transmitted\n")}
+    }
+    return 0
+}

@@ -162,6 +162,37 @@ compiler и production runtime для reconnect не менялись.
 
 ## Приёмка
 
+### Диагностика
+
+Ошибки выводятся в stderr понятным текстом с числовым кодом рядом.
+Например, ответ `UpdateRequired` теперь даёт:
+
+```text
+VideoGrace login rejected: client version is too old (UpdateRequired); update client_version in config and restart (result=3, client_version=617)
+RTSP/VG session stopped: VideoGrace login failed; see login details above (code=20)
+```
+
+Неверные credentials, ban, отсутствующий account, redirect и перегруженный
+сервер имеют отдельные описания с реальным `connect_response.result`.
+Ошибка join различает отсутствие конференции, запрет доступа, license capacity
+и time limit. Названия соответствуют VideoGrace `CONNECT_RESPONSE::Result`
+и `CONNECT_TO_CONFERENCE_RESPONSE::Result`; неизвестный result остаётся
+явно неизвестным, с исходным номером.
+
+RTSP timeout называет метод (`OPTIONS`, `DESCRIBE`, `SETUP`, `PLAY`,
+`GET_PARAMETER` или `TEARDOWN`), 5000-миллисекундное ожидание и CSeq.
+Неожиданный ответ показывает status, полученный и ожидаемый CSeq.
+TLS сообщает об ошибке сертификата/peer identity, конфигурации, памяти,
+deadline или протокола; сохраняются verify code и backend reason, если доступны.
+Числовые коды ошибок, `generation`, `delay_ms` и `uptime_ms` не исчезают.
+
+Сообщения используют статические [байтовые литералы](byte-literals.md),
+не создают `can.text.Value`/String/Region ради текста ошибки. Credentials,
+access tokens, binding keys и сырые JSON/RTSP сообщения не печатаются.
+Нормальная обработка медиабайтов не получает побайтового логирования.
+
+### Проверки
+
 Независимый локальный стенд проверяет O0/O2: RTSP fragmentation/CSeq,
 обычный WSS login/join, фрагментированный control message больше 32 КиБ,
 VGB1 с Python HMAC oracle, точный RTP payload, SPS/PPS, PT/SSRC/sequence,
