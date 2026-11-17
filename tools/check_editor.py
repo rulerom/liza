@@ -50,6 +50,9 @@ def check():
             assert re.search(r' - '+re.escape(category)+r',.*text: `'+re.escape(text)+r'`',highlighted), (category,text)
         borrowed = run('query', queries/'highlights.scm', ROOT/'examples/text/string.liza')
         assert re.search(r' - keyword,.*text: `borrow`',borrowed)
+        byte_strings = run('query', queries/'highlights.scm', ROOT/'examples/byte_literals.liza')
+        assert re.search(r' - string,.*text: `b"PLAY"`', byte_strings)
+        assert re.search(r' - string.escape,.*text: `\\xff`', byte_strings)
         outline = run('query', queries/'outline.scm', ROOT/'examples/tables/connections.liza')
         for name in ['ConnectionId','TableError','edit']:
             assert re.search(r' - name,.*text: `'+name+r'`',outline),name

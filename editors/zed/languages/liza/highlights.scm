@@ -5,6 +5,8 @@
 (number) @number
 (boolean) @boolean
 (string) @string
+(byte_string) @string
+(byte_escape_sequence) @string.escape
 (escape_sequence) @string.escape
 (comment) @comment
 ["import" "pub" "fn" "struct" "enum" "var" "return" "if" "else" "while"

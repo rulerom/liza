@@ -1,11 +1,11 @@
 import can.text
 import httpws.bytes
-pub fn equal(data:View<u8>,word:can.text.Value)->bool {
-    bytes=word.bytes;return httpws.bytes.equal(data,0,data.len,view bytes[0..word.length],false)
+pub fn equal(data:View<u8>,word:View<u8>)->bool {
+    return httpws.bytes.equal(data,0,data.len,word,false)
 }
-pub fn prefix(data:View<u8>,word:can.text.Value)->bool {
-    if data.len<word.length {return false};bytes=word.bytes
-    return httpws.bytes.equal(data,0,word.length,view bytes[0..word.length],false)
+pub fn prefix(data:View<u8>,word:View<u8>)->bool {
+    if data.len<word.len {return false}
+    return httpws.bytes.equal(data,0,word.len,word,false)
 }
 pub fn number(data:View<u8>,limit:u32)->Result<u32,u32> {
     if data.len==0 {return Err(1)};var n:u32=0;var i:u32=0
@@ -16,14 +16,14 @@ pub fn append(wire:httpws.bytes.Wire,value:can.text.Value)->Result<httpws.bytes.
     var next=wire;bytes=value.bytes
     if !httpws.bytes.append(borrow mut next,view bytes[0..value.length]) {return Err(1)};return Ok(next)
 }
-pub fn field(data:View<u8>,name:can.text.Value)->Result<can.text.Value,u32> {
+pub fn field(data:View<u8>,name:View<u8>)->Result<can.text.Value,u32> {
     var pos:u32=0;while pos+1<data.len {if data[pos]==13&&data[pos+1]==10 {pos=pos+2;break};pos=pos+1}
-    var found=false;var result=can.text.empty();key=name.bytes
+    var found=false;var result=can.text.empty()
     while pos+1<data.len {
         var end=pos;while end+1<data.len {if data[end]==13&&data[end+1]==10 {break};end=end+1}
         if end==pos {break};var colon=pos;while colon<end&&data[colon]!=58 {colon=colon+1}
         if colon==end {return Err(1)}
-        if httpws.bytes.equal(data,pos,colon,view key[0..name.length],true) {
+        if httpws.bytes.equal(data,pos,colon,name,true) {
             if found {return Err(1)};found=true;var a=colon+1;var b=end
             while a<b&&(data[a]==32||data[a]==9) {a=a+1};while b>a&&(data[b-1]==32||data[b-1]==9) {b=b-1}
             match can.text.from_view(view data[a..b],1024) {Err(e)=>{return Err(1)} Ok(v)=>{result=v}}
@@ -33,11 +33,11 @@ pub fn field(data:View<u8>,name:can.text.Value)->Result<can.text.Value,u32> {
     return Ok(result)
 }
 
-pub fn parameter(data:View<u8>,word:can.text.Value)->bool {
-    if word.length>data.len {return false};bytes=word.bytes;var at:u32=0
-    while at<=data.len-word.length {
-        end=at+word.length
-        if httpws.bytes.equal(data,at,end,view bytes[0..word.length],false) {
+pub fn parameter(data:View<u8>,word:View<u8>)->bool {
+    if word.len>data.len {return false};var at:u32=0
+    while at<=data.len-word.len {
+        end=at+word.len
+        if httpws.bytes.equal(data,at,end,word,false) {
             var left=at==0;if at!=0 {left=data[at-1]==59||data[at-1]==32||data[at-1]==9}
             var right=end==data.len;if end<data.len {right=data[end]==59||data[end]==32||data[end]==9}
             if left&&right {return true}

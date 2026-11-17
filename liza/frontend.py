@@ -21,7 +21,7 @@ class CompileError(Exception):
 
 def lex(source, filename=""):
     tokens = []
-    pattern = re.compile(r'"(?:[^"\\\n]|\\[^\n])*"|//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|\.\.|=>|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[\[\]{}(),:=;+*\-!<>~&|^/%.]')
+    pattern = re.compile(r'b?"(?:[^"\\\n]|\\[^\n])*"|//[^\n]*|[ \t\r]+|\n|0x[0-9a-fA-F]+|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|\.\.|=>|->|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[\[\]{}(),:=;+*\-!<>~&|^/%.]')
     pos, line, column = 0, 1, 1
     while pos < len(source):
         match = pattern.match(source, pos)
@@ -37,6 +37,35 @@ def lex(source, filename=""):
         pos = match.end()
     tokens.append(Token('<eof>', line, column, filename))
     return tokens
+
+
+def byte_literal(token):
+    """ASCII source plus explicit byte escapes; no UTF-8/Text conversion."""
+    source, result, pos = token.text[2:-1], bytearray(), 0
+    escapes = {'0': 0, 'n': 10, 'r': 13, 't': 9, '\\': 92, '"': 34}
+    while pos < len(source):
+        char = source[pos]
+        pos += 1
+        if char == '\\':
+            if pos >= len(source):
+                raise CompileError(token, 'incomplete byte literal escape')
+            escape = source[pos]
+            pos += 1
+            if escape == 'x':
+                digits = source[pos:pos+2]
+                if not re.fullmatch('[0-9a-fA-F]{2}', digits):
+                    raise CompileError(token, 'byte escape requires exactly two hex digits')
+                result.append(int(digits, 16))
+                pos += 2
+            elif escape in escapes:
+                result.append(escapes[escape])
+            else:
+                raise CompileError(token, 'unknown byte literal escape')
+        elif not 32 <= ord(char) <= 126:
+            raise CompileError(token, 'byte literal requires printable ASCII or explicit byte escapes')
+        else:
+            result.append(ord(char))
+    return result.decode('latin-1')
 
 
 @dataclass
@@ -520,7 +549,10 @@ class Parser:
 
     def expression(self, minimum=0):
         token = self.current
-        if token.text.startswith('"'):
+        if token.text.startswith('b"'):
+            self.take()
+            left = Expr(Token(byte_literal(token), token.line, token.column, token.source), 'bytes', [])
+        elif token.text.startswith('"'):
             self.take()
             try:
                 value = json.loads(token.text)

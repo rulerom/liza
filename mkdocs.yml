@@ -122,6 +122,7 @@ nav:
       - Readonly-заимствование: readonly-access.md
       - Mutable-заимствование: mutable-access.md
       - Локальные subviews: local-subviews.md
+      - Байтовые литералы: byte-literals.md
       - Эффекты и I/O: io-model.md
   - Библиотеки:
       - UTF-8: utf8.md

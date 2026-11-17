@@ -20,7 +20,7 @@ def successors(block):
 
 
 def references(op, names):
-    if op.op in ('constant', 'text.literal'): return set()
+    if op.op in ('constant', 'text.literal', 'bytes.literal'): return set()
     return {a for a in op.args if isinstance(a, str) and a in names}
 
 

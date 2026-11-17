@@ -283,6 +283,10 @@ class Lowerer:
 
     def _emit_expression(self, expr, names, inferred):
         text, type_name = expr.token.text, inferred[id(expr)]
+        if expr.kind == 'bytes':
+            if len(text) > 4294967295:
+                raise CompileError(expr.token, 'byte literal exceeds u32 bytes')
+            return self.emit('bytes.literal', [text], type='View<u8>', storage_relation='static_readonly')
         if expr.kind == 'text':
             if len(text.encode('utf-8')) > 4294967295:
                 raise CompileError(expr.token, 'text literal exceeds u32 bytes')

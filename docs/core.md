@@ -73,12 +73,13 @@ statement := ("var")? name (":" type)? "=" expression
            | "return" expression | conditional | "while" expression block
            | "break" | "continue" | match_statement | block
 conditional := "if" expression block ("else" (block | conditional))?
-expression := literal | "true" | "false" | name | name "(" arguments? ")"
+expression := literal | byte_literal | "true" | "false" | name | name "(" arguments? ")"
             | "(" expression ")" | unary expression | expression binary expression
             | expression "." name | "[" arguments? "]" | expression "[" expression "]"
             | "view" name "[" expression ".." expression "]"
             | integer_type ("." ("wrap" | "saturate"))? "(" expression ")"
 unary     := "!" | "~" | "-" | "copy" | "move"
+byte_literal := 'b"' (printable_ascii | byte_escape)* '"'
 binary    := "+" | "-" | "*" | "/" | "%" | "+%" | "-%" | "*%" | "+|" | "-|" | "*|"
             | "==" | "!=" | "<" | "<=" | ">" | ">="
             | "&" | "|" | "^" | "<<" | ">>" | "&&" | "||"
@@ -537,6 +538,10 @@ IR версии 20 содержит типизированные значени�
 родительского дескриптора, а `storage_relation: borrow_argument_0` сохраняет связь
 с его хранилищем. Цепочка не вводит нового владельца. Время жизни проверяется до
 backend; подробности — [T2-B](local-subviews.md).
+`bytes.literal` имеет тип `View<u8>` и `storage_relation: static_readonly`;
+его payload — точные байты (в JSON представлены строкой с кодами 0..255).
+Backend создаёт readonly constant и дескриптор, без локальной копии payload.
+Синтаксис и ограничения — [байтовые литералы](byte-literals.md).
 Потенциальные traps распространяются через вызовы так же, как арифметические.
 
 Backend может материализовать SSA-значение массива в локальном хранилище один раз

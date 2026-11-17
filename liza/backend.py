@@ -74,10 +74,11 @@ def llvm(module, target=None):
     for fn in module:
         for block in fn.blocks:
             for op in block.operations:
-                if op.op == 'text.literal':
-                    data = op.args[0].encode('utf-8')
+                if op.op in ('text.literal', 'bytes.literal'):
+                    kind = op.op.split('.')[0]
+                    data = op.args[0].encode('utf-8' if kind == 'text' else 'latin-1')
                     escaped = ''.join('\\%02X' % byte for byte in data)
-                    lines.append(f'@text.{fn.name}.{op.result} = private constant [{len(data)} x i8] c"{escaped}"')
+                    lines.append(f'@{kind}.{fn.name}.{op.result} = private constant [{len(data)} x i8] c"{escaped}"')
     if getattr(module, 'externals', []):
         lines.extend(['declare i64 @liza_rt_write(ptr, i32)',
                       'declare i64 @liza_rt_write_text(ptr, i32)',
@@ -265,9 +266,10 @@ def llvm(module, target=None):
                         exits[block.name] = f'{op.result}_done'
                     elif array_length(op.type) == 0:
                         refs[op.result] = 'zeroinitializer'
-                if op.op == 'text.literal':
-                    text_size = len(op.args[0].encode('utf-8'))
-                    refs[op.result] = f'{{ ptr @text.{fn.name.removeprefix("__liza_owned_")}.{op.result}, i32 {text_size} }}'
+                if op.op in ('text.literal', 'bytes.literal'):
+                    kind = op.op.split('.')[0]
+                    text_size = len(op.args[0].encode('utf-8' if kind == 'text' else 'latin-1'))
+                    refs[op.result] = f'{{ ptr @{kind}.{fn.name.removeprefix("__liza_owned_")}.{op.result}, i32 {text_size} }}'
                 value_types[op.result] = types[op.type]
                 if op.op in ('vec.get','vec.pop','vec.push','vec.set'):
                     exits[block.name] = f'{op.result}_done'
@@ -357,7 +359,7 @@ def llvm(module, target=None):
                 if op.op != 'phi':
                     flush()
                 name, ty = op.result, types[op.type]
-                if op.op in ('constant', 'text.literal', 'copy', 'move', 'unpack.consume') or (op.op.startswith('convert.') and op.source_type == 'integer'):
+                if op.op in ('constant', 'text.literal', 'bytes.literal', 'copy', 'move', 'unpack.consume') or (op.op.startswith('convert.') and op.source_type == 'integer'):
                     continue
                 args = [refs[a] for a in op.args]
                 if large(op.type) and op.op == 'phi':

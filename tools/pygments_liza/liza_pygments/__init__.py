@@ -13,6 +13,7 @@ class LizaLexer(RegexLexer):
         'root': [
             (r'\s+', Whitespace),
             (r'//[^\n]*', Comment.Single),
+            (r'b"', String.Double, 'byte-string'),
             (r'"', String.Double, 'string'),
             (words(('true', 'false'), suffix=r'\b'), Keyword.Constant),
             (words(('fn', 'return', 'var', 'if', 'else', 'while', 'break',
@@ -30,6 +31,11 @@ class LizaLexer(RegexLexer):
             (r'[A-Za-z_][A-Za-z_0-9]*', Name),
             (r'->|=>|==|!=|<<|>>|<=|>=|&&|\|\||[+*\-][%|]|[=+*\-!<>~&|^/%]', Operator),
             (r'\.\.|[\[\]{}(),:;.]', Punctuation),
+        ],
+        'byte-string': [
+            (r'\\(?:["\\0nrt]|x[0-9a-fA-F]{2})', String.Escape),
+            (r'[\x20-\x21\x23-\x5b\x5d-\x7e]+', String.Double),
+            (r'"', String.Double, '#pop'),
         ],
         'string': [
             (r'\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4})', String.Escape),

@@ -3,7 +3,6 @@ import rtsp.request
 import rtsp.stream
 import rtsp.sdp
 import rtsp.bytes
-import rtsp.words
 import rtsp.tcp
 import rtsp.bridge
 import vg.connection
@@ -23,7 +22,7 @@ fn camera_response(borrow mut state:State,response:rtsp.tcp.Response,now:u64)->u
     state.waiting=false
     if state.camera_phase==1 {state.camera_phase=2}
     else if state.camera_phase==2 {
-        kind=head.content_type.bytes;if !rtsp.bytes.equal(view kind[0..head.content_type.length],rtsp.words.sdp()) {return 11}
+        kind=head.content_type.bytes;if !rtsp.bytes.equal(view kind[0..head.content_type.length],b"application/sdp") {return 11}
         body=response.body.data
         match rtsp.sdp.parse(view body[0..response.body.len]) {Err(e)=>{return 11} Ok(video)=>{state.video=video}}
         if head.base.length!=0 {state.base=head.base}
@@ -31,7 +30,7 @@ fn camera_response(borrow mut state:State,response:rtsp.tcp.Response,now:u64)->u
         state.camera_phase=3
     } else if state.camera_phase==3 {
         transport=head.transport.bytes
-        if !rtsp.bytes.parameter(view transport[0..head.transport.length],rtsp.words.tcp())||!rtsp.bytes.parameter(view transport[0..head.transport.length],rtsp.words.interleaved()) {return 12}
+        if !rtsp.bytes.parameter(view transport[0..head.transport.length],b"RTP/AVP/TCP")||!rtsp.bytes.parameter(view transport[0..head.transport.length],b"interleaved=0-1") {return 12}
         bytes=head.session.bytes;var length:u32=0;while length<head.session.length&&bytes[length]!=59 {length=length+1}
         if length==0||length>128 {return 12}
         match can.text.from_view(view bytes[0..length],128) {Err(e)=>{return 12} Ok(v)=>{state.session=v}}
@@ -83,14 +82,14 @@ fn exchange(link:vg.connection.Connection,bundle:Bundle,config:rtsp.config.Confi
         if state.stopping&&now>=state.shutdown_due {if state.error==0 {state.error=34};break}
         if !camera_dead {
             if rtsp.tcp.can_send(camera)&&!state.waiting {
-                var method=can.text.empty();var target=state.base
-                if state.stopping {if state.session.length!=0&&state.camera_phase!=8 {method=rtsp.words.teardown();state.camera_phase=7} else {state.camera_phase=8}}
-                else if state.camera_phase==0 {method=rtsp.words.options();state.camera_phase=1}
-                else if state.camera_phase==2 {method=rtsp.words.describe()}
-                else if state.camera_phase==3 {method=rtsp.words.setup();target=state.track}
-                else if state.camera_phase==4 {method=rtsp.words.play()}
-                else if state.camera_phase==5&&now>=state.keepalive {method=rtsp.words.keepalive();state.camera_phase=6}
-                if method.length!=0 {
+                var method=b"";var target=state.base
+                if state.stopping {if state.session.length!=0&&state.camera_phase!=8 {method=b"TEARDOWN";state.camera_phase=7} else {state.camera_phase=8}}
+                else if state.camera_phase==0 {method=b"OPTIONS";state.camera_phase=1}
+                else if state.camera_phase==2 {method=b"DESCRIBE"}
+                else if state.camera_phase==3 {method=b"SETUP";target=state.track}
+                else if state.camera_phase==4 {method=b"PLAY"}
+                else if state.camera_phase==5&&now>=state.keepalive {method=b"GET_PARAMETER";state.camera_phase=6}
+                if method.len!=0 {
                     state.cseq=state.cseq+1
                     match rtsp.request.make(method,target,state.cseq,state.session) {Err(e)=>{state.error=10;camera_dead=true} Ok(wire)=>{camera=rtsp.tcp.send(move camera,wire);state.waiting=true;state.camera_due=now+5000}}
                 }

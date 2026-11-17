@@ -1373,6 +1373,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "byte_string"
+        },
+        {
+          "type": "SYMBOL",
           "name": "array_expression"
         },
         {
@@ -1457,6 +1461,63 @@
           "value": "\""
         }
       ]
+    },
+    "byte_string": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "b\""
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "byte_escape_sequence"
+              },
+              {
+                "type": "IMMEDIATE_TOKEN",
+                "content": {
+                  "type": "PATTERN",
+                  "value": "[\\x20-\\x21\\x23-\\x5b\\x5d-\\x7e]+"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "\""
+        }
+      ]
+    },
+    "byte_escape_sequence": {
+      "type": "IMMEDIATE_TOKEN",
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "\\"
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "PATTERN",
+                "value": "[\"\\\\0nrt]"
+              },
+              {
+                "type": "PATTERN",
+                "value": "x[0-9a-fA-F]{2}"
+              }
+            ]
+          }
+        ]
+      }
     },
     "escape_sequence": {
       "type": "IMMEDIATE_TOKEN",

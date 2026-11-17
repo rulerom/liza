@@ -82,7 +82,7 @@ class RtspProtocol(unittest.TestCase):
                  (response.replace(b'CSeq: 1', b'CSeq: 1\r\nCSeq: 2'), True, 0),
                  (response.replace(b'Length: 0', b'Length: 99999'), True, 0),
                  (b'$\2\0\1x', True, 0), (b'$\0\xff\xff', True, 0)]
-        source = 'import rtsp.stream\nimport rtsp.bytes\nimport rtsp.words\nfn main()->u32 {\n'
+        source = 'import rtsp.stream\nimport rtsp.bytes\nfn main()->u32 {\n'
         for i, (data, bad, events) in enumerate(cases):
             source += f'''d{i}:[u8;{len(data)}]={array(data)};var s{i}=rtsp.stream.create();var bad{i}=false;var total{i}:u32=0;var n{i}:u32=0
  while n{i}<{len(data)} {{match rtsp.stream.feed(borrow mut s{i},d{i}[n{i}]) {{Err(e)=>{{bad{i}=true;break}} Ok(event)=>{{total{i}=total{i}+event}}}};n{i}=n{i}+1}}
@@ -91,7 +91,7 @@ class RtspProtocol(unittest.TestCase):
             if not bad:
                 source += f'if total{i}!={events} {{return 20}}\n'
         bad_channel = b'RTP/AVP/TCP;interleaved=0-10'
-        source += f'channel_text:[u8;{len(bad_channel)}]={array(bad_channel)};if rtsp.bytes.parameter(view channel_text[0..{len(bad_channel)}],rtsp.words.interleaved()) {{return 30}}\n'
+        source += f'channel_text:[u8;{len(bad_channel)}]={array(bad_channel)};if rtsp.bytes.parameter(view channel_text[0..{len(bad_channel)}],b"interleaved=0-1") {{return 30}}\n'
         self.run_liza(source + 'return 0}')
 
     @unittest.skipUnless(os.environ.get('LIZA_TEST_TLS') == '1', 'OpenSSL required')

@@ -1,5 +1,4 @@
 import rtsp.bytes
-import rtsp.words
 import httpws.http
 import httpws.bytes
 import can.text
@@ -14,13 +13,13 @@ fn parse(data:View<u8>)->Result<Head,u32> {
     check=wire.data
     match httpws.http.response(view check[0..wire.len]) {Err(e)=>{return Err(1)} Ok(found)=>{match found {None=>{return Err(1)} Some(head)=>{}}}}
     var status:u32=0;match rtsp.bytes.number(view data[9..12],999) {Err(e)=>{return Err(1)} Ok(n)=>{status=n}}
-    var sequence:u32=0;match rtsp.bytes.field(data,rtsp.words.cseq()) {Err(e)=>{return Err(1)} Ok(v)=>{b=v.bytes;match rtsp.bytes.number(view b[0..v.length],4294967295) {Err(e)=>{return Err(1)} Ok(n)=>{sequence=n}}}}
-    var length:u32=0;match rtsp.bytes.field(data,rtsp.words.content_length()) {Err(e)=>{return Err(1)} Ok(v)=>{if v.length!=0 {b=v.bytes;match rtsp.bytes.number(view b[0..v.length],8192) {Err(e)=>{return Err(1)} Ok(n)=>{length=n}}}}}
+    var sequence:u32=0;match rtsp.bytes.field(data,b"CSeq") {Err(e)=>{return Err(1)} Ok(v)=>{b=v.bytes;match rtsp.bytes.number(view b[0..v.length],4294967295) {Err(e)=>{return Err(1)} Ok(n)=>{sequence=n}}}}
+    var length:u32=0;match rtsp.bytes.field(data,b"Content-Length") {Err(e)=>{return Err(1)} Ok(v)=>{if v.length!=0 {b=v.bytes;match rtsp.bytes.number(view b[0..v.length],8192) {Err(e)=>{return Err(1)} Ok(n)=>{length=n}}}}}
     var session=can.text.empty();var base=can.text.empty();var transport=can.text.empty();var kind=can.text.empty()
-    match rtsp.bytes.field(data,rtsp.words.session()) {Err(e)=>{return Err(1)} Ok(v)=>{session=v}}
-    match rtsp.bytes.field(data,rtsp.words.content_base()) {Err(e)=>{return Err(1)} Ok(v)=>{base=v}}
-    match rtsp.bytes.field(data,rtsp.words.transport_name()) {Err(e)=>{return Err(1)} Ok(v)=>{transport=v}}
-    match rtsp.bytes.field(data,rtsp.words.content_type()) {Err(e)=>{return Err(1)} Ok(v)=>{kind=v}}
+    match rtsp.bytes.field(data,b"Session") {Err(e)=>{return Err(1)} Ok(v)=>{session=v}}
+    match rtsp.bytes.field(data,b"Content-Base") {Err(e)=>{return Err(1)} Ok(v)=>{base=v}}
+    match rtsp.bytes.field(data,b"Transport") {Err(e)=>{return Err(1)} Ok(v)=>{transport=v}}
+    match rtsp.bytes.field(data,b"Content-Type") {Err(e)=>{return Err(1)} Ok(v)=>{kind=v}}
     return Ok(Head(status,sequence,session,base,transport,kind,length))
 }
 // Payload-byte path: scalar stores into the caller's existing frame storage.
