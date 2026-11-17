@@ -203,7 +203,7 @@ class RtspClient(unittest.TestCase):
                         if drop_wss and epoch==0:
                             self.assertTrue(media_seen[epoch].wait(5), 'no first-generation media')
                             if drop_wss in ('close','policy'):
-                                conn.sendall(ws(struct.pack('!H',1008 if drop_wss=='policy' else 1001),8))
+                                conn.sendall(ws(struct.pack('!H',1008 if drop_wss=='policy' else 1001),0x88))
                                 opcode,data=client_frame(conn)
                                 self.assertEqual(opcode,8)
                                 conn.unwrap().close()
