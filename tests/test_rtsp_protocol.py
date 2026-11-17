@@ -22,6 +22,25 @@ SDP = (b'v=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\n'
 
 @unittest.skipUnless(shutil.which('clang'), 'Clang required')
 class RtspProtocol(unittest.TestCase):
+    def test_reconnect_limits_and_fatal_error_policy(self):
+        source='''import rtsp.reconnect
+fn main()->u32 {
+    var delay:u32=0
+    expected:[u32;8]=[1000,2000,4000,8000,16000,30000,30000,30000]
+    var i:u32=0;while i<8 {delay=rtsp.reconnect.next_delay(delay);if delay!=expected[i] {return 1};i=i+1}
+    if rtsp.reconnect.next_delay(4294967295)!=30000 {return 2}
+    if !rtsp.reconnect.transient_tls(TlsError.Transport(ReactorError.Disconnected)) {return 3}
+    if !rtsp.reconnect.transient_tls(TlsError.Deadline) {return 4}
+    if rtsp.reconnect.transient_tls(TlsError.Transport(ReactorError.OutOfMemory)) {return 5}
+    if rtsp.reconnect.transient_tls(TlsError.Transport(ReactorError.PermissionDenied)) {return 6}
+    if rtsp.reconnect.transient_tls(TlsError.Verification(1)) {return 7}
+    if rtsp.reconnect.transient_tls(TlsError.Configuration) {return 8}
+    if rtsp.reconnect.transient(10)||rtsp.reconnect.transient(44)||rtsp.reconnect.transient(2) {return 9}
+    if !rtsp.reconnect.transient(32)||!rtsp.reconnect.transient(35)||!rtsp.reconnect.transient(43) {return 10}
+    return 0
+}'''
+        self.run_liza(source)
+
     def test_receive_cannot_release_region_before_buffer(self):
         source = '''fn main()->u32:io,alloc {
  match net.reactor_udp_create(net.ipv4(127,0,0,1,0),1) {Err(e)=>{return 1} Ok(r)=>{

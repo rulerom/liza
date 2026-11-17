@@ -1,0 +1,26 @@
+// Application retry policy; authentication and resource failures are fatal.
+pub fn transient_net(error:ReactorError)->bool {
+    match error {
+        ReactorError.Interrupted=>{return true} ReactorError.WouldBlock=>{return true}
+        ReactorError.Disconnected=>{return true} ReactorError.Other=>{return true}
+        ReactorError.AddressInUse=>{return false} ReactorError.PermissionDenied=>{return false}
+        ReactorError.InvalidRange=>{return false} ReactorError.InvalidCapacity=>{return false}
+        ReactorError.Full=>{return false} ReactorError.InvalidConnection=>{return false}
+        ReactorError.Exhausted=>{return false} ReactorError.OutOfMemory=>{return false}
+    }
+}
+pub fn transient_tls(error:TlsError)->bool {
+    match error {TlsError.Transport(code)=>{return transient_net(code)} TlsError.Deadline=>{return true}
+    TlsError.Invalid=>{return false} TlsError.ManagedBudget=>{return false}
+    TlsError.OutOfMemory=>{return false} TlsError.WrongThread=>{return false}
+    TlsError.Configuration=>{return false} TlsError.Verification(code)=>{return false}
+    TlsError.Protocol(code)=>{return false} TlsError.Output=>{return false}}
+}
+pub fn transient(code:u32)->bool {
+    return code==31||code==32||code==33||code==35||code==36||code==43
+}
+pub fn next_delay(previous:u32)->u32 {
+    if previous<1000 {return 1000}
+    if previous>=15000 {return 30000}
+    return previous*2
+}
