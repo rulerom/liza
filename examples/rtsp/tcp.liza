@@ -2,7 +2,7 @@ import rtsp.stream
 import httpws.bytes
 pub struct Frame {pub data:[u8;4096];pub length:u32}
 pub struct Response {pub head:rtsp.stream.Head;pub body:httpws.bytes.Wire}
-pub enum Event {Idle;Response(Response);Packet(Frame);Rtcp;Failed}
+pub enum Event {Idle;Response(Response);Packet(Frame);Rtcp;Failed;Invalid}
 struct State {connected:bool;pending:httpws.bytes.Wire;sent:u32;length:u32;cursor:u32;blocked:bool;parser:rtsp.stream.State}
 pub struct Client {id:net.Connection;buffer:memory.Buffer<u8>;state:State}
 pub struct Step {pub client:Client;pub reactor:net.Reactor;pub event:Event}
@@ -23,7 +23,7 @@ fn buffered_event(borrow mut state:State,data:View<u8>)->Event {
     while state.cursor<state.length&&processed<256 {
         byte=data[state.cursor];state.cursor=state.cursor+1;processed=processed+1
         match rtsp.stream.feed(borrow mut state.parser,byte) {
-            Err(e)=>{return Event.Failed}
+            Err(e)=>{return Event.Invalid}
             Ok(code)=>{
                 if code==1 {return Event.Response(Response(state.parser.head,state.parser.body))}
                 if code==2 {return Event.Packet(Frame(state.parser.frame,state.parser.have))}
@@ -34,7 +34,7 @@ fn buffered_event(borrow mut state:State,data:View<u8>)->Event {
     return Event.Idle
 }
 pub fn step(owned:Client,r:net.Reactor)->Step:io {
-    (id,initial_buffer,initial)=move owned;var buffer=move initial_buffer;var state=initial;var event=Event.Idle;var failed=false
+    (id,initial_buffer,initial)=move owned;var buffer=move initial_buffer;var state=initial;var event=Event.Idle;var failed=false;var invalid=false
     if !state.connected {match net.reactor_finish_connect(r,id) {Err(e)=>{if !retry(e) {failed=true}} Ok(ready)=>{state.connected=ready}}}
     if state.blocked {match net.reactor_ready(r,id) {Err(e)=>{failed=true} Ok(flags)=>{if (flags&6)!=0 {state.blocked=false}}}}
     if state.connected&&!failed {
@@ -47,7 +47,7 @@ pub fn step(owned:Client,r:net.Reactor)->Step:io {
         }
         if !failed {
             {data=memory.view(buffer);event=buffered_event(borrow mut state,data)}
-            match event {Event.Failed=>{failed=true} Event.Idle=>{} Event.Response(v)=>{} Event.Packet(v)=>{} Event.Rtcp=>{}}
+            match event {Event.Invalid=>{failed=true;invalid=true} Event.Failed=>{failed=true} Event.Idle=>{} Event.Response(v)=>{} Event.Packet(v)=>{} Event.Rtcp=>{}}
         }
         if state.cursor==state.length&&!failed {
             (next,result)=net.reactor_read(r,id,move buffer,0,4096);buffer=move next
@@ -56,7 +56,7 @@ pub fn step(owned:Client,r:net.Reactor)->Step:io {
     }
     var interest:u32=1;if !state.connected||state.pending.len!=0 {interest=interest|2}
     match net.reactor_interest(r,id,interest) {Err(e)=>{failed=true} Ok(n)=>{}}
-    if failed {event=Event.Failed}
+    if failed {if invalid {event=Event.Invalid} else {event=Event.Failed}}
     return Step(Client(id,move buffer,state),move r,event)
 }
 pub fn close(owned:Client,r:net.Reactor)->net.Reactor:io {

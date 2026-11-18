@@ -47,6 +47,13 @@ reserve 8 МиБ; это отдельная величина от Region и `tls
 `camera_ip` и `vg_ip` — числовые IPv4; DNS resolver не используется.
 `camera_url` задаёт RTSP resource, а TCP подключается к `camera_ip:camera_port`.
 `vg_peer` задаёт TLS identity/SNI и HTTP Host независимо от TCP IP.
+`client_version` задаётся для выбранного сервера и читается при запуске;
+после изменения файла работающий процесс нужно перезапустить. Например,
+после обновления `demo.videograce.ru` 17 ноября потребовалось значение 618.
+Отказ `connect_response.result=3` (`UpdateRequired`) является постоянным
+для прежней конфигурации и не устраняется сетевым reconnect. Код приложения
+20 также охватывает другие ошибки login-ответа; сам по себе он не указывает
+точный `connect_response.result`.
 Системное доверие обязательно; необязательный `ca_file` выбирает явный CA
 для этой session. Переключения на небезопасный транспорт при TLS-ошибке нет.
 `run_ms` — 100..3600000 мс; `0` отключает общий лимит времени работы.
@@ -65,6 +72,9 @@ reserve 8 МиБ; это отдельная величина от Region и `tls
 Один Reactor владеет UDP endpoint и двумя исходящими TCP-соединениями:
 RTSP камеры и WSS сервера. UDP endpoint исключает TCP listener, но не
 исходящие TCP slots. Числовой socket handle приложению не выдаётся.
+Отдельный supervisor Reactor владеет регистрацией shutdown-сигнала и служит
+для ожидания между попытками. Его временный listener сразу закрывается;
+постоянных сетевых сокетов и дополнительных потоков у supervisor нет.
 
 RTSP выполняет `OPTIONS → DESCRIBE → SETUP → PLAY`, затем `GET_PARAMETER`
 каждые 15 секунд. В первой версии используется RTP/RTCP interleaved TCP,
@@ -106,10 +116,82 @@ timestamp/marker сохраняются; выходной PT — 102, SSRC на�
 фиксированы, interleaved record до 4096 байт, SPS/PPS до 256 байт каждый.
 Входящие большие WS сообщения не расширяют CAN-профиль с его лимитом 4 КиБ.
 Нет RTSP authentication, аудио, UDP-транспорта со стороны камеры, DNS,
-автоматического reconnect, обработки смены SPS/PPS/разрешения и CAN lifecycle.
+обработки смены SPS/PPS/разрешения внутри сессии и CAN lifecycle.
 Камера должна поддерживать указанный профиль и keepalive.
 
+## Reconnect
+
+После временного отказа приложение полностью закрывает текущую пару
+RTSP/WSS, UDP endpoint, TLS session и Region/Buffer, затем заново выполняет
+RTSP setup и VG login/join/device registration/media binding. Динамические
+ID, CSeq, SSRC, nonce, ключ, parser и IDR gate из старой попытки не переносятся.
+В одной попытке нет доступа к ресурсам другой; межгрупповых очередей нет.
+
+Повторяются connection/transport loss, timeout RTSP-ответа (код 32),
+отсутствие RTP (33), startup deadline VG (31) и временные ошибки WSS.
+WS close 1000/1001, отсутствие кода и server failure/restart 1011..1014
+без предварительной команды остановки также запускают reconnect.
+Protocol/policy close (например, 1002/1008) и неизвестные application-коды
+завершают процесс; ответ на close после уже принятого stop не запускает retry.
+Backoff: 1, 2, 4, 8, 16, затем максимум 30 секунд; после сессии не короче
+30 секунд с успешными UDP sends следующая пауза снова составляет 1 секунду.
+При `run_ms: 0` число временных попыток не ограничено, частота ограничена
+backoff. На паузе shutdown проверяется с шагом не более 50 мс, без busy loop.
+
+Ошибки конфигурации, авторизации, сертификата/имени, malformed RTSP/WS,
+неверный CSeq и исчерпание известных ресурсных лимитов не повторяются.
+TCP EOF без завершённого WS close считается потерей транспорта, а не успешным
+завершением сообщения: недополученные данные отбрасываются вместе с сессией.
+TLS verification и ошибки TLS records не превращаются в insecure fallback.
+
+`run_ms` остаётся общим временем процесса, включая попытки и backoff;
+на reconnect срок не начинается заново. Если он истёк во время паузы,
+возвращается последняя ошибка. Общий shutdown остаётся bounded и может
+добавить до пяти секунд к сроку работы. SIGINT/SIGTERM и штатная команда
+удалённой остановки прекращают reconnect, также при timeout `TEARDOWN`.
+Принудительная остановка процесса не восстанавливается самим приложением.
+
+Лог `RTSP session generation=N` обозначает новую локальную попытку;
+`uptime_ms` в этой строке и записи retry отсчитывается от начала supervisor.
+Счётчики `RTP received/attempted/succeeded/gated/discontinuities` выводятся
+для каждой завершённой сессии отдельно. `RTSP reconnect after error ...
+delay_ms=...` сообщает о повторе. Timeout дополнительно показывает CSeq
+и фазу: 6 — `GET_PARAMETER`, 7 — `TEARDOWN`. `RTSP connector finished
+code=...` означает завершение всего процесса. Это приложение на Liza;
+compiler и production runtime для reconnect не менялись.
+
 ## Приёмка
+
+### Диагностика
+
+Ошибки выводятся в stderr понятным текстом с числовым кодом рядом.
+Например, ответ `UpdateRequired` теперь даёт:
+
+```text
+VideoGrace login rejected: client version is too old (UpdateRequired); update client_version in config and restart (result=3, client_version=617)
+RTSP/VG session stopped: VideoGrace login failed; see login details above (code=20)
+```
+
+Неверные credentials, ban, отсутствующий account, redirect и перегруженный
+сервер имеют отдельные описания с реальным `connect_response.result`.
+Ошибка join различает отсутствие конференции, запрет доступа, license capacity
+и time limit. Названия соответствуют VideoGrace `CONNECT_RESPONSE::Result`
+и `CONNECT_TO_CONFERENCE_RESPONSE::Result`; неизвестный result остаётся
+явно неизвестным, с исходным номером.
+
+RTSP timeout называет метод (`OPTIONS`, `DESCRIBE`, `SETUP`, `PLAY`,
+`GET_PARAMETER` или `TEARDOWN`), 5000-миллисекундное ожидание и CSeq.
+Неожиданный ответ показывает status, полученный и ожидаемый CSeq.
+TLS сообщает об ошибке сертификата/peer identity, конфигурации, памяти,
+deadline или протокола; сохраняются verify code и backend reason, если доступны.
+Числовые коды ошибок, `generation`, `delay_ms` и `uptime_ms` не исчезают.
+
+Сообщения используют статические [байтовые литералы](byte-literals.md),
+не создают `can.text.Value`/String/Region ради текста ошибки. Credentials,
+access tokens, binding keys и сырые JSON/RTSP сообщения не печатаются.
+Нормальная обработка медиабайтов не получает побайтового логирования.
+
+### Проверки
 
 Независимый локальный стенд проверяет O0/O2: RTSP fragmentation/CSeq,
 обычный WSS login/join, фрагментированный control message больше 32 КиБ,
@@ -117,8 +199,11 @@ VGB1 с Python HMAC oracle, точный RTP payload, SPS/PPS, PT/SSRC/sequence,
 а также `TEARDOWN`, удаление устройства и WSS/TLS close. Дополнительные
 тесты проверяют RFC 4231, изменение MAC, SDP/Base64, IDR recovery,
 truncation, нулевой datagram и сохранение Buffer.
-Обрыв камеры при активной передаче проверяется отдельно: ненулевой выход,
-удаление VG-устройства и закрытие WSS без автоматического reconnect.
+Обрывы камеры, WSS EOF/RST и пропущенный keepalive проверяются с повторным
+handshake, новым SSRC/ключом/nonce и восстановлением IDR gate. Есть три
+последовательные сессии в одном процессе, общий deadline, SIGTERM в backoff,
+отказ login/TLS identity без retry и удалённая остановка при timeout TEARDOWN.
+Если восстановления до конца общего бюджета нет, процесс возвращает ошибку.
 
 ```sh
 LIZA_TEST_TLS=1 python3 -m unittest discover -s tests -p 'test_rtsp*.py' -v

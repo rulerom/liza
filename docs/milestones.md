@@ -78,6 +78,7 @@ Milestone означает работающую возможность с опр
 | **SG4-A** | [UDP endpoint](sg4-a1-udp.md), [Liza/C RTP workload](sg4-a2-rtp-fanout.md), [collector audit](sg4-a2-collector.md) | Сохранённые измерения и явные ограничения стенда |
 | **SG4-B1/B2** | [Две группы](sg4-b1-multiple-groups.md) и [dual RTP workload](sg4-b2-dual-owners.md) | Изоляция ресурсов/завершения; эффект CPU и UDP queues не разделён |
 | **RTSP endurance · 17 ноября 2026** | [Контрольная точка около семи часов](rtsp-endurance.md) реальной H.264-публикации | Последний снимок первого процесса — 7 ч 25 мин; он перестал наблюдаться до 24 часов. Новая сборка запущена с отдельным журналом; live RTP counters недоступны |
+| **RTSP reconnect** | [Повтор полного RTSP/VG handshake](rtsp-client.md#reconnect) после временных сбоев, bounded backoff и независимый shutdown watcher | Старые ресурсы и media identity не переносятся; процесс uptime больше не означает непрерывность одной сетевой сессии |
 
 Эксперименты Verified V0–V4 и Relay проверяют выбранные модели и фрагменты IR.
 Они не доказывают корректность всех новых механизмов языка, сетевого runtime

@@ -1,8 +1,8 @@
 import httpws.bytes
 import vg.websocket
-pub enum Error {Tls(TlsError);Protocol;Deadline}
+pub enum Error {Tls(TlsError);Protocol;Deadline;Disconnected}
 pub struct Frame {pub bytes:[u8;65536];pub length:u32}
-pub enum Event {Idle;Upgraded;Message(Frame);PeerClosed;Closed;Failed(Error)}
+pub enum Event {Idle;Upgraded;Message(Frame);PeerClosed(u32);Closed;Failed(Error)}
 struct State {pub app:vg.websocket.State;pub proof:[u8;28];pub connected:bool;pub state:u32;pub done:bool;pub incoming:u32;pub fed:u32;pub outgoing:u32;pub sent:u32;pub plaintext:u32;pub cursor:u32;pub tcp_eof:bool;pub write_blocked:bool;pub plaintext_blocked:bool;pub work_since_poll:u32;pub connect_due:u64;pub send_due:u64;pub close_due:u64;pub close_ms:u32;pub stopping:bool;pub failure:Option<Error>;}
 pub struct Session {crypto:tls.Session;id:net.Connection;buffer:memory.Buffer<u8>;state:State}
 pub struct Step {pub session:Session;pub reactor:net.Reactor;pub event:Event}
@@ -108,7 +108,9 @@ pub fn step(owned:Session,r:net.Reactor,now:u64,until:u64)->Step:io {
                             if event==8 {
                                 if !stopping {stopping=true;close_due=now+u64(close_ms)}
                                 if !app.close_sent {control=app.parser.control;control_length=app.parser.control_size;if vg.websocket.frame(borrow mut app,8,view control[0..control_length])!=0 {failure=Some(Error.Protocol);break};send_due=close_due}
-                                event_result=Event.PeerClosed;emitted=true;break
+                                var close_code:u32=1005
+                                if app.parser.control_size>=2 {control=app.parser.control;close_code=u32(control[0])*256+u32(control[1])}
+                                event_result=Event.PeerClosed(close_code);emitted=true;break
                             }
                         }
                     }
@@ -119,7 +121,7 @@ pub fn step(owned:Session,r:net.Reactor,now:u64,until:u64)->Step:io {
                     (next,result)=tls.read(session,move input,8192,4096,now);input=move next
                     match result {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{
                         state=state_number(step.state);plaintext=step.count;cursor=0;if step.count!=0 {progress=true}
-                        if closed(step.outcome)&&!app.closed {trace=console.errln("WSS premature TLS close");failure=Some(Error.Protocol);break}
+                        if closed(step.outcome)&&!app.closed {trace=console.errln("WSS premature TLS close");failure=Some(Error.Disconnected);break}
                     }}
                 }
                 if app.closed&&app.pending.len==0 {state=2;progress=true}
@@ -144,7 +146,13 @@ pub fn step(owned:Session,r:net.Reactor,now:u64,until:u64)->Step:io {
             }
             if fed==incoming&&!tcp_eof&&state!=3 {
                 (next,result)=net.reactor_read(r,id,move input,0,4096);input=move next
-                match result {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)));break}} Ok(n)=>{incoming=n;fed=0;if n!=0 {progress=true} else {tcp_eof=true;progress=true;match tls.eof(session,now) {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{}}}}}
+                match result {Err(e)=>{if !retry(e) {failure=Some(Error.Tls(TlsError.Transport(e)));break}} Ok(n)=>{incoming=n;fed=0;if n!=0 {progress=true} else {
+                    tcp_eof=true;progress=true
+                    // Transport loss discards this session, including partial
+                    // plaintext. It never completes an unfinished WS message.
+                    if !app.closed {failure=Some(Error.Disconnected);break}
+                    match tls.eof(session,now) {Err(e)=>{failure=Some(Error.Tls(e));break} Ok(step)=>{}}
+                }}}
             }
         }
         if stopping&&app.upgraded&&!app.close_sent&&app.pending.len==0 {

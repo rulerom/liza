@@ -22,6 +22,43 @@ SDP = (b'v=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\n'
 
 @unittest.skipUnless(shutil.which('clang'), 'Clang required')
 class RtspProtocol(unittest.TestCase):
+    def test_diagnostics_explain_version_timeout_and_unknown_errors(self):
+        self.run_liza('''import rtsp.diagnostics
+fn main()->u32:io {
+    a=rtsp.diagnostics.login(3,617)
+    b=rtsp.diagnostics.login(2,618)
+    c=rtsp.diagnostics.rtsp_timeout(6,5)
+    d=rtsp.diagnostics.session_error(32)
+    e=rtsp.diagnostics.session_error(999)
+    f=rtsp.diagnostics.rtsp_response(401,2,2)
+    g=rtsp.diagnostics.exit_error(999)
+    return 0
+}''',expected_stderr=[b'UpdateRequired',b'client_version=617',b'update client_version in config and restart',
+                     b'invalid login or password',b'no answer to GET_PARAMETER within 5000 ms',b'cseq=5, phase=6',
+                     b'Timed out waiting for an RTSP camera response (code=32)',b'Unknown connector error (code=999)',
+                     b'camera requires RTSP authentication',b'RTSP connector stopped: Unknown connector error (exit_code=999)'])
+
+    def test_reconnect_limits_and_fatal_error_policy(self):
+        source='''import rtsp.reconnect
+fn main()->u32 {
+    var delay:u32=0
+    expected:[u32;8]=[1000,2000,4000,8000,16000,30000,30000,30000]
+    var i:u32=0;while i<8 {delay=rtsp.reconnect.next_delay(delay);if delay!=expected[i] {return 1};i=i+1}
+    if rtsp.reconnect.next_delay(4294967295)!=30000 {return 2}
+    if !rtsp.reconnect.transient_tls(TlsError.Transport(ReactorError.Disconnected)) {return 3}
+    if !rtsp.reconnect.transient_tls(TlsError.Deadline) {return 4}
+    if rtsp.reconnect.transient_tls(TlsError.Transport(ReactorError.OutOfMemory)) {return 5}
+    if rtsp.reconnect.transient_tls(TlsError.Transport(ReactorError.PermissionDenied)) {return 6}
+    if rtsp.reconnect.transient_tls(TlsError.Verification(1)) {return 7}
+    if rtsp.reconnect.transient_tls(TlsError.Configuration) {return 8}
+    if rtsp.reconnect.transient(10)||rtsp.reconnect.transient(44)||rtsp.reconnect.transient(2) {return 9}
+    if !rtsp.reconnect.transient(32)||!rtsp.reconnect.transient(35)||!rtsp.reconnect.transient(43) {return 10}
+    if !rtsp.reconnect.transient_close(1001)||!rtsp.reconnect.transient_close(1012) {return 11}
+    if rtsp.reconnect.transient_close(1008)||rtsp.reconnect.transient_close(1002)||rtsp.reconnect.transient_close(4001) {return 12}
+    return 0
+}'''
+        self.run_liza(source)
+
     def test_receive_cannot_release_region_before_buffer(self):
         source = '''fn main()->u32:io,alloc {
  match net.reactor_udp_create(net.ipv4(127,0,0,1,0),1) {Err(e)=>{return 1} Ok(r)=>{
@@ -39,7 +76,7 @@ class RtspProtocol(unittest.TestCase):
             with self.assertRaisesRegex(CompileError, 'region'):
                 lower(load_program(entry))
 
-    def run_liza(self, source):
+    def run_liza(self, source, expected_stderr=None):
         with tempfile.TemporaryDirectory(prefix='liza-rtsp-protocol-') as folder:
             root = Path(folder)
             shutil.copytree(ROOT / 'examples', root / 'project')
@@ -51,6 +88,9 @@ class RtspProtocol(unittest.TestCase):
                 exe = build(entry, out, opt, root / 'project')
                 run = subprocess.run([str(exe)], capture_output=True, timeout=10)
                 self.assertEqual(run.returncode, 0, (opt, run.returncode, run.stdout, run.stderr))
+                if expected_stderr is not None:
+                    for message in expected_stderr:
+                        self.assertIn(message,run.stderr,(opt,run.stderr))
 
     def test_sdp_unicode_free_bounds_and_rtp_recovery(self):
         cases = [(SDP, True), (SDP.replace(b'mode=1', b'mode=2'), False),

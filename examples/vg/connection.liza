@@ -4,10 +4,11 @@ import httpws.crypto
 import httpws.http
 pub enum Error {Tls(TlsError);Protocol}
 pub struct Connection {pub crypto:tls.Session;pub reactor:net.Reactor;pub id:net.Connection;pub request:httpws.bytes.Wire;pub proof:[u8;28];pub camera:net.Connection}
+// The RTSP supervisor owns process shutdown registration across attempts.
+// This module owns only the per-attempt sockets and TLS session.
 fn start(crypto:tls.Session,config:rtsp.config.Config,request:httpws.bytes.Wire,proof:[u8;28])->Result<Connection,Error>:io,alloc {
     match net.reactor_udp_create(net.ipv4(0,0,0,0,0),2) {Err(e)=>{log=console.errln("UDP create failed");d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(r)=>{
         match net.reactor_stop_accepting(r) {Err(e)=>{log=console.errln("Reactor setup failed");c=net.reactor_close(move r);d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(n)=>{}}
-        match net.reactor_watch_shutdown(r) {Err(e)=>{log=console.errln("Reactor setup failed");c=net.reactor_close(move r);d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(n)=>{}}
         match net.reactor_connect_at(r,config.vg) {Err(e)=>{log=console.errln("VG TCP connect failed");c=net.reactor_close(move r);d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(id)=>{
             match net.reactor_connect_at(r,config.camera) {Err(e)=>{log=console.errln("Camera TCP connect failed");c=net.reactor_close(move r);d=tls.destroy(move crypto);return Err(Error.Tls(TlsError.Transport(e)))} Ok(camera)=>{return Ok(Connection(move crypto,move r,id,request,proof,camera))}}
         }}

@@ -1,5 +1,8 @@
 import rtsp.config
 import rtsp.client
 fn main()->u32:io,alloc {
-    match rtsp.config.read() {Err(e)=>{log=console.errln("Usage: liza-rtsp config.json");return 2} Ok(config)=>{return rtsp.client.run(config)}}
+    match rtsp.config.read() {Err(e)=>{
+        log=console.err_bytes(b"Cannot read or validate RTSP configuration. Check the file path, JSON syntax and required connection fields.\nUsage: liza-rtsp config.json\n")
+        return 2
+    } Ok(config)=>{return rtsp.client.run(config)}}
 }
