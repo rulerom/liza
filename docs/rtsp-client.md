@@ -9,10 +9,10 @@ VideoGrace. Вход на сервер выполняется как обычн�
 Python и декодер не запускаются. OpenSSL обеспечивает TLS и HMAC-SHA256.
 
 ```mermaid
-flowchart LR
+flowchart TB
     Camera["RTSP-камера<br/>H.264"]
     VG["VideoGrace<br/>конференция"]
-    subgraph Session["Liza · одна session generation · один сетевой Reactor"]
+    subgraph Session["Liza · одна session generation<br/>один сетевой Reactor"]
         TCP["RTSP / TCP<br/>ответы и interleaved records"]
         Gate["Проверка RTP / H.264<br/>SPS/PPS и IDR gate"]
         Adapt["Адаптация RTP<br/>PT, SSRC, sequence"]
