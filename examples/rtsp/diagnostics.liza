@@ -112,3 +112,13 @@ pub fn tls_failure(error:TlsError)->u32:io {
     }
     return 0
 }
+// Bounded operational telemetry. Counts mean local receipt / OS send acceptance,
+// never delivery to a viewer. No configuration or peer-provided strings.
+pub fn health(ready:u64,received:u64,sent:u64,input_age:u64,output_age:u64)->u32:io {
+    a=console.err_bytes(b"LIZA_RTSP_HEALTH ready=");b=console.err_u64(ready)
+    c=console.err_bytes(b" received=");d=console.err_u64(received)
+    e=console.err_bytes(b" sent=");f=console.err_u64(sent)
+    g=console.err_bytes(b" input_age_ms=");h=console.err_u64(input_age)
+    i=console.err_bytes(b" output_age_ms=");j=console.err_u64(output_age)
+    line=console.err_bytes(b"\n");return 0
+}

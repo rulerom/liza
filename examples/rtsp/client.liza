@@ -76,8 +76,16 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     var reactor=move initial_reactor;var socket=vg.socket.create(move crypto,id,move network,request,proof,clock()+5000,3000)
     var camera=rtsp.tcp.create(camera_id,move camera_buffer);var document=move initial_document;var scratch=move initial_scratch;var output=move initial_output;var udp=move initial_udp
     var state=initial();state.base=config.url;start=clock();var closed=false;var camera_dead=false;var socket_dead=false;var requested=false
+    var health_due=start;var seen_rtp=false;var previous_sent:u64=0;var last_sent:u64=0
     while true {
         now=clock();if now==0 {state.error=30;break}
+        if state.bridge.succeeded!=previous_sent {previous_sent=state.bridge.succeeded;last_sent=now}
+        if now>=health_due {
+            var input_age:u64=18446744073709551615;var output_age:u64=18446744073709551615;var ready:u64=0
+            if seen_rtp {input_age=now-state.last_rtp};if last_sent!=0 {output_age=now-last_sent};if state.binding.ready&&!state.stopping {ready=1}
+            health=rtsp.diagnostics.health(ready,state.bridge.received,state.bridge.succeeded,input_age,output_age)
+            health_due=now+5000
+        }
         if until!=0&&now>=until {state.stopping=true}
         match net.reactor_shutdown_requested(supervisor) {Err(e)=>{state.error=30;break} Ok(n)=>{if n!=0 {state.stopping=true}}}
         if state.stopping&&state.error==0 {requested=true}
@@ -112,7 +120,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                     rtsp.tcp.Event.Invalid=>{camera_dead=true;if !state.stopping {state.error=10};state.stopping=true}
                     rtsp.tcp.Event.Response(response)=>{status=camera_response(borrow mut state,response,now);if status!=0 {state.error=status;state.stopping=true;camera_dead=true}}
                     rtsp.tcp.Event.Packet(frame)=>{
-                        state.last_rtp=now
+                        state.last_rtp=now;seen_rtp=true
                         if !state.stopping&&state.vg_phase==6&&state.binding.ready {
                             data=frame.data;action=rtsp.bridge.inspect(state.bridge,view data[0..frame.length]);state.bridge=action.state
                             if action.send {

@@ -52,6 +52,9 @@ class RtspClient(unittest.TestCase):
     def setUpClass(cls):
         setup_fixture(cls)
         cls.clients = []
+        if os.environ.get('LIZA_RTSP_RELEASE'):
+            cls.clients.append(Path(os.environ['LIZA_RTSP_RELEASE']).resolve())
+            return
         for opt in ('0', '2'):
             folder = cls.root / ('rtsp' + opt)
             folder.mkdir()
@@ -59,7 +62,7 @@ class RtspClient(unittest.TestCase):
 
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
-                 stall_teardown=False, reject_login=False, client_version=617, required_version=None):
+                 stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None):
         errors, packets, methods, commands = [], [], [], []
         stopped = threading.Event()
         media_seen = [threading.Event() for _ in range(cycles)]
@@ -267,11 +270,25 @@ class RtspClient(unittest.TestCase):
             config['vg_peer']='wrong.example'
         path = self.root / 'rtsp-config.json'
         path.write_text(json.dumps(config))
+        path.chmod(0o600)
+        command = [str(exe), str(path)]
+        if service:
+            state = self.root / 'service-state'
+            state.mkdir(mode=0o700)
+            self.service_samples = []
+            def observe_status():
+                while not stopped.wait(.05):
+                    try:
+                        self.service_samples.append(json.loads((state / 'status.json').read_text()))
+                    except FileNotFoundError:
+                        pass
+            threads.append(threading.Thread(target=guarded, args=(observe_status,), daemon=True))
+            command = [str(service), str(exe), str(path), str(state), 'fixture']
         for thread in threads:
             thread.start()
         try:
             try:
-                run = subprocess.run([str(exe), str(path)], capture_output=True, timeout=45 if stall_keepalive else 20)
+                run = subprocess.run(command, capture_output=True, timeout=45 if stall_keepalive else 20)
             except subprocess.TimeoutExpired as error:
                 self.fail(('client timeout',error.stdout,error.stderr,errors,camera_runs,commands,[len(p) for p in epoch_packets]))
         finally:
@@ -287,11 +304,29 @@ class RtspClient(unittest.TestCase):
         self.attempts=(camera_runs,control_runs,epoch_packets)
         return run, packets, methods, commands
 
+    @unittest.skipUnless(os.environ.get('LIZA_RTSP_SERVICE_BINARY'), 'bundled operational launcher acceptance')
+    def test_operational_launcher_observes_live_generation_and_media(self):
+        run, packets, methods, commands = self.scenario(self.clients[0], run_ms=8500,
+                                                       service=Path(os.environ['LIZA_RTSP_SERVICE_BINARY']))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertGreater(len(packets), 10)
+        active = [s for s in self.service_samples if s['state'] == 'Running']
+        self.assertTrue(active, self.service_samples)
+        self.assertTrue(all(s['generation'] == 1 and s['send_accepted'] > 0 for s in active))
+        self.assertNotIn('fixture-password', (self.root / 'service-state/service.log').read_text())
+
     def test_publish_and_cleanup(self):
         for exe in self.clients:
             with self.subTest(exe=exe.name):
-                run, packets, methods, commands = self.scenario(exe)
+                run, packets, methods, commands = self.scenario(exe, run_ms=6500)
                 self.assertEqual(run.returncode, 0, (run.stdout, run.stderr))
+                health = re.findall(rb'LIZA_RTSP_HEALTH ready=1 received=(\d+) sent=(\d+) input_age_ms=(\d+) output_age_ms=(\d+)', run.stderr)
+                self.assertTrue(health, run.stderr)
+                latest = list(map(int, health[-1]))
+                self.assertGreater(latest[0], 0)
+                self.assertGreater(latest[1], 0)
+                self.assertLess(latest[2], 5000)
+                self.assertLess(latest[3], 5000)
                 self.assertGreater(len(packets), 10)
                 self.assertEqual(packets[0][12:], SPS)
                 self.assertEqual(packets[1][12:], PPS)
