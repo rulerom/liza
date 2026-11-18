@@ -52,6 +52,9 @@ class RtspClient(unittest.TestCase):
     def setUpClass(cls):
         setup_fixture(cls)
         cls.clients = []
+        if os.environ.get('LIZA_RTSP_RELEASE'):
+            cls.clients.append(Path(os.environ['LIZA_RTSP_RELEASE']).resolve())
+            return
         for opt in ('0', '2'):
             folder = cls.root / ('rtsp' + opt)
             folder.mkdir()

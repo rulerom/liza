@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 import platform
 import plistlib
-import pwd
 import re
 import shutil
 import signal
@@ -15,6 +14,11 @@ import sys
 import tempfile
 import time
 import unittest
+
+try:
+    import pwd
+except ImportError:
+    pwd = None
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'packaging/macos/rtsp'

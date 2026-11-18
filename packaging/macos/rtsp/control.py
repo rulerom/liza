@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Install/manage the macOS RTSP LaunchDaemon. Never reads secrets into argv/logs."""
 import argparse
-import fcntl
 import hashlib
 import ipaddress
 import json
@@ -9,13 +8,18 @@ import os
 from pathlib import Path
 import platform
 import plistlib
-import pwd
 import re
 import shutil
 import stat
 import subprocess
 import sys
 import time
+
+try:
+    import fcntl
+    import pwd
+except ImportError:  # Allow cross-platform test discovery; management stays macOS-only.
+    fcntl = pwd = None
 
 BASE = Path('/Library/Application Support/Liza/RTSP')
 PLISTS = Path('/Library/LaunchDaemons')
