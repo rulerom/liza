@@ -41,6 +41,9 @@ COMPILER = {'test', 'verified', 'verified-v3', 'verified-v4', 'verified-pipeline
             'verified-relay-r1', 'verified-relay-r2b', 'verified-relay-r2c',
             'aggregate-lowering', 'mutable-borrow', 'sg3-api', 'sg4-workload', 'http-ws', 'tls-transport', 'json-access', 'process-child'}
 CASES = [
+    (['packaging/macos/rtsp/service.c', 'packaging/macos/rtsp/control.py'], {'rtsp-service'}),
+    (['tests/test_rtsp_service.py'], {'test', 'tls-transport', 'rtsp-service'}),
+    (['.github/workflows/rtsp-service.yml'], {'ci-policy', 'rtsp-service'}),
     (['tests/test_byte_literals.py'], {'test'}),
     (['tools/monitor_rtsp_endurance.py'], {'test'}),
     (['tests/test_endurance_monitor.py'], {'test'}),

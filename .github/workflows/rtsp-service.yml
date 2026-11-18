@@ -1,0 +1,42 @@
+name: RTSP macOS service
+on:
+  pull_request:
+    paths: ['packaging/macos/rtsp/**', 'tests/test_rtsp_service.py', '.github/workflows/rtsp-service.yml']
+  push:
+    branches: [main]
+    paths: ['packaging/macos/rtsp/**', 'tests/test_rtsp_service.py', '.github/workflows/rtsp-service.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  service:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Real child and isolated launchd acceptance
+        env:
+          LIZA_TEST_LAUNCHD: '1'
+          LIZA_TEST_LAUNCHD_DOMAIN: system
+        run: python -m unittest discover -s tests -p test_rtsp_service.py -v
+      - name: Build versioned native release
+        run: |
+          brew install openssl@3
+          export LIZA_OPENSSL_PREFIX="$(brew --prefix openssl@3)"
+          python packaging/macos/rtsp/build.py "$RUNNER_TEMP/liza-rtsp-release"
+          if "$RUNNER_TEMP/liza-rtsp-release/bin/liza-rtsp"; then
+            exit 1
+          else
+            test "$?" = 2
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rtsp-macos-release
+          path: ${{ runner.temp }}/liza-rtsp-release
+          retention-days: 7

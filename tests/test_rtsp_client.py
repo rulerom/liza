@@ -290,8 +290,15 @@ class RtspClient(unittest.TestCase):
     def test_publish_and_cleanup(self):
         for exe in self.clients:
             with self.subTest(exe=exe.name):
-                run, packets, methods, commands = self.scenario(exe)
+                run, packets, methods, commands = self.scenario(exe, run_ms=6500)
                 self.assertEqual(run.returncode, 0, (run.stdout, run.stderr))
+                health = re.findall(rb'LIZA_RTSP_HEALTH ready=1 received=(\d+) sent=(\d+) input_age_ms=(\d+) output_age_ms=(\d+)', run.stderr)
+                self.assertTrue(health, run.stderr)
+                latest = list(map(int, health[-1]))
+                self.assertGreater(latest[0], 0)
+                self.assertGreater(latest[1], 0)
+                self.assertLess(latest[2], 5000)
+                self.assertLess(latest[3], 5000)
                 self.assertGreater(len(packets), 10)
                 self.assertEqual(packets[0][12:], SPS)
                 self.assertEqual(packets[1][12:], PPS)
