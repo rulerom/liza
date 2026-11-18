@@ -8,6 +8,30 @@ VideoGrace. Вход на сервер выполняется как обычн�
 без CAN. Протокольный код и медиатракт написаны на Liza; внешние ffmpeg,
 Python и декодер не запускаются. OpenSSL обеспечивает TLS и HMAC-SHA256.
 
+```mermaid
+flowchart LR
+    Camera["RTSP-камера<br/>H.264"]
+    VG["VideoGrace<br/>конференция"]
+    subgraph Session["Liza · одна session generation · один сетевой Reactor"]
+        TCP["RTSP / TCP<br/>ответы и interleaved records"]
+        Gate["Проверка RTP / H.264<br/>SPS/PPS и IDR gate"]
+        Adapt["Адаптация RTP<br/>PT, SSRC, sequence"]
+        UDP["UDP endpoint<br/>VGB1 binding + RTP"]
+        Control["WSS / TLS<br/>login, join, camera device"]
+        TCP --> Gate --> Adapt --> UDP
+        Control -.->|"SSRC, адрес и binding key"| UDP
+    end
+    Camera <-->|"RTSP + RTP/RTCP в одном TCP"| TCP
+    Control <-->|"Управление"| VG
+    UDP <-->|"VGB1 handshake / refresh"| VG
+    UDP -->|"RTP / H.264 без декодирования"| VG
+```
+
+Сплошной медиатракт сохраняет сжатый H.264 payload: кадры не собираются и
+не декодируются. WSS управляет публикацией, а UDP передаёт RTP после
+подтверждения binding. Приём отправки операционной системой не подтверждает
+доставку зрителю.
+
 ## Сборка и запуск
 
 Нужны Clang и OpenSSL 3, как для [HTTPS/WSS](tls-transport.md).
@@ -123,6 +147,24 @@ timestamp/marker сохраняются; выходной PT — 102, SSRC на�
 Камера должна поддерживать указанный профиль и keepalive.
 
 ## Reconnect
+
+```mermaid
+flowchart TD
+    Start["Запуск · конфигурация и общий deadline"] --> Connect
+    Connect["Новая generation<br/>новые RTSP / WSS / TLS / UDP и buffers"]
+    Connect -->|"Setup и binding готовы"| Publish
+    Publish["Публикация RTP<br/>keepalive камеры и VG binding"]
+    Connect -->|"Ошибка подключения / setup"| Cleanup
+    Publish -->|"Отказ, stop или срок работы"| Cleanup
+    Cleanup["Завершить текущую попытку<br/>закрыть соединения и освободить ресурсы"]
+    Cleanup --> Stop{"Запрошена остановка<br/>или исчерпан общий срок?"}
+    Stop -->|"Да"| Exit["Выход с итоговым кодом"]
+    Stop -->|"Нет"| Retry{"Временный отказ?"}
+    Retry -->|"Нет"| Fatal["Завершить с ошибкой<br/>требуется вмешательство оператора"]
+    Retry -->|"Да"| Backoff["Backoff: 1 / 2 / 4 / 8 / 16 / 30 с<br/>shutdown проверяется и на паузе"]
+    Backoff -->|"Пауза завершена"| Connect
+    Backoff -->|"Stop или общий deadline"| Exit
+```
 
 После временного отказа приложение полностью закрывает текущую пару
 RTSP/WSS, UDP endpoint, TLS session и Region/Buffer, затем заново выполняет
