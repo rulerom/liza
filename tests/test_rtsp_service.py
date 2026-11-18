@@ -141,6 +141,7 @@ while True:
         self.assertEqual(p.wait(5), 0)
         self.assertEqual((self.state / 'service.log').stat().st_size, original)
         self.assertEqual(self.wait_status('Attention required')['child_pid'], 0)
+        self.assertEqual(self.wait_status('Attention required')['exit_code'], 20)
 
     def test_signal_crash_is_restartable(self):
         p = self.start('crash')

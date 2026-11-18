@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <os/log.h>
 
 #define LINE 2048
 #define LOG_BYTES (1024 * 1024)
@@ -30,6 +31,13 @@ static bool io_failed;
 static uint64_t generation, received, sent, last_input, last_output, health_at;
 static unsigned last_error;
 static bool ready;
+
+static int startup_failure(const char *reason) {
+    /* Available even when the private log/state directory cannot be opened.
+       Only fixed application strings are passed here, never configuration. */
+    os_log_error(OS_LOG_DEFAULT, "Liza RTSP service startup failed: %{public}s", reason);
+    return 0; /* An operator action, not a launchd restart loop. */
+}
 
 static uint64_t clock_ms(void) {
     struct timespec t;
@@ -130,23 +138,25 @@ static void latch(const char *reason) {
     if (!atomic_text("attention", reason)) {
         static const char message[] = "Liza RTSP: cannot persist attention marker; check disk and permissions\n";
         (void)write_all(STDERR_FILENO, message, sizeof(message) - 1);
+        (void)startup_failure("cannot persist attention marker; check disk and permissions");
     }
 }
 int main(int argc, char **argv) {
     /* argv: executable, config PATH, private state DIRECTORY, release ID */
     if (argc != 5 || !argv[4][0] || strlen(argv[4]) > 96 ||
-        strspn(argv[4], "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.") != strlen(argv[4])) return 0;
+        strspn(argv[4], "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.") != strlen(argv[4])) return startup_failure("invalid invocation");
     umask(077);
     directory = open(argv[3], O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     struct stat st;
-    if (directory < 0 || fstat(directory, &st) || st.st_uid != geteuid() || (st.st_mode & 077)) return 0;
+    if (directory < 0 || fstat(directory, &st) || st.st_uid != geteuid() || (st.st_mode & 077)) return startup_failure("state directory unavailable or permissions invalid");
     int lock = create_file("service.lock", O_CREAT | O_RDWR);
-    if (lock < 0 || flock(lock, LOCK_EX | LOCK_NB)) return 0;
+    if (lock < 0 || flock(lock, LOCK_EX | LOCK_NB)) return startup_failure("cannot acquire service lock; check permissions or duplicate instance");
     if (fstatat(directory, "attention", &st, AT_SYMLINK_NOFOLLOW) == 0) {
-        (void)status(0, "Attention required", "operator_restart_required", argv[4], 0); return 0;
+        /* Preserve the original failure's code/generation across reboot. */
+        return 0;
     }
     if (!open_log() || log_size > LOG_BYTES || !status(0, "Recovering", "starting", argv[4], 0)) {
-        latch("storage_or_permissions\n"); return 0;
+        latch("storage_or_permissions\n"); return startup_failure("cannot initialize bounded log/status; check disk and permissions");
     }
     int input = open(argv[2], O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
     bool config_ok = input >= 0 && !fstat(input, &st) && S_ISREG(st.st_mode) && st.st_nlink == 1 &&
@@ -178,15 +188,16 @@ int main(int argc, char **argv) {
     if (child < 0) { close(pipefd[0]); latch("spawn_failed\n"); return 0; }
     fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
     char line[LINE]; size_t used = 0; bool oversized = false;
-    uint64_t stop_at = 0, report_at = 0; int child_status = 0;
+    uint64_t stop_at = 0, report_at = 0; int child_status = 0; bool pipe_eof = false;
     log_line("service: child started");
     for (;;) {
         uint64_t now = clock_ms();
         if ((stopping || io_failed) && !stop_at) { kill(child, SIGTERM); stop_at = now + STOP_MS; }
         if (stop_at && now >= stop_at) kill(child, SIGKILL);
-        struct pollfd p = {pipefd[0], POLLIN, 0}; (void)poll(&p, 1, 100);
+        struct pollfd p = {pipe_eof ? -1 : pipefd[0], POLLIN, 0}; (void)poll(&p, 1, 100);
         /* Bounded reads ensure log floods cannot starve stop/status handling. */
-        char data[8192]; ssize_t n = read(pipefd[0], data, sizeof(data));
+        char data[8192]; ssize_t n = pipe_eof ? -1 : read(pipefd[0], data, sizeof(data));
+        if (n == 0) pipe_eof = true;
         for (ssize_t i = 0; i < n; ++i) {
             if (data[i] == '\n') {
                 line[used] = 0;
@@ -200,7 +211,7 @@ int main(int argc, char **argv) {
         }
         if (waitpid(child, &child_status, WNOHANG) == child) break;
         if (now >= report_at) {
-            bool active = ready && health_at && now - health_at <= 7000 && last_input && last_output &&
+            bool active = !pipe_eof && ready && received && sent && health_at && now - health_at <= 7000 && last_input && last_output &&
                           now - last_input <= 7000 && now - last_output <= 7000;
             if (!status(child, stopping ? "Stopping" : active ? "Running" : "Recovering",
                         stopping ? "stop_requested" : active ? "rtp_and_local_send_active" : "waiting_for_media_or_network",

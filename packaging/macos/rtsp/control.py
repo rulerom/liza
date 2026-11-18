@@ -132,7 +132,12 @@ class Service:
         if self.staging:
             return
         result = subprocess.run(['/bin/launchctl', *args], capture_output=True, text=True)
-        if result.returncode and not missing_ok:
+        if result.returncode:
+            if missing_ok:
+                probe = subprocess.run(['/bin/launchctl', 'print', 'system/' + self.label],
+                                       capture_output=True, text=True, env=dict(os.environ, LC_ALL='C'))
+                if probe.returncode and 'Could not find service' in probe.stderr:
+                    return
             raise ValueError('launchctl failed; inspect launchctl print system/' + self.label)
 
     def stop(self):
@@ -252,8 +257,10 @@ class Service:
 
     def status(self):
         path = self.root / 'state/status.json'
+        attention = (self.root / 'state/attention').exists()
         if not path.exists():
-            return {'state': 'Unknown', 'reason': 'no_status_file'}
+            return {'state': 'Attention required' if attention else 'Unknown',
+                    'reason': 'operator_restart_required' if attention else 'no_status_file'}
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_size > 4096:
@@ -261,11 +268,11 @@ class Service:
             raise ValueError('invalid status file')
         with os.fdopen(fd) as stream:
             value = json.load(stream)
-        if (self.root / 'state/attention').exists():
+        if attention:
             value['state'] = 'Attention required'
             if value.get('reason') in ('starting', 'child_crashed'):
                 value['reason'] = 'operator_restart_required'
-        if value.get('child_pid') and (time.time() - value['updated_epoch_s'] > 10 or
+        elif value.get('child_pid') and (time.time() - value['updated_epoch_s'] > 10 or
                                       value['updated_epoch_s'] > time.time() + 1):
             value['state'] = 'Unknown'
             value['reason'] = 'stale_status_check_launchctl'
