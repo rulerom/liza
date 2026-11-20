@@ -1,17 +1,17 @@
 import rtsp.sdp
 import apps.rtp.packet
 pub struct State {pub pt:u8;pub ssrc:u32;pub sequence:u16;pub seen:bool;pub last:u16;pub open:bool;pub received:u64;pub rejected:u64;pub gated:u64;pub discontinuities:u64;pub attempted:u64;pub succeeded:u64;pub send_errors:u64}
-pub struct Action {pub state:State;pub send:bool;pub parameters:bool;pub offset:u32;pub length:u32;pub timestamp:u32;pub marker:bool}
+pub struct Action {pub state:State;pub send:bool;pub parameters:bool;pub offset:u32;pub length:u32;pub timestamp:u32;pub marker:bool;pub idr:bool}
 pub struct Output {pub buffer:memory.Buffer<u8>;pub state:State;pub reactor:net.Reactor}
 pub fn create(pt:u8,ssrc:u32,sequence:u16)->State {return State(pt,ssrc,sequence,false,0,false,0,0,0,0,0,0,0)}
 pub fn inspect(initial:State,data:View<u8>)->Action {
     var state=initial;state.received=state.received+1
     var offset:u32=12;var length:u32=0
-    match apps.rtp.packet.parse(data) {Err(e)=>{state.rejected=state.rejected+1;state.open=false;return Action(state,false,false,0,0,0,false)} Ok(header)=>{}}
-    if (data[1]&127)!=state.pt {state.rejected=state.rejected+1;return Action(state,false,false,0,0,0,false)}
+    match apps.rtp.packet.parse(data) {Err(e)=>{state.rejected=state.rejected+1;state.open=false;return Action(state,false,false,0,0,0,false,false)} Ok(header)=>{}}
+    if (data[1]&127)!=state.pt {state.rejected=state.rejected+1;return Action(state,false,false,0,0,0,false,false)}
     offset=12+4*u32(data[0]&15);if (data[0]&16)!=0 {offset=offset+4+4*((u32(data[offset+2])<<8)|u32(data[offset+3]))}
     length=data.len-offset;if (data[0]&32)!=0 {length=length-u32(data[data.len-1])}
-    if length==0 {state.rejected=state.rejected+1;state.open=false;return Action(state,false,false,0,0,0,false)}
+    if length==0 {state.rejected=state.rejected+1;state.open=false;return Action(state,false,false,0,0,0,false,false)}
     sequence=(u16(data[2])<<8)|u16(data[3]);timestamp=(u32(data[4])<<24)|(u32(data[5])<<16)|(u32(data[6])<<8)|u32(data[7])
     if state.seen&&sequence!=u16.wrap(u32(state.last)+1) {state.discontinuities=state.discontinuities+1;state.open=false}
     state.seen=true;state.last=sequence
@@ -23,10 +23,10 @@ pub fn inspect(initial:State,data:View<u8>)->Action {
         while at+2<=end {n=(u32(data[at])<<8)|u32(data[at+1]);at=at+2;if n==0||n>end-at {valid=false;break};inner=data[at]&31;if inner<1||inner>23||(data[at]&128)!=0 {valid=false};if inner==5 {idr=true};at=at+n}
         if at!=end {valid=false}
     } else if typ<1||typ>23 {valid=false}
-    if !valid {state.rejected=state.rejected+1;state.open=false;return Action(state,false,false,0,0,0,false)}
+    if !valid {state.rejected=state.rejected+1;state.open=false;return Action(state,false,false,0,0,0,false,false)}
     var parameters=false
-    if !state.open {if !idr {state.gated=state.gated+1;return Action(state,false,false,0,0,0,false)};state.open=true;parameters=true}
-    return Action(state,true,parameters,offset,length,timestamp,(data[1]&128)!=0)
+    if !state.open {if !idr {state.gated=state.gated+1;return Action(state,false,false,0,0,0,false,false)};state.open=true;parameters=true}
+    return Action(state,true,parameters,offset,length,timestamp,(data[1]&128)!=0,idr)
 }
 pub fn send(buffer:memory.Buffer<u8>,initial:State,r:net.Reactor,address:net.Address,payload:View<u8>,timestamp:u32,marker:bool)->Output:io {
     var out=move buffer;var state=initial
