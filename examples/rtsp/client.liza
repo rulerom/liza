@@ -90,7 +90,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     var state=initial();state.base=config.url;start=clock();var closed=false;var camera_dead=false;var socket_dead=false;var requested=false
     var seed:u32=1;match net.random_u32() {Err(e)=>{state.error=3;log=console.err_bytes(b"Cannot obtain an RTCP sender SSRC from OS entropy\n")} Ok(n)=>{seed=n}}
     var feedback=rtsp.keyframe.create(seed)
-    probe_notice=console.err_bytes(b"Experimental RTP pacing probe: 1 ms wait before each media datagram\n")
+    if config.rtp_pace_ms!=0 {label=console.err_bytes(b"RTP media send pacing enabled: wait_ms=");value=console.err_u64(u64(config.rtp_pace_ms));line=console.err_bytes(b" per datagram\n")}
     var health_due=start;var seen_rtp=false;var previous_sent:u64=0;var last_sent:u64=0;var monitor=rtsp.monitor.create()
     while true {
         now=clock();if now==0 {state.error=30;break}
@@ -147,13 +147,13 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                             if action.send {
                                 if action.parameters||(feedback.waiting&&action.idr) {
                                     sps=state.video.sps.bytes
-                                    paced_sps=net.reactor_poll(supervisor,1)
+                                    if config.rtp_pace_ms!=0 {paced_sps=net.reactor_poll(supervisor,config.rtp_pace_ms)}
                                     (tx_buffer,tx_state,tx_reactor)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view sps[0..state.video.sps.length],action.timestamp,false);udp=move tx_buffer;state.bridge=tx_state;reactor=move tx_reactor
                                     pps=state.video.pps.bytes
-                                    paced_pps=net.reactor_poll(supervisor,1)
+                                    if config.rtp_pace_ms!=0 {paced_pps=net.reactor_poll(supervisor,config.rtp_pace_ms)}
                                     (next_buffer2,next_state2,next_reactor2)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view pps[0..state.video.pps.length],action.timestamp,false);udp=move next_buffer2;state.bridge=next_state2;reactor=move next_reactor2
                                 }
-                                if state.bridge.open {paced_payload=net.reactor_poll(supervisor,1);(next_buffer3,next_state3,next_reactor3)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view data[action.offset..action.offset+action.length],action.timestamp,action.marker);udp=move next_buffer3;state.bridge=next_state3;reactor=move next_reactor3}
+                                if state.bridge.open {if config.rtp_pace_ms!=0 {paced_payload=net.reactor_poll(supervisor,config.rtp_pace_ms)};(next_buffer3,next_state3,next_reactor3)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view data[action.offset..action.offset+action.length],action.timestamp,action.marker);udp=move next_buffer3;state.bridge=next_state3;reactor=move next_reactor3}
                             }
                             keyframe_observed=rtsp.keyframe.observe(borrow mut feedback,view data[0..frame.length],state.bridge.rejected==rejected_before,action.idr,now)
                             packet_observed=rtsp.monitor.packet(borrow mut monitor,now,view data[0..frame.length],state.bridge.rejected==rejected_before,action.idr,state.bridge)

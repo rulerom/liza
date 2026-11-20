@@ -63,8 +63,9 @@ class RtspClient(unittest.TestCase):
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
                  stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None,
-                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None):
+                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03):
         errors, packets, methods, commands = [], [], [], []
+        packet_times = []
         stopped = threading.Event()
         moderation_observed = threading.Event()
         live_stderr = self.root / 'live-stderr.log'
@@ -92,7 +93,7 @@ class RtspClient(unittest.TestCase):
                 epoch=len(camera_runs)
                 history={'methods': [], 'cseqs': [], 'started': time.monotonic()}
                 camera_runs.append(history)
-                conn.settimeout(.03)
+                conn.settimeout(camera_interval)
                 pending = b''
                 playing = False
                 sequence = 0
@@ -312,6 +313,7 @@ class RtspClient(unittest.TestCase):
                         udp.sendto(signed(data, 4, epoch_key(epoch)), source)
                 else:
                     packets.append(data)
+                    packet_times.append(time.monotonic())
                     epoch=struct.unpack('!I', data[8:12])[0]-456
                     self.assertIn(epoch,range(cycles))
                     epoch_packets[epoch].append(data)
@@ -340,6 +342,7 @@ class RtspClient(unittest.TestCase):
         threads = [threading.Thread(target=guarded, args=(fn,), daemon=True) for fn in (camera_peer, control_peer, udp_peer)]
         config = dict(camera_ip='127.0.0.1', camera_port=camera.getsockname()[1], camera_url='rtsp://127.0.0.1/stream1', vg_ip='127.0.0.1', vg_port=control.getsockname()[1], vg_peer='localhost', login='fixture-login', password='fixture-password', conference='radio', ca_file=str(self.root / 'ca.pem'), run_ms=run_ms)
         config['client_version']=client_version
+        config['rtp_pace_ms']=rtp_pace_ms
         if wrong_peer:
             config['vg_peer']='wrong.example'
         path = self.root / 'rtsp-config.json'
@@ -381,6 +384,7 @@ class RtspClient(unittest.TestCase):
         self.assertFalse(errors, (errors, run.returncode, run.stdout, run.stderr, methods, commands))
         self.assertNotIn(b'fixture-password', run.stdout + run.stderr)
         self.attempts=(camera_runs,control_runs,epoch_packets)
+        self.packet_times = packet_times
         return run, packets, methods, commands
 
     @unittest.skipUnless(os.environ.get('LIZA_RTSP_SERVICE_BINARY'), 'bundled operational launcher acceptance')
@@ -425,6 +429,21 @@ class RtspClient(unittest.TestCase):
                 self.assertEqual(methods, [b'OPTIONS', b'DESCRIBE', b'SETUP', b'PLAY', b'TEARDOWN'])
                 self.assertIn('device_disconnect', commands)
                 self.assertIn('disconnect_from_conference', commands)
+
+    def test_paced_media_preserves_rtp_and_bounds_burst_rate(self):
+        for exe in self.clients:
+            with self.subTest(exe=exe.name):
+                run, packets, methods, _ = self.scenario(exe, rtp_pace_ms=1, camera_interval=.0005, run_ms=1800)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertIn(b'RTP media send pacing enabled: wait_ms=1', run.stderr)
+                self.assertGreater(len(packets), 20)
+                self.assertGreater(self.packet_times[-1]-self.packet_times[0], (len(packets)-1)*.00075)
+                sequences = [struct.unpack('!H', packet[2:4])[0] for packet in packets]
+                for previous, current in zip(sequences, sequences[1:]):
+                    self.assertEqual(current, (previous+1) % 65536)
+                for packet in packets:
+                    self.assertIn(packet[12:], (SPS, PPS, b'\x61camera-payload', b'\x65camera-payload'))
+                self.assertIn(b'TEARDOWN', methods)
 
     def test_moderator_stop_cancels_pending_keyframe_fallback(self):
         for exe in self.clients:
@@ -581,6 +600,11 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
             self.assertEqual([p[12:] for p in epochs[epoch][:3]],[SPS,PPS,b'\x65camera-payload'])
             self.assertEqual(struct.unpack('!H',epochs[epoch][0][2:4])[0],1)
         return run
+
+    def test_paced_reconnect_and_moderator_stop(self):
+        for exe in self.clients:
+            run = self.recovered(exe, drop_after=35, rtp_pace_ms=1)
+            self.assertEqual(run.stderr.count(b'RTP media send pacing enabled: wait_ms=1'), 2)
 
     def test_camera_disconnect_reconnects_with_fresh_binding_and_idr(self):
         for exe in self.clients:
