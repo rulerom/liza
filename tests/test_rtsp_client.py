@@ -63,7 +63,7 @@ class RtspClient(unittest.TestCase):
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
                  stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None,
-                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False):
+                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False):
         errors, packets, methods, commands = [], [], [], []
         stopped = threading.Event()
         moderation_observed = threading.Event()
@@ -148,7 +148,8 @@ class RtspClient(unittest.TestCase):
                         sequence += 1
                         # Every fifth packet is an IDR; payload must survive unchanged.
                         payload = (b'\x65' if sequence % 5 == 0 else b'\x61') + payload_bytes
-                        packet = struct.pack('!BBHII', 128, 224, sequence, sequence * 3600, 777) + payload
+                        timestamp = (sequence * 3600 + (1916186809 if clock_jump and sequence >= 20 else 0)) % (1 << 32)
+                        packet = struct.pack('!BBHII', 128, 224, sequence, timestamp, 777) + payload
                         record = b'$\0' + struct.pack('!H', len(packet)) + packet
                         conn.sendall(record[:3])
                         conn.sendall(record[3:] + b'$\1\0\4\x80\xc8\0\0')
@@ -375,6 +376,20 @@ class RtspClient(unittest.TestCase):
                 self.assertEqual(methods, [b'OPTIONS', b'DESCRIBE', b'SETUP', b'PLAY', b'TEARDOWN'])
                 self.assertIn('device_disconnect', commands)
                 self.assertIn('disconnect_from_conference', commands)
+
+    def test_clock_anomaly_is_logged_without_rewriting_or_reconnecting(self):
+        for exe in self.clients:
+            with self.subTest(exe=exe.name):
+                run, packets, methods, _ = self.scenario(exe, clock_jump=True, run_ms=2000)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertIn(b'RTP anomaly: clock_jump', run.stderr)
+                self.assertIn(b'clock_jumps=1', run.stderr)
+                timestamps = [struct.unpack('!I', packet[4:8])[0] for packet in packets]
+                self.assertIn(20 * 3600 + 1916186809, timestamps)
+                self.assertIn(21 * 3600 + 1916186809, timestamps)
+                self.assertEqual(methods.count(b'PLAY'), 1)
+                for packet in packets:
+                    self.assertIn(packet[12:], (SPS, PPS, b'\x61camera-payload', b'\x65camera-payload'))
 
     def test_wrong_cseq_rejected(self):
         for exe in self.clients:
