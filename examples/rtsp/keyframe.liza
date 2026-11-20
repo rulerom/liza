@@ -1,0 +1,78 @@
+import httpws.bytes
+// One bounded request chain per camera session; no payload ownership or rewriting.
+pub struct State {pub sender:u32;pub source:u32;pub seen:bool;pub pending:bool;pub waiting:bool;pub fir_sent:bool;pub next:u64;pub fallback:u64;pub deadline:u64;pub queued_at:u64;pub fir_sequence:u8;pub received:u64;pub coalesced:u64;pub pli:u64;pub fir:u64;pub idr:u64;pub timeouts:u64}
+pub fn create(sender:u32)->State {var local=sender;if local==0 {local=1};return State(local,0,false,false,false,false,0,0,0,0,0,0,0,0,0,0,0)}
+// VideoGrace RTCP APP amtForceKeyFrame: exact fixed 20-byte native wire format.
+// Its SSRC identifies the requesting RECEIVER, not this publisher. The caller
+// must first check the current translator source IP/port and active binding.
+pub fn vg_request(data:View<u8>)->bool {
+    if data.len!=20 {return false}
+    if (data[4]|data[5]|data[6]|data[7])==0 {return false}
+    return data[0]==128&&data[1]==204&&data[2]==0&&data[3]==4&&data[8]==0&&data[9]==0&&data[10]==0&&data[11]==1
+}
+pub fn offer(borrow mut state:State,now:u64)->u32 {
+    state.received=state.received+1
+    if state.pending||state.waiting||now<state.next {state.coalesced=state.coalesced+1} else {state.pending=true}
+    return 0
+}
+pub fn observe(borrow mut state:State,data:View<u8>,valid:bool,idr:bool,now:u64)->u32:io {
+    if !valid||data.len<12 {return 0}
+    source=(u32(data[8])<<24)|(u32(data[9])<<16)|(u32(data[10])<<8)|u32(data[11])
+    if source==0 {return 0}
+    if !state.seen||state.source!=source {
+        if state.waiting {state.pending=true};state.waiting=false;state.fir_sent=false
+        state.seen=true;state.source=source
+        if state.sender==source {state.sender=u32.wrap(u64(state.sender)+1);if state.sender==0 {state.sender=1}}
+    }
+    if idr&&state.waiting {
+        state.idr=state.idr+1;state.waiting=false;state.fir_sent=false
+        a=console.err_bytes(b"Camera IDR observed after keyframe request: elapsed_ms=");b=console.err_u64(now-state.queued_at)
+        c=console.err_bytes(b" camera_ssrc=");d=console.err_u64(u64(state.source));e=console.err_bytes(b" (observation, not an acknowledgement)\n")
+    }
+    return 0
+}
+pub fn cancel(borrow mut state:State)->u32 {state.pending=false;state.waiting=false;state.fir_sent=false;return 0}
+pub fn tick(borrow mut state:State,now:u64)->u32:io {
+    if state.waiting&&now>=state.deadline {
+        state.waiting=false;state.fir_sent=false;state.timeouts=state.timeouts+1
+        a=console.err_bytes(b"Camera keyframe request timed out without an observed IDR; RTCP feedback may be unsupported\n")
+    }
+    return 0
+}
+pub fn due(borrow state:State,now:u64)->bool {
+    if !state.seen||now<state.next {return false}
+    return (state.pending&&!state.waiting)||(state.waiting&&!state.fir_sent&&now>=state.fallback&&now<state.deadline)
+}
+fn word(borrow mut out:httpws.bytes.Wire,value:u32)->u32 {
+    var i:u32=0;while i<4 {b=httpws.bytes.put(borrow mut out,u8.wrap(value>>(24-i*8)));i=i+1};return 0
+}
+// Only call when due() and the RTSP TCP write queue is empty. RR + SDES(CNAME)
+// + PLI, then at most one FIR fallback; all inside negotiated RTCP channel 1.
+pub fn request(borrow mut state:State,now:u64)->httpws.bytes.Wire:io {
+    var out=httpws.bytes.empty();var fir=state.waiting
+    var length:u8=40;if fir {length=48}
+    wrote_framing=httpws.bytes.append(borrow mut out,b"$\x01\x00");size=httpws.bytes.put(borrow mut out,length)
+    rr=httpws.bytes.append(borrow mut out,b"\x80\xc9\x00\x01");rr_source=word(borrow mut out,state.sender)
+    sdes=httpws.bytes.append(borrow mut out,b"\x81\xca\x00\x04");sdes_source=word(borrow mut out,state.sender)
+    cname_bytes=httpws.bytes.append(borrow mut out,b"\x01\x09liza-rtsp\x00")
+    if fir {
+        header=httpws.bytes.append(borrow mut out,b"\x84\xce\x00\x04");sender=word(borrow mut out,state.sender);media=word(borrow mut out,0);target=word(borrow mut out,state.source)
+        state.fir_sequence=u8.wrap(u32(state.fir_sequence)+1);sequence=httpws.bytes.put(borrow mut out,state.fir_sequence);reserved=httpws.bytes.append(borrow mut out,b"\x00\x00\x00")
+        state.fir_sent=true;state.fir=state.fir+1;label=console.err_bytes(b"Camera keyframe FIR queued")
+    } else {
+        header=httpws.bytes.append(borrow mut out,b"\x81\xce\x00\x02");sender=word(borrow mut out,state.sender);target=word(borrow mut out,state.source)
+        state.pending=false;state.waiting=true;state.fir_sent=false;state.queued_at=now;state.fallback=now+1000;state.deadline=now+3000;state.pli=state.pli+1
+        label=console.err_bytes(b"Camera keyframe PLI queued")
+    }
+    state.next=now+1000
+    source_label=console.err_bytes(b" on RTSP RTCP channel 1; camera_ssrc=");source_number=console.err_u64(u64(state.source));line=console.err_bytes(b"\n")
+    return out
+}
+pub fn summary(borrow state:State)->u32:io {
+    a=console.err_bytes(b"Keyframe feedback vg_requests=");b=console.err_u64(state.received)
+    c=console.err_bytes(b" coalesced=");d=console.err_u64(state.coalesced)
+    e=console.err_bytes(b" pli_queued=");f=console.err_u64(state.pli)
+    g=console.err_bytes(b" fir_queued=");h=console.err_u64(state.fir)
+    i=console.err_bytes(b" idr_observed=");j=console.err_u64(state.idr)
+    k=console.err_bytes(b" timed_out=");l=console.err_u64(state.timeouts);line=console.err_bytes(b"\n");return 0
+}

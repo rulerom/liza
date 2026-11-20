@@ -63,7 +63,7 @@ class RtspClient(unittest.TestCase):
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
                  stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None,
-                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False):
+                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None):
         errors, packets, methods, commands = [], [], [], []
         stopped = threading.Event()
         moderation_observed = threading.Event()
@@ -96,6 +96,8 @@ class RtspClient(unittest.TestCase):
                 pending = b''
                 playing = False
                 sequence = 0
+                force_idr = False
+                feedback_seen = []
                 while not stopped.is_set():
                     try:
                         chunk = conn.recv(8192)
@@ -110,7 +112,41 @@ class RtspClient(unittest.TestCase):
                         pending += chunk
                     except socket.timeout:
                         pass
-                    while b'\r\n\r\n' in pending:
+                    while pending:
+                        if pending[0] == 36:
+                            if len(pending) < 4:
+                                break
+                            length = int.from_bytes(pending[2:4], 'big')
+                            if len(pending) < length + 4:
+                                break
+                            self.assertEqual(pending[1], 1)
+                            compound, pending = pending[4:4+length], pending[4+length:]
+                            self.assertIn(length, (40, 48))
+                            self.assertEqual(compound[:4], b'\x80\xc9\0\1')
+                            sender = struct.unpack('!I', compound[4:8])[0]
+                            self.assertNotIn(sender, (0, 777))
+                            self.assertEqual(compound[8:12], b'\x81\xca\0\4')
+                            self.assertEqual(compound[12:16], compound[4:8])
+                            self.assertEqual(compound[16:28], b'\x01\x09liza-rtsp\0')
+                            feedback = compound[28:]
+                            self.assertEqual(feedback[4:8], compound[4:8])
+                            if length == 40:
+                                self.assertEqual(feedback[:4], b'\x81\xce\0\2')
+                                self.assertEqual(struct.unpack('!I', feedback[8:12])[0], 777)
+                                mode = 'pli'
+                            else:
+                                self.assertEqual(feedback[:4], b'\x84\xce\0\4')
+                                self.assertEqual(feedback[8:12], b'\0'*4)
+                                self.assertEqual(struct.unpack('!I', feedback[12:16])[0], 777)
+                                self.assertEqual(feedback[17:], b'\0'*3)
+                                mode = 'fir'
+                            feedback_seen.append((mode, time.monotonic()))
+                            history['feedback'] = feedback_seen
+                            if mode == keyframe_feedback:
+                                force_idr = True
+                            continue
+                        if b'\r\n\r\n' not in pending:
+                            break
                         request, pending = pending.split(b'\r\n\r\n', 1)
                         method = request.split(b' ', 1)[0]
                         methods.append(method)
@@ -147,7 +183,9 @@ class RtspClient(unittest.TestCase):
                     if playing and not (stop_during_camera_timeout and sequence>=35):
                         sequence += 1
                         # Every fifth packet is an IDR; payload must survive unchanged.
-                        payload = (b'\x65' if sequence % 5 == 0 else b'\x61') + payload_bytes
+                        is_idr = force_idr or (sequence % 5 == 0 and (not keyframe_feedback or not epoch_packets[epoch]))
+                        force_idr = False
+                        payload = (b'\x65' if is_idr else b'\x61') + payload_bytes
                         timestamp = (sequence * 3600 + (1916186809 if clock_jump and sequence >= 20 else 0)) % (1 << 32)
                         packet = struct.pack('!BBHII', 128, 224, sequence, timestamp, 777) + payload
                         record = b'$\0' + struct.pack('!H', len(packet)) + packet
@@ -278,6 +316,17 @@ class RtspClient(unittest.TestCase):
                     self.assertIn(epoch,range(cycles))
                     epoch_packets[epoch].append(data)
                     if len(epoch_packets[epoch])>=10:media_seen[epoch].set()
+                    if keyframe_feedback and len(epoch_packets[epoch]) == 12:
+                        request = struct.pack('!BBHII8s', 128, 204, 4, 999, 1, bytes(8))
+                        # Native APP's source is the receiver (999), not author 456.
+                        # Wrong port and malformed messages must not create requests.
+                        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as alien:
+                            alien.sendto(request, source)
+                        udp.sendto(request[:-1], source)
+                        udp.sendto(request[:8] + struct.pack('!I', 2) + request[12:], source)
+                        for _ in range(20):
+                            udp.sendto(request, source)
+
 
         def guarded(fn):
             try:
@@ -376,6 +425,73 @@ class RtspClient(unittest.TestCase):
                 self.assertEqual(methods, [b'OPTIONS', b'DESCRIBE', b'SETUP', b'PLAY', b'TEARDOWN'])
                 self.assertIn('device_disconnect', commands)
                 self.assertIn('disconnect_from_conference', commands)
+
+    def test_moderator_stop_cancels_pending_keyframe_fallback(self):
+        for exe in self.clients:
+            with self.subTest(exe=exe.name):
+                run, packets, methods, _ = self.scenario(exe, keyframe_feedback='ignore', run_ms=0,
+                                                        stop_on_media=True, stop_delay=.4)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertIn(b'Camera keyframe PLI queued', run.stderr)
+                self.assertNotIn(b'Camera keyframe FIR queued', run.stderr)
+                self.assertNotIn(b'keyframe request timed out', run.stderr)
+                self.assertEqual(methods.count(b'PLAY'), 1)
+                self.assertIn(b'TEARDOWN', methods)
+
+    def test_camera_feedback_partial_tcp_writes_and_wouldblock(self):
+        if os.environ.get('LIZA_RTSP_RELEASE'):
+            self.skipTest('requires instrumented reactor build')
+        stub = self.root / 'feedback-reactor.c'
+        header = json.dumps((ROOT / 'liza/runtime/reactor_common.h').as_posix())
+        stub.write_text('#include <stdio.h>\n#define liza_rt_reactor_write real_reactor_write\n#include ' + header + '''\n#undef liza_rt_reactor_write
+uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uint64_t slot,const uint8_t *data,uint32_t length,uint32_t start,uint32_t count) {
+    static unsigned attempts;
+    if (length>=2 && data[0]==36 && data[1]==1) {
+        if (!attempts) fputs("RTCP_WRITE_STUB short+WouldBlock\\n",stderr);
+        if ((attempts++ % 3)==0) return net_failure(4);
+        if (count>3) count=3;
+    }
+    return real_reactor_write(r,owner,generation,slot,data,length,start,count);
+}
+''')
+        for opt in ('0', '2'):
+            with self.subTest(opt=opt):
+                folder = self.root / ('feedback-partial' + opt)
+                folder.mkdir()
+                exe = build(ROOT / 'examples/apps/liza_rtsp.liza', folder, opt, ROOT / 'examples', reactor_stub=stub)
+                run, packets, methods, _ = self.scenario(exe, keyframe_feedback='pli', run_ms=4500)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertIn(b'RTCP_WRITE_STUB short+WouldBlock', run.stderr)
+                self.assertIn(b'Camera IDR observed after keyframe request', run.stderr)
+                self.assertEqual(methods.count(b'PLAY'), 1)
+                self.assertGreater(len(packets), 20)
+
+    def test_vg_keyframe_feedback_reaches_camera_and_observes_idr(self):
+        for mode in ('pli', 'fir', 'ignore'):
+            for exe in self.clients:
+                with self.subTest(mode=mode, exe=exe.name):
+                    run, packets, methods, _ = self.scenario(exe, keyframe_feedback=mode, run_ms=4500)
+                    self.assertEqual(run.returncode, 0, run.stderr)
+                    self.assertIn(b'Camera keyframe PLI queued', run.stderr)
+                    self.assertEqual(run.stderr.count(b'Camera keyframe PLI queued'), 1)
+                    self.assertEqual(methods.count(b'PLAY'), 1)
+                    if mode == 'pli':
+                        self.assertNotIn(b'Camera keyframe FIR queued', run.stderr)
+                    else:
+                        self.assertEqual(run.stderr.count(b'Camera keyframe FIR queued'), 1)
+                    if mode == 'ignore':
+                        self.assertIn(b'Camera keyframe request timed out', run.stderr)
+                        self.assertNotIn(b'Camera IDR observed after', run.stderr)
+                    else:
+                        self.assertIn(b'Camera IDR observed after', run.stderr)
+                        idrs = [i for i, packet in enumerate(packets) if packet[12:] == b'\x65camera-payload']
+                        self.assertGreaterEqual(len(idrs), 2)
+                        for i in idrs:
+                            self.assertGreaterEqual(i, 2)
+                            self.assertEqual([packet[12:] for packet in packets[i-2:i]], [SPS, PPS])
+
+                    self.assertIn(b'vg_requests=20 coalesced=19', run.stderr)
+                    self.assertGreater(len(packets), 20)
 
     def test_clock_anomaly_is_logged_without_rewriting_or_reconnecting(self):
         for exe in self.clients:
