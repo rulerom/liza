@@ -45,3 +45,6 @@ pub fn run_ms()->can.text.Value {b:[u8;6]=[114,117,110,95,109,115];match can.tex
 pub fn ca_file()->can.text.Value {b:[u8;7]=[99,97,95,102,105,108,101];match can.text.from_view(view b[0..7],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}}
 pub fn control_instance_id()->can.text.Value {b:[u8;19]=[99,111,110,116,114,111,108,95,105,110,115,116,97,110,99,101,95,105,100];match can.text.from_view(view b[0..19],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}}
 pub fn control_identity()->can.text.Value {b:[u8;16]=[108,105,122,97,45,114,116,115,112,45,99,108,105,45,118,49];match can.text.from_view(view b[0..16],1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}}
+pub fn disconnect()->can.text.Value {match can.text.from_view(b"disconnect",1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}}
+pub fn member_action()->can.text.Value {match can.text.from_view(b"member_action",1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}}
+pub fn action()->can.text.Value {match can.text.from_view(b"action",1024) {Ok(v)=>{return v} Err(e)=>{return can.text.empty()}}}
