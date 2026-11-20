@@ -46,8 +46,18 @@ fn camera_response(borrow mut state:State,response:rtsp.tcp.Response,now:u64)->u
 }
 fn control_response(borrow mut state:State,message:vg.control.Message,now:u64,config:rtsp.config.Config)->u32:io {
     if message.kind==0 {return 0}
-    if message.kind==5 {if state.device!=0&&message.device==state.device {state.stopping=true};return 0}
-    if message.kind==6 {state.stopping=true;return 0}
+    if vg.control.terminal(message,state.device) {
+        if message.kind==8 {log=console.err_bytes(b"VideoGrace moderator requested disconnect from conference (member_action action=9); stopping connector without reconnect\n")}
+        else if message.kind==5 {log=console.err_bytes(b"VideoGrace requested removal of this camera; stopping connector without reconnect\n")}
+        else if message.kind==7 {log=console.err_bytes(b"VideoGrace requested session disconnect; stopping connector without reconnect\n")}
+        else {log=console.err_bytes(b"VideoGrace requested disconnect from conference; stopping connector without reconnect\n")}
+        state.stopping=true;if rtsp.reconnect.transient(state.error) {state.error=0};return 0
+    }
+    if message.kind==8 {
+        if message.action!=0&&message.result==0 {label=console.err_bytes(b"VideoGrace moderator action is not supported by this RTSP profile (action=");number=console.err_u64(u64(message.action));line=console.err_bytes(b"); publication unchanged\n")}
+        return 0
+    }
+    if message.kind==5 {return 0}
     if message.kind==1 {
         if state.vg_phase!=1 {log=console.err_bytes(b"VideoGrace login response arrived in an unexpected state\n");return 20}
         if message.result!=1 {log=rtsp.diagnostics.login(message.result,config.version);return 20}
@@ -170,10 +180,12 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                 vg.socket.Event.Idle=>{}
                 vg.socket.Event.Upgraded=>{state.command=1;state.vg_phase=1}
                 vg.socket.Event.Message(frame)=>{
-                    if !state.stopping {bytes=frame.bytes;var i:u32=0;while i<frame.length {document=memory.set(move document,i,bytes[i]);i=i+1}
+                    if !requested {bytes=frame.bytes;var i:u32=0;while i<frame.length {document=memory.set(move document,i,bytes[i]);i=i+1}
                     (next_doc,next_scratch,message,valid)=vg.control.parse(move document,frame.length,move scratch);document=move next_doc;scratch=move next_scratch
                     if message.kind==4&&message.result==1 {route_label=console.write("VG RTP endpoint: ");route_bytes=message.address.bytes;route_name=console.write_bytes(view route_bytes[0..message.address.length]);route_separator=console.write(":");route_port=console.print_u64(u64(message.port));route_line=console.println("")}
-                    if !valid {state.error=42;state.stopping=true} else {status=control_response(borrow mut state,message,now,config);if status!=0 {state.error=status;state.stopping=true};if state.stopping&&state.error==0 {requested=true}}}
+                    if !valid {if !state.stopping {state.error=42;state.stopping=true}} else if !state.stopping||vg.control.terminal(message,state.device) {
+                        if vg.control.terminal(message,state.device) {requested=true}
+                        status=control_response(borrow mut state,message,now,config);if status!=0 {state.error=status;state.stopping=true};if state.stopping&&state.error==0 {requested=true}}}
                 }
                 vg.socket.Event.PeerClosed(code)=>{
                     label=console.err("WSS peer close code=");number=console.err_u64(u64(code));line=console.errln("")
