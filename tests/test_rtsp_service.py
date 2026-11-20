@@ -225,6 +225,16 @@ while True:
             service.install(third)
         self.assertEqual(secret.read_bytes(), config)
 
+    def test_rtp_packet_size_configuration_bounds(self):
+        config = json.loads(self.service_config())
+        for value in (0, 256, 1200, 1472):
+            config['rtp_max_packet_bytes'] = value
+            control.validate_config(json.dumps(config).encode())
+        for value in (1, 255, 1473, True, .5, '1200', None):
+            config['rtp_max_packet_bytes'] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                control.validate_config(json.dumps(config).encode())
+
     def test_rtp_pacing_configuration_bounds(self):
         config = json.loads(self.service_config())
         control.validate_config(json.dumps(config).encode())

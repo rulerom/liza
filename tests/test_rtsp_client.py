@@ -63,7 +63,7 @@ class RtspClient(unittest.TestCase):
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
                  stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None,
-                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03):
+                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03, rtp_max_packet_bytes=0, camera_packetization='single'):
         errors, packets, methods, commands = [], [], [], []
         packet_times = []
         stopped = threading.Event()
@@ -98,6 +98,7 @@ class RtspClient(unittest.TestCase):
                 playing = False
                 sequence = 0
                 force_idr = False
+                nal_idr = False
                 feedback_seen = []
                 while not stopped.is_set():
                     try:
@@ -188,7 +189,23 @@ class RtspClient(unittest.TestCase):
                         force_idr = False
                         payload = (b'\x65' if is_idr else b'\x61') + payload_bytes
                         timestamp = (sequence * 3600 + (1916186809 if clock_jump and sequence >= 20 else 0)) % (1 << 32)
-                        packet = struct.pack('!BBHII', 128, 224, sequence, timestamp, 777) + payload
+                        marker = True
+                        if camera_packetization == 'fu':
+                            pieces = (len(payload_bytes)+1433)//1434
+                            part = (sequence-1) % pieces
+                            frame = (sequence-1)//pieces + 1
+                            if part == 0:
+                                nal_idr = frame % 5 == 0
+                            header = (5 if nal_idr else 1) | (128 if part == 0 else 0) | (64 if part == pieces-1 else 0)
+                            payload = bytes([124, header]) + payload_bytes[part*1434:(part+1)*1434]
+                            timestamp = frame * 3600
+                            marker = part == pieces-1
+                        elif camera_packetization == 'stap-many':
+                            nal = (b'\x65' if is_idr else b'\x61') + b'x'*39
+                            payload = bytes([120]) + (struct.pack('!H', len(nal)) + nal)*33
+                        elif camera_packetization == 'stap':
+                            payload = bytes([120]) + struct.pack('!H', len(SPS)) + SPS + struct.pack('!H', len(PPS)) + PPS + struct.pack('!H', len(payload)) + payload
+                        packet = struct.pack('!BBHII', 128, 96 | (128 if marker else 0), sequence, timestamp, 777) + payload
                         record = b'$\0' + struct.pack('!H', len(packet)) + packet
                         conn.sendall(record[:3])
                         conn.sendall(record[3:] + b'$\1\0\4\x80\xc8\0\0')
@@ -343,6 +360,7 @@ class RtspClient(unittest.TestCase):
         config = dict(camera_ip='127.0.0.1', camera_port=camera.getsockname()[1], camera_url='rtsp://127.0.0.1/stream1', vg_ip='127.0.0.1', vg_port=control.getsockname()[1], vg_peer='localhost', login='fixture-login', password='fixture-password', conference='radio', ca_file=str(self.root / 'ca.pem'), run_ms=run_ms)
         config['client_version']=client_version
         config['rtp_pace_ms']=rtp_pace_ms
+        config['rtp_max_packet_bytes']=rtp_max_packet_bytes
         if wrong_peer:
             config['vg_peer']='wrong.example'
         path = self.root / 'rtsp-config.json'
@@ -429,6 +447,69 @@ class RtspClient(unittest.TestCase):
                 self.assertEqual(methods, [b'OPTIONS', b'DESCRIBE', b'SETUP', b'PLAY', b'TEARDOWN'])
                 self.assertIn('device_disconnect', commands)
                 self.assertIn('disconnect_from_conference', commands)
+
+    def test_oversized_stap_output_work_is_bounded(self):
+        for exe in self.clients:
+            with self.subTest(exe=exe.name):
+                run, packets, methods, _ = self.scenario(exe, rtp_max_packet_bytes=1200,
+                                                        camera_packetization='stap-many', run_ms=1500)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertGreater(len(packets), 0)
+                # More than 32 output datagrams: no partial STAP NALs emitted.
+                for packet in packets:
+                    self.assertIn(packet[12:], (SPS, PPS))
+                self.assertRegex(run.stderr, rb'send_errors=[1-9][0-9]*')
+                self.assertIn(b'TEARDOWN', methods)
+
+    def test_packet_size_limit_preserves_h264_nals(self):
+        body = bytes(range(256))*12
+        for mode in ('single', 'fu', 'stap'):
+            for exe in self.clients:
+                with self.subTest(mode=mode, exe=exe.name):
+                    run, packets, methods, _ = self.scenario(exe, payload_bytes=body, rtp_max_packet_bytes=1200,
+                                                             rtp_pace_ms=1, camera_packetization=mode, run_ms=2200)
+                    self.assertEqual(run.returncode, 0, run.stderr)
+                    self.assertGreater(len(packets), 10)
+                    nals = []
+                    pending = None
+                    current_ts = None
+                    last_seq = None
+                    for packet in packets:
+                        self.assertLessEqual(len(packet), 1200)
+                        _, pt, sequence, timestamp, ssrc = struct.unpack('!BBHII', packet[:12])
+                        self.assertEqual(pt & 127, 102)
+                        self.assertEqual(ssrc, 456)
+                        if last_seq is not None:
+                            self.assertEqual(sequence, (last_seq+1) % 65536)
+                        last_seq = sequence
+                        payload = packet[12:]
+                        if payload[0] & 31 == 28:
+                            self.assertFalse(payload[1] & 32)
+                            if payload[1] & 128:
+                                self.assertIsNone(pending)
+                                pending = bytearray([(payload[0] & 224) | (payload[1] & 31)])
+                                current_ts = timestamp
+                            self.assertIsNotNone(pending)
+                            self.assertEqual(timestamp, current_ts)
+                            pending.extend(payload[2:])
+                            if payload[1] & 64:
+                                nals.append(bytes(pending));pending = None
+                                self.assertTrue(pt & 128)
+                            else:
+                                self.assertFalse(pt & 128)
+                        else:
+                            self.assertIsNone(pending)
+                            nals.append(payload)
+                            self.assertFalse(pt & 128)  # SPS/PPS only in this fixture.
+                    if pending is not None:
+                        # A timed shutdown can cut a source NAL between RTP records.
+                        # The incomplete tail must still be an exact valid prefix.
+                        self.assertTrue(any(nal.startswith(bytes(pending)) for nal in (b'\x61'+body, b'\x65'+body)))
+                    self.assertTrue(any(nal == b'\x65'+body for nal in nals))
+                    self.assertTrue(any(nal == b'\x61'+body for nal in nals))
+                    for nal in nals:
+                        self.assertIn(nal, (SPS, PPS, b'\x65'+body, b'\x61'+body))
+                    self.assertIn(b'TEARDOWN', methods)
 
     def test_paced_media_preserves_rtp_and_bounds_burst_rate(self):
         for exe in self.clients:

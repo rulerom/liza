@@ -82,6 +82,8 @@ def validate_config(data):
         for key, default in (('camera_port', 554), ('vg_port', 443)):
             assert type(value.get(key, default)) is int and 0 < value.get(key, default) <= 65535
         assert type(value.get('rtp_pace_ms', 0)) is int and 0 <= value.get('rtp_pace_ms', 0) <= 5
+        size = value.get('rtp_max_packet_bytes', 0)
+        assert type(size) is int and (size == 0 or 256 <= size <= 1472)
         if 'ca_file' in value:
             assert isinstance(value['ca_file'], str) and Path(value['ca_file']).is_absolute()
     except (ValueError, KeyError, TypeError, AssertionError, UnicodeError):

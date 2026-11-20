@@ -82,7 +82,8 @@ fn control_response(borrow mut state:State,message:vg.control.Message,now:u64,co
     }
     return 0
 }
-fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,config:rtsp.config.Config,until:u64)->Attempt:io,alloc {
+fn exchange(initial_supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,config:rtsp.config.Config,until:u64)->Attempt:io,alloc {
+    var supervisor=move initial_supervisor
     (crypto,initial_reactor,id,request,proof,camera_id)=move link
     (network,camera_buffer,initial_document,initial_scratch,initial_output,initial_udp)=move bundle
     var reactor=move initial_reactor;var socket=vg.socket.create(move crypto,id,move network,request,proof,clock()+5000,3000)
@@ -91,6 +92,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     var seed:u32=1;match net.random_u32() {Err(e)=>{state.error=3;log=console.err_bytes(b"Cannot obtain an RTCP sender SSRC from OS entropy\n")} Ok(n)=>{seed=n}}
     var feedback=rtsp.keyframe.create(seed)
     if config.rtp_pace_ms!=0 {label=console.err_bytes(b"RTP media send pacing enabled: wait_ms=");value=console.err_u64(u64(config.rtp_pace_ms));line=console.err_bytes(b" per datagram\n")}
+    if config.rtp_max_packet_bytes!=0 {label=console.err_bytes(b"RTP maximum packet bytes=");value=console.err_u64(u64(config.rtp_max_packet_bytes));line=console.err_bytes(b" (H264 FU-A repacketization enabled)\n")}
     var health_due=start;var seen_rtp=false;var previous_sent:u64=0;var last_sent:u64=0;var monitor=rtsp.monitor.create()
     while true {
         now=clock();if now==0 {state.error=30;break}
@@ -147,13 +149,11 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                             if action.send {
                                 if action.parameters||(feedback.waiting&&action.idr) {
                                     sps=state.video.sps.bytes
-                                    if config.rtp_pace_ms!=0 {paced_sps=net.reactor_poll(supervisor,config.rtp_pace_ms)}
-                                    (tx_buffer,tx_state,tx_reactor)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view sps[0..state.video.sps.length],action.timestamp,false);udp=move tx_buffer;state.bridge=tx_state;reactor=move tx_reactor
+                                    (tx_buffer,tx_state,tx_reactor,tx_supervisor)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view sps[0..state.video.sps.length],action.timestamp,false,move supervisor,config.rtp_pace_ms,config.rtp_max_packet_bytes);udp=move tx_buffer;state.bridge=tx_state;reactor=move tx_reactor;supervisor=move tx_supervisor
                                     pps=state.video.pps.bytes
-                                    if config.rtp_pace_ms!=0 {paced_pps=net.reactor_poll(supervisor,config.rtp_pace_ms)}
-                                    (next_buffer2,next_state2,next_reactor2)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view pps[0..state.video.pps.length],action.timestamp,false);udp=move next_buffer2;state.bridge=next_state2;reactor=move next_reactor2
+                                    (next_buffer2,next_state2,next_reactor2,next_supervisor2)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view pps[0..state.video.pps.length],action.timestamp,false,move supervisor,config.rtp_pace_ms,config.rtp_max_packet_bytes);udp=move next_buffer2;state.bridge=next_state2;reactor=move next_reactor2;supervisor=move next_supervisor2
                                 }
-                                if state.bridge.open {if config.rtp_pace_ms!=0 {paced_payload=net.reactor_poll(supervisor,config.rtp_pace_ms)};(next_buffer3,next_state3,next_reactor3)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view data[action.offset..action.offset+action.length],action.timestamp,action.marker);udp=move next_buffer3;state.bridge=next_state3;reactor=move next_reactor3}
+                                if state.bridge.open {(next_buffer3,next_state3,next_reactor3,next_supervisor3)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view data[action.offset..action.offset+action.length],action.timestamp,action.marker,move supervisor,config.rtp_pace_ms,config.rtp_max_packet_bytes);udp=move next_buffer3;state.bridge=next_state3;reactor=move next_reactor3;supervisor=move next_supervisor3}
                             }
                             keyframe_observed=rtsp.keyframe.observe(borrow mut feedback,view data[0..frame.length],state.bridge.rejected==rejected_before,action.idr,now)
                             packet_observed=rtsp.monitor.packet(borrow mut monitor,now,view data[0..frame.length],state.bridge.rejected==rejected_before,action.idr,state.bridge)
