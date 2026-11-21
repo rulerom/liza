@@ -4,10 +4,11 @@ pub enum Error {Tls(TlsError);Protocol;Deadline;Disconnected}
 pub struct Frame {pub bytes:[u8;65536];pub length:u32}
 pub enum Event {Idle;Upgraded;Message(Frame);PeerClosed(u32);Closed;Failed(Error)}
 struct State {pub app:vg.websocket.State;pub proof:[u8;28];pub connected:bool;pub state:u32;pub done:bool;pub incoming:u32;pub fed:u32;pub outgoing:u32;pub sent:u32;pub plaintext:u32;pub cursor:u32;pub tcp_eof:bool;pub write_blocked:bool;pub plaintext_blocked:bool;pub work_since_poll:u32;pub connect_due:u64;pub send_due:u64;pub close_due:u64;pub close_ms:u32;pub stopping:bool;pub failure:Option<Error>;}
-pub struct Session {crypto:tls.Session;id:net.Connection;buffer:memory.Buffer<u8>;state:State}
+pub struct Session {crypto:Option<tls.Session>;id:Option<net.Connection>;buffer:memory.Buffer<u8>;state:State}
 pub struct Step {pub session:Session;pub reactor:net.Reactor;pub event:Event}
 pub struct Closed {pub reactor:net.Reactor;pub result:Result<u32,Error>}
 pub struct Send {pub session:Session;pub result:Result<bool,Error>}
+pub struct Reset {pub session:Session;pub reactor:net.Reactor}
 fn retry(e:ReactorError)->bool {
     match e {ReactorError.Interrupted=>{return true} ReactorError.WouldBlock=>{return true}
     ReactorError.AddressInUse=>{return false} ReactorError.PermissionDenied=>{return false}
@@ -23,7 +24,19 @@ fn closed(outcome:TlsOutcome)->bool {match outcome {TlsOutcome.Progress=>{return
 
 pub fn create(crypto:tls.Session,id:net.Connection,buffer:memory.Buffer<u8>,request:httpws.bytes.Wire,proof:[u8;28],connect_due:u64,close_ms:u32)->Session {
     state=State(vg.websocket.create(request),proof,false,0,false,0,0,0,0,0,0,false,false,false,0,connect_due,connect_due,0,close_ms,false,None)
-    return Session(move crypto,id,move buffer,state)
+    return Session(Some(move crypto),Some(id),move buffer,state)
+}
+pub fn start(owned:Session,crypto:tls.Session,id:net.Connection,request:httpws.bytes.Wire,proof:[u8;28],until:u64)->Session:io,alloc {
+    (old,old_id,buffer,state)=move owned
+    match move old {None=>{} Some(previous)=>{destroyed=tls.destroy(move previous)}}
+    return create(move crypto,id,move buffer,request,proof,until,3000)
+}
+pub fn reset(owned:Session,r:net.Reactor)->Reset:io,alloc {
+    (crypto,id,buffer,state)=move owned
+    match id {None=>{} Some(handle)=>{disconnected=net.reactor_disconnect(r,handle)}}
+    match move crypto {None=>{} Some(last)=>{destroyed=tls.destroy(move last)}}
+    initial=State(vg.websocket.create(httpws.bytes.empty()),[0;28],false,0,false,0,0,0,0,0,0,false,false,false,0,0,0,0,3000,false,None)
+    return Reset(Session(None,None,move buffer,initial),move r)
 }
 pub fn can_send(borrow session:Session)->bool {return session.state.app.upgraded&&session.state.app.pending.len==0&&!session.state.stopping}
 pub fn buffered(borrow session:Session)->bool {return session.state.cursor<session.state.plaintext}
@@ -43,14 +56,17 @@ pub fn stop(session:Session,until:u64)->Session {
 }
 pub fn close(session:Session,r:net.Reactor)->Closed:io,alloc {
     (crypto,id,buffer,state)=move session
-    disconnected=net.reactor_disconnect(r,id)
-    released=memory.release(move buffer);destroyed=tls.destroy(move crypto)
-    match destroyed {Err(e)=>{return Closed(move r,Err(Error.Tls(e)))} Ok(n)=>{}}
-    match disconnected {Err(e)=>{return Closed(move r,Err(Error.Tls(TlsError.Transport(e))))} Ok(n)=>{}}
+    var failure:Option<Error> = None
+    match id {None=>{} Some(handle)=>{match net.reactor_disconnect(r,handle) {Err(e)=>{failure=Some(Error.Tls(TlsError.Transport(e)))} Ok(n)=>{}}}}
+    released=memory.release(move buffer)
+    match move crypto {None=>{} Some(last)=>{match tls.destroy(move last) {Err(e)=>{failure=Some(Error.Tls(e))} Ok(n)=>{}}}}
+    match failure {None=>{} Some(e)=>{return Closed(move r,Err(e))}}
     return Closed(move r,Ok(0))
 }
 pub fn step(owned:Session,r:net.Reactor,now:u64,until:u64)->Step:io {
-    (session,id,input_buffer,initial)=move owned
+    (optional_session,optional_id,input_buffer,initial)=move owned
+    match move optional_session {None=>{return Step(Session(None,optional_id,move input_buffer,initial),move r,Event.Idle)} Some(session)=>{
+    match optional_id {None=>{return Step(Session(Some(move session),None,move input_buffer,initial),move r,Event.Failed(Error.Protocol))} Some(id)=>{
     var input=move input_buffer
     var app=initial.app
     var proof=initial.proof
@@ -175,5 +191,7 @@ pub fn step(owned:Session,r:net.Reactor,now:u64,until:u64)->Step:io {
     }
     match failure {Some(error)=>{event_result=Event.Failed(error)} None=>{}}
     next=State(app,proof,connected,state,done,incoming,fed,outgoing,sent,plaintext,cursor,tcp_eof,write_blocked,plaintext_blocked,work_since_poll,connect_due,send_due,close_due,close_ms,stopping,failure)
-    return Step(Session(move session,id,move input,next),move r,event_result)
+    return Step(Session(Some(move session),Some(id),move input,next),move r,event_result)
+    }}
+    }}
 }

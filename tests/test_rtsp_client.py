@@ -63,13 +63,14 @@ class RtspClient(unittest.TestCase):
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
                  stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None,
-                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03):
+                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03, binding_delay=0, control_reconnect_delay=0):
         errors, packets, methods, commands = [], [], [], []
         packet_times = []
         stopped = threading.Event()
         moderation_observed = threading.Event()
         live_stderr = self.root / 'live-stderr.log'
         media_seen = [threading.Event() for _ in range(cycles)]
+        binding_confirmed = [threading.Event() for _ in range(cycles)]
         camera_runs, control_runs = [], []
         epoch_packets = [[] for _ in range(cycles)]
         def epoch_key(epoch):
@@ -150,6 +151,8 @@ class RtspClient(unittest.TestCase):
                             break
                         request, pending = pending.split(b'\r\n\r\n', 1)
                         method = request.split(b' ', 1)[0]
+                        if method == b'PLAY':
+                            self.assertTrue(binding_confirmed[epoch].is_set(), 'camera PLAY before VG binding confirmation')
                         methods.append(method)
                         history['methods'].append(method)
                         cseq = next(line.split(b':', 1)[1].strip() for line in request.split(b'\r\n') if line.lower().startswith(b'cseq:'))
@@ -196,7 +199,7 @@ class RtspClient(unittest.TestCase):
                             return
 
         def camera_peer():
-            for _ in range(cycles):
+            for _ in range(1 if drop_wss else cycles):
                 try:
                     camera_session()
                 except (ConnectionResetError,BrokenPipeError,ConnectionAbortedError):
@@ -290,7 +293,9 @@ class RtspClient(unittest.TestCase):
                         self.assertTrue(moderation_observed.is_set(), 'moderator stop was ignored after camera timeout')
 
         def control_peer():
-            for _ in range(cycles):
+            for epoch in range(cycles):
+                if epoch:
+                    time.sleep(control_reconnect_delay)
                 control_session()
 
         def udp_peer():
@@ -310,6 +315,9 @@ class RtspClient(unittest.TestCase):
                         udp.sendto(signed(challenge, 2, epoch_key(epoch)), source)
                     elif data[12] == 3:
                         self.assertEqual(data[32:48], epoch_nonce(epoch))
+                        if not binding_confirmed[epoch].is_set():
+                            time.sleep(binding_delay)
+                        binding_confirmed[epoch].set()
                         udp.sendto(signed(data, 4, epoch_key(epoch)), source)
                 else:
                     packets.append(data)
@@ -586,18 +594,26 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
         run,packets,methods,commands=self.scenario(exe,cycles=2,run_ms=0,stop_on_media=True,stop_delay=.2,**fault)
         self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
         camera,control,epochs=self.attempts
-        self.assertEqual(len(camera),2)
+        preserved=bool(fault.get('drop_wss'))
+        self.assertEqual(len(camera),1 if preserved else 2)
         self.assertEqual(len(control),2)
         self.assertEqual(commands.count('connect_request'),2)
         self.assertEqual(commands.count('device_connect'),2)
-        self.assertIn(b'RTSP session generation=2',run.stdout)
+        if preserved:
+            self.assertIn(b'camera RTSP session preserved',run.stderr)
+            self.assertEqual(methods.count(b'PLAY'),1)
+            self.assertEqual(methods.count(b'TEARDOWN'),1)
+        else:
+            self.assertIn(b'RTSP session generation=2',run.stdout)
         self.assertNotIn(b'RTSP session generation=3',run.stdout)
         self.assertIn(b'delay_ms=1000',run.stderr)
-        self.assertGreaterEqual(camera[1]['started']-camera[0]['started'],1)
+        if not preserved:
+            self.assertGreaterEqual(camera[1]['started']-camera[0]['started'],1)
         for epoch in range(2):
-            self.assertEqual(camera[epoch]['cseqs'][0],1)
+            if not preserved:
+                self.assertEqual(camera[epoch]['cseqs'][0],1)
             self.assertGreaterEqual(len(epochs[epoch]),10)
-            self.assertEqual([p[12:] for p in epochs[epoch][:3]],[SPS,PPS,b'\x65camera-payload'])
+            self.assertEqual([p[12:] for p in epochs[epoch][:3]],[SPS,PPS,b'\x65'+fault.get('payload_bytes',b'camera-payload')])
             self.assertEqual(struct.unpack('!H',epochs[epoch][0][2:4])[0],1)
         return run
 
@@ -637,6 +653,23 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
             for fault in ('reset','eof','close'):
                 self.recovered(exe,drop_wss=fault)
 
+    def test_camera_is_drained_during_vg_backoff_without_rtsp_restart(self):
+        for exe in self.clients:
+            run=self.recovered(exe,drop_wss='reset',control_reconnect_delay=2,
+                               payload_bytes=b'x'*1300,camera_interval=.004)
+            counts=[int(n) for n in re.findall(rb'Camera packets drained without VG publication=(\d+)',run.stderr)]
+            self.assertTrue(counts,run.stderr)
+            self.assertGreater(max(counts),30,run.stderr)
+
+    def test_global_deadline_stops_preserved_camera_during_vg_outage(self):
+        for exe in self.clients:
+            run, packets, methods, commands=self.scenario(
+                exe,drop_wss='reset',run_ms=1600)
+            # The global budget may report the last transport failure during an outage.
+            self.assertIn(run.returncode,(0,43),(run.stdout,run.stderr))
+            self.assertEqual(methods.count(b'PLAY'),1)
+            self.assertEqual(methods.count(b'TEARDOWN'),1)
+
     def test_wss_policy_close_is_fatal_without_retry(self):
         for exe in self.clients:
             run,packets,methods,commands=self.scenario(exe,drop_wss='policy',run_ms=0)
@@ -649,6 +682,7 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
             run,packets,methods,commands=self.scenario(exe,wrong_peer=True,run_ms=0)
             self.assertNotEqual(run.returncode,0)
             self.assertFalse(packets)
+            self.assertFalse(methods, 'RTSP commands sent before authenticated VG session')
             self.assertIn(b'TLS verification',run.stderr)
             self.assertNotIn(b'RTSP reconnect',run.stderr)
 
@@ -658,8 +692,19 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
             self.assertNotEqual(run.returncode,0)
             self.assertIn(b'invalid login or password',run.stderr)
             self.assertFalse(packets)
+            self.assertFalse(methods, 'RTSP commands sent before accepted VG login')
             self.assertEqual(commands.count('connect_request'),1)
             self.assertNotIn(b'RTSP reconnect',run.stderr)
+
+    def test_camera_play_waits_for_binding_after_wss_reset(self):
+        for exe in self.clients:
+            run, packets, methods, commands = self.scenario(
+                exe, cycles=2, drop_wss='reset', run_ms=0,
+                stop_on_media=True, stop_delay=.2, binding_delay=.3)
+            self.assertEqual(run.returncode, 0, (run.stdout, run.stderr))
+            self.assertEqual(methods.count(b'PLAY'), 1)
+            self.assertEqual(methods.count(b'TEARDOWN'), 1)
+            self.assertTrue(all(len(epoch) >= 10 for epoch in self.attempts[2]))
 
     def test_server_version_upgrade_needs_updated_client_configuration(self):
         for exe in self.clients:
