@@ -63,7 +63,7 @@ class RtspClient(unittest.TestCase):
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
                  stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None,
-                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03, binding_delay=0, control_reconnect_delay=0):
+                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03, binding_delay=0, control_reconnect_delay=0, vg_resume_quiet_ms=0):
         errors, packets, methods, commands = [], [], [], []
         packet_times = []
         stopped = threading.Event()
@@ -71,6 +71,7 @@ class RtspClient(unittest.TestCase):
         live_stderr = self.root / 'live-stderr.log'
         media_seen = [threading.Event() for _ in range(cycles)]
         binding_confirmed = [threading.Event() for _ in range(cycles)]
+        binding_confirmed_at = [None for _ in range(cycles)]
         camera_runs, control_runs = [], []
         epoch_packets = [[] for _ in range(cycles)]
         def epoch_key(epoch):
@@ -277,7 +278,7 @@ class RtspClient(unittest.TestCase):
                                 conn.setsockopt(socket.SOL_SOCKET,socket.SO_LINGER,struct.pack('hh' if os.name=='nt' else 'ii',1,0))
                             return
                         if stop_on_media and epoch==cycles-1:
-                            self.assertTrue(media_seen[epoch].wait(5), 'no authorized media')
+                            self.assertTrue(media_seen[epoch].wait(5+(vg_resume_quiet_ms/1000 if epoch else 0)), 'no authorized media')
                             # Exercise TLS beyond the old zero-duration + 5 s
                             # lifetime, then stop through the existing control API.
                             time.sleep(stop_delay)
@@ -317,6 +318,7 @@ class RtspClient(unittest.TestCase):
                         self.assertEqual(data[32:48], epoch_nonce(epoch))
                         if not binding_confirmed[epoch].is_set():
                             time.sleep(binding_delay)
+                            binding_confirmed_at[epoch]=time.monotonic()
                         binding_confirmed[epoch].set()
                         udp.sendto(signed(data, 4, epoch_key(epoch)), source)
                 else:
@@ -351,6 +353,7 @@ class RtspClient(unittest.TestCase):
         config = dict(camera_ip='127.0.0.1', camera_port=camera.getsockname()[1], camera_url='rtsp://127.0.0.1/stream1', vg_ip='127.0.0.1', vg_port=control.getsockname()[1], vg_peer='localhost', login='fixture-login', password='fixture-password', conference='radio', ca_file=str(self.root / 'ca.pem'), run_ms=run_ms)
         config['client_version']=client_version
         config['rtp_pace_ms']=rtp_pace_ms
+        config['vg_resume_quiet_ms']=vg_resume_quiet_ms
         if wrong_peer:
             config['vg_peer']='wrong.example'
         path = self.root / 'rtsp-config.json'
@@ -393,6 +396,7 @@ class RtspClient(unittest.TestCase):
         self.assertNotIn(b'fixture-password', run.stdout + run.stderr)
         self.attempts=(camera_runs,control_runs,epoch_packets)
         self.packet_times = packet_times
+        self.binding_confirmed_at = binding_confirmed_at
         return run, packets, methods, commands
 
     @unittest.skipUnless(os.environ.get('LIZA_RTSP_SERVICE_BINARY'), 'bundled operational launcher acceptance')
@@ -668,6 +672,38 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
             # The global budget may report the last transport failure during an outage.
             self.assertIn(run.returncode,(0,43),(run.stdout,run.stderr))
             self.assertEqual(methods.count(b'PLAY'),1)
+            self.assertEqual(methods.count(b'TEARDOWN'),1)
+
+    def test_experimental_ten_second_media_quiet_period_preserves_camera(self):
+        for exe in self.clients:
+            run,packets,methods,commands=self.scenario(
+                exe,drop_wss='reset',cycles=2,run_ms=0,stop_on_media=True,
+                stop_delay=.2,vg_resume_quiet_ms=10000,camera_interval=.01)
+            self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
+            first={}
+            for packet,stamp in zip(packets,self.packet_times):
+                first.setdefault(struct.unpack('!I',packet[8:12])[0],stamp)
+            self.assertLess(first[456]-self.binding_confirmed_at[0],2)
+            self.assertGreaterEqual(first[457]-self.binding_confirmed_at[1],9.99)
+            self.assertLess(first[457]-self.binding_confirmed_at[1],13)
+            self.assertEqual(methods.count(b'PLAY'),1)
+            self.assertEqual(methods.count(b'TEARDOWN'),1)
+            self.assertEqual(len(self.attempts[0]),1)
+            counts=[int(n) for n in re.findall(rb'quiet period ended; drained camera packets=(\d+)',run.stderr)]
+            self.assertTrue(counts,run.stderr)
+            self.assertGreater(counts[0],100)
+            self.assertEqual([p[12:] for p in self.attempts[2][1][:3]],[SPS,PPS,b'\x65camera-payload'])
+            self.assertNotRegex(run.stderr,rb'RTP anomaly:[^\n]*\bpacket_pause\b')
+            self.assertNotRegex(run.stderr,rb'RTP anomaly:[^\n]*\bsequence_discontinuity\b')
+
+    def test_deadline_ends_media_quiet_period_without_publication(self):
+        for exe in self.clients:
+            run,packets,methods,commands=self.scenario(
+                exe,drop_wss='reset',cycles=2,run_ms=2500,vg_resume_quiet_ms=10000)
+            self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
+            self.assertFalse(self.attempts[2][1])
+            self.assertIn(b'Experimental RTP quiet period after VG binding',run.stderr)
+            self.assertNotIn(b'quiet period ended',run.stderr)
             self.assertEqual(methods.count(b'TEARDOWN'),1)
 
     def test_wss_policy_close_is_fatal_without_retry(self):

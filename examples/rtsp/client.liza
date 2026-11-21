@@ -94,6 +94,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     var health_due=start;var seen_rtp=false;var previous_sent:u64=0;var last_sent:u64=0;var monitor=rtsp.monitor.create()
     var vg_offline=false;var vg_retry_due:u64=0;var vg_delay:u32=1000;var vg_started=start;var vg_generation:u64=1
     var discarded_offline:u64=0;var vg_closing=false
+    var resume_media_due:u64=0
     while true {
         now=clock();if now==0 {state.error=30;break}
         loop_observed=rtsp.monitor.tick(borrow mut monitor,now)
@@ -110,6 +111,11 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
         match net.reactor_shutdown_requested(supervisor) {Err(e)=>{state.error=30;break} Ok(n)=>{if n!=0 {state.stopping=true}}}
         if state.stopping&&state.error==0 {requested=true}
         if state.error!=0 {state.stopping=true}
+        if !state.stopping&&resume_media_due!=0&&now>=resume_media_due {
+            resume_media_due=0
+            label=console.err_bytes(b"Experimental RTP quiet period ended; drained camera packets=");value=console.err_u64(discarded_offline);line=console.err_bytes(b"; waiting for next IDR\n");discarded_offline=0
+            offered=rtsp.keyframe.offer(borrow mut feedback,now)
+        }
         if state.stopping {feedback_cancelled=rtsp.keyframe.cancel(borrow mut feedback)} else {feedback_observed=rtsp.keyframe.tick(borrow mut feedback,now)}
         if vg_offline&&!state.stopping&&now>=vg_retry_due {
             (resumed,resumed_reactor,result)=vg.connection.resume(move socket,move reactor,config,now,now+5000);socket=move resumed;reactor=move resumed_reactor
@@ -144,7 +150,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                     match rtsp.request.make(method,target,state.cseq,state.session) {Err(e)=>{state.error=10;camera_dead=true} Ok(wire)=>{camera=rtsp.tcp.send(move camera,wire);state.waiting=true;state.camera_due=now+5000}}
                 }
             }
-            if !state.stopping&&state.camera_phase==5&&!state.waiting&&rtsp.tcp.can_send(camera)&&rtsp.keyframe.due(feedback,now) {wire=rtsp.keyframe.request(borrow mut feedback,now);camera=rtsp.tcp.send(move camera,wire)}
+            if !state.stopping&&resume_media_due==0&&state.camera_phase==5&&!state.waiting&&rtsp.tcp.can_send(camera)&&rtsp.keyframe.due(feedback,now) {wire=rtsp.keyframe.request(borrow mut feedback,now);camera=rtsp.tcp.send(move camera,wire)}
             if state.camera_phase!=8&&!camera_dead {
                 (next_camera,next_reactor,event)=rtsp.tcp.step(move camera,move reactor);camera=move next_camera;reactor=move next_reactor
                 match event {
@@ -154,7 +160,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                     rtsp.tcp.Event.Response(response)=>{status=camera_response(borrow mut state,response,now);if status!=0 {state.error=status;state.stopping=true;camera_dead=true}}
                     rtsp.tcp.Event.Packet(frame)=>{
                         state.last_rtp=now;seen_rtp=true
-                        if !state.stopping&&state.vg_phase==6&&state.binding.ready {
+                        if !state.stopping&&state.vg_phase==6&&state.binding.ready&&resume_media_due==0 {
                             rejected_before=state.bridge.rejected
                             data=frame.data;action=rtsp.bridge.inspect(state.bridge,view data[0..frame.length]);state.bridge=action.state
                             if action.send {
@@ -190,12 +196,15 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
             match result {Err(e)=>{} Ok(meta)=>{
                 if net.udp_source_ip(meta)==net.ipv4_bits(state.route)&&net.udp_source_port(meta)==state.route.port {
                     var changed=false
-                    {data=memory.view(udp);if !state.stopping&&state.binding.ready&&rtsp.keyframe.vg_request(view data[0..net.udp_length(meta)]) {offered=rtsp.keyframe.offer(borrow mut feedback,now)};received=vg.binding.receive(state.binding,view data[0..net.udp_length(meta)],now);changed=!state.binding.ready&&received.state.ready;state.binding=received.state;if !received.valid {state.error=40;state.stopping=true}
+                    {data=memory.view(udp);if !state.stopping&&resume_media_due==0&&state.binding.ready&&rtsp.keyframe.vg_request(view data[0..net.udp_length(meta)]) {offered=rtsp.keyframe.offer(borrow mut feedback,now)};received=vg.binding.receive(state.binding,view data[0..net.udp_length(meta)],now);changed=!state.binding.ready&&received.state.ready;state.binding=received.state;if !received.valid {state.error=40;state.stopping=true}
                     match received.packet {None=>{} Some(p)=>{bytes=p.bytes;sent=net.reactor_udp_send(reactor,view bytes[0..80],0,80,state.route)}}}
                     if changed {
                         log=console.println("VG RTP binding ready; waiting for camera IDR");vg_delay=1000
                         if discarded_offline!=0 {label=console.err_bytes(b"Camera packets drained without VG publication=");value=console.err_u64(discarded_offline);line=console.err_bytes(b"\n");discarded_offline=0}
-
+                        if vg_generation>1&&config.vg_resume_quiet_ms!=0 {
+                            resume_media_due=now+u64(config.vg_resume_quiet_ms);cancelled=rtsp.keyframe.cancel(borrow mut feedback)
+                            label=console.err_bytes(b"Experimental RTP quiet period after VG binding: duration_ms=");value=console.err_u64(u64(config.vg_resume_quiet_ms));line=console.err_bytes(b"; camera and control remain active\n")
+                        }
                     }
                 }
             }}
@@ -255,7 +264,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
             state.vg_phase=0;state.command=0;state.client=0;state.device=0;state.ssrc=0
             state.binding=vg.binding.create(can.text.empty(),0);state.bridge=rtsp.bridge.create(state.video.pt,0,0)
             cancelled=rtsp.keyframe.cancel(borrow mut feedback)
-            previous_sent=0;last_sent=0;closed=false;socket_dead=false
+            previous_sent=0;last_sent=0;closed=false;socket_dead=false;resume_media_due=0
             vg_offline=true;vg_closing=false;vg_retry_due=now+u64(vg_delay)
             label=console.err_bytes(b"VG unavailable; preserving camera RTSP session, draining RTP during backoff delay_ms=");value=console.err_u64(u64(vg_delay));line=console.err_bytes(b"\n")
             vg_delay=rtsp.reconnect.next_delay(vg_delay)

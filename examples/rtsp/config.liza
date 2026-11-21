@@ -1,7 +1,7 @@
 import can.fields
 import can.text
 import vg.words
-pub struct Config {pub camera:net.Address;pub url:can.text.Value;pub vg:net.Address;pub peer:can.text.Value;pub host:can.text.Value;pub login:can.text.Value;pub password:can.text.Value;pub conference:can.text.Value;pub version:u32;pub run_ms:u32;pub ca:can.text.Value;pub rtp_pace_ms:u32}
+pub struct Config {pub camera:net.Address;pub url:can.text.Value;pub vg:net.Address;pub peer:can.text.Value;pub host:can.text.Value;pub login:can.text.Value;pub password:can.text.Value;pub conference:can.text.Value;pub version:u32;pub run_ms:u32;pub ca:can.text.Value;pub rtp_pace_ms:u32;pub vg_resume_quiet_ms:u32}
 pub fn wildcard(value:can.text.Value)->bool {
     b=value.bytes;return value.length==7&&b[0]==48&&b[1]==46&&b[2]==48&&b[3]==46&&b[4]==48&&b[5]==46&&b[6]==48
 }
@@ -32,14 +32,16 @@ fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Parsed 
     (c12,ca)=can.fields.text(move cursor,empty,empty,vg.words.ca_file(),false,1024);cursor=move c12
     var pace_key=can.text.empty();match can.text.from_view(b"rtp_pace_ms",16) {Err(e)=>{} Ok(v)=>{pace_key=v}}
     (c13,pace)=can.fields.number(move cursor,empty,empty,pace_key,false,0);cursor=move c13
+    var quiet_key=can.text.empty();match can.text.from_view(b"vg_resume_quiet_ms",32) {Err(e)=>{} Ok(v)=>{quiet_key=v}}
+    (c14,quiet)=can.fields.number(move cursor,empty,empty,quiet_key,false,0);cursor=move c14
     (doc,temp,valid)=can.fields.finish(move cursor)
     var first=net.ipv4(127,0,0,1,554);var second=net.ipv4(127,0,0,1,443);var ok=valid
-    if pace>5||camera_port>65535||vg_port>65535||version>4294967295||(run_ms!=0&&run_ms<100)||run_ms>3600000||peer.length==0||login.length==0||password.length==0||conference.length==0 {ok=false}
+    if quiet>30000||pace>5||camera_port>65535||vg_port>65535||version>4294967295||(run_ms!=0&&run_ms<100)||run_ms>3600000||peer.length==0||login.length==0||password.length==0||conference.length==0 {ok=false}
     match address(camera,u16.wrap(camera_port)) {Err(e)=>{ok=false} Ok(v)=>{first=v}}
     match address(vg_ip,u16.wrap(vg_port)) {Err(e)=>{ok=false} Ok(v)=>{second=v}}
     var host=peer
     if vg_port!=443 {host.bytes[host.length]=58;host.length=host.length+1;var digits:[u8;5]=[0;5];var at:u32=5;var n=vg_port;while true {at=at-1;digits[at]=u8(n%10)+48;n=n/10;if n==0 {break}};while at<5 {host.bytes[host.length]=digits[at];host.length=host.length+1;at=at+1}}
-    return Parsed(move doc,move temp,Config(first,url,second,peer,host,login,password,conference,u32.wrap(version),u32.wrap(run_ms),ca,u32.wrap(pace)),ok)
+    return Parsed(move doc,move temp,Config(first,url,second,peer,host,login,password,conference,u32.wrap(version),u32.wrap(run_ms),ca,u32.wrap(pace),u32.wrap(quiet)),ok)
 }
 struct Parsed {buffer:memory.Buffer<u8>;scratch:memory.Buffer<u8>;config:Config;valid:bool}
 pub fn read()->Result<Config,u32>:io,alloc {
