@@ -63,7 +63,7 @@ class RtspClient(unittest.TestCase):
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
                  stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None,
-                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03, binding_delay=0, control_reconnect_delay=0, vg_resume_quiet_ms=0):
+                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03, binding_delay=0, control_reconnect_delay=0, vg_resume_quiet_ms=0, echo_cleanup=False):
         errors, packets, methods, commands = [], [], [], []
         packet_times = []
         stopped = threading.Event()
@@ -162,6 +162,8 @@ class RtspClient(unittest.TestCase):
                             continue  # RTP continues, but the control reply never arrives.
                         if stall_teardown and method==b'TEARDOWN':
                             continue
+                        if echo_cleanup and epoch==0 and method==b'TEARDOWN':
+                            continue
                         if stop_during_camera_timeout and method==b'TEARDOWN':
                             self.assertTrue(moderation_observed.wait(3), 'stop command ignored during camera cleanup')
                         if bad_cseq:
@@ -185,7 +187,7 @@ class RtspClient(unittest.TestCase):
                             playing = True
                         if method == b'TEARDOWN':
                             return
-                    if playing and not (stop_during_camera_timeout and sequence>=35):
+                    if playing and not ((stop_during_camera_timeout or (echo_cleanup and epoch==0)) and sequence>=35):
                         sequence += 1
                         # Every fifth packet is an IDR; payload must survive unchanged.
                         is_idr = force_idr or (sequence % 5 == 0 and (not keyframe_feedback or not epoch_packets[epoch]))
@@ -204,7 +206,7 @@ class RtspClient(unittest.TestCase):
                 try:
                     camera_session()
                 except (ConnectionResetError,BrokenPipeError,ConnectionAbortedError):
-                    if not (stall_keepalive or stall_teardown or drop_wss):
+                    if not (stall_keepalive or stall_teardown or drop_wss or echo_cleanup):
                         raise
                     # Expected end of this faulted session, not end of the
                     # camera listener. The next connection must be accepted.
@@ -227,7 +229,7 @@ class RtspClient(unittest.TestCase):
                     try:
                         opcode, data = client_frame(conn)
                     except AssertionError as error:
-                        if stall_teardown and str(error)=='premature EOF':
+                        if (stall_teardown or echo_cleanup) and str(error)=='premature EOF':
                             return  # The bounded shutdown deadline closed TCP.
                         raise
                     if opcode == 8:
@@ -283,6 +285,8 @@ class RtspClient(unittest.TestCase):
                             # lifetime, then stop through the existing control API.
                             time.sleep(stop_delay)
                             conn.sendall(ws(stop_payload) if stop_payload is not None else message({'device_disconnect': {'device_id': 7}}))
+                    elif 'device_disconnect' in value and echo_cleanup:
+                        conn.sendall(message({'device_disconnect': {'device_id': 7}}))
                     elif 'device_disconnect' in value and stop_during_camera_timeout:
                         conn.sendall(message({'member_action': {'id': [], 'action': 9}}))
                         until = time.monotonic() + 3
@@ -630,6 +634,15 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
         for exe in self.clients:
             run=self.recovered(exe,drop_after=35)
             self.assertIn(b'after error 35',run.stderr)
+
+    def test_own_device_removal_echo_does_not_cancel_camera_recovery(self):
+        for exe in self.clients:
+            run=self.recovered(exe,echo_cleanup=True)
+            self.assertIn(b'Camera removal acknowledged during local cleanup',run.stderr)
+            # Only the final explicit stop of the recovered publication is terminal.
+            self.assertEqual(run.stderr.count(b'VideoGrace requested removal of this camera'),1)
+            self.assertLess(run.stderr.index(b'Camera removal acknowledged during local cleanup'),
+                            run.stderr.index(b'RTSP reconnect after error'))
 
     def test_repeated_camera_failures_create_three_independent_sessions(self):
         for exe in self.clients:

@@ -131,7 +131,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
             log=rtsp.diagnostics.rtsp_timeout(state.camera_phase,state.cseq)
             state.error=32;state.stopping=true;camera_dead=true;state.waiting=false
         }
-        if !state.stopping&&state.camera_phase==5&&now>=state.last_rtp+10000 {state.error=33;state.stopping=true}
+        if !state.stopping&&state.camera_phase==5&&now>=state.last_rtp+10000 {log=console.err_bytes(b"Camera RTP idle for 10000 ms; starting cleanup before camera reconnect\n");state.error=33;state.stopping=true}
         if state.stopping&&state.shutdown_due==0 {state.shutdown_due=now+5000;state.shutdown_stage=1}
         if state.stopping&&now>=state.shutdown_due {if state.error==0 {state.error=34};break}
         if !camera_dead {
@@ -233,7 +233,10 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                     if !requested {bytes=frame.bytes;var i:u32=0;while i<frame.length {document=memory.set(move document,i,bytes[i]);i=i+1}
                     (next_doc,next_scratch,message,valid)=vg.control.parse(move document,frame.length,move scratch);document=move next_doc;scratch=move next_scratch
                     if message.kind==4&&message.result==1 {route_label=console.write("VG RTP endpoint: ");route_bytes=message.address.bytes;route_name=console.write_bytes(view route_bytes[0..message.address.length]);route_separator=console.write(":");route_port=console.print_u64(u64(message.port));route_line=console.println("")}
-                    if !valid {if !state.stopping {state.error=42;state.stopping=true}} else if !state.stopping||vg.control.terminal(message,state.device) {
+                    if !valid {if !state.stopping {state.error=42;state.stopping=true}}
+                    else if state.stopping&&state.shutdown_stage>=2&&message.kind==5&&message.device==state.device {
+                        log=console.err_bytes(b"Camera removal acknowledged during local cleanup; reconnect policy unchanged\n")
+                    } else if !state.stopping||vg.control.terminal(message,state.device) {
                         if vg.control.terminal(message,state.device) {requested=true}
                         status=control_response(borrow mut state,message,now,config);if status!=0 {state.error=status;state.stopping=true};if state.stopping&&state.error==0 {requested=true}}}
                 }
