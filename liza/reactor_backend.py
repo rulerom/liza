@@ -60,6 +60,8 @@ def external(fn, lines, types):
                      '  %n = extractvalue { ptr, i32 } %data, 1'])
         abi.extend(['ptr','i32']);args.extend(['ptr %p','i32 %n'])
     extras = {'poll':['timeout'], 'interest':['flags'], 'read':['start','count'], 'write':['start','count']}.get(operation,[])
+    if operation == 'udp_replace_connected':
+        params.extend(['i32 %ip','i16 %port']);abi.extend(['i32','i16']);args.extend(['i32 %ip','i16 %port'])
     for arg in extras:
         params.append(f'i32 %{arg}');abi.append('i32');args.append(f'i32 %{arg}')
     ret='i32' if operation=='close' else 'i64'
