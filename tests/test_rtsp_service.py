@@ -225,6 +225,17 @@ while True:
             service.install(third)
         self.assertEqual(secret.read_bytes(), config)
 
+    def test_rtp_pacing_configuration_bounds(self):
+        config = json.loads(self.service_config())
+        control.validate_config(json.dumps(config).encode())
+        for value in (0, 1, 5):
+            config['rtp_pace_ms'] = value
+            control.validate_config(json.dumps(config).encode())
+        for value in (-1, 6, True, .5, '1', None):
+            config['rtp_pace_ms'] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                control.validate_config(json.dumps(config).encode())
+
     def test_checksums_symlinks_and_invalid_config_fail_closed(self):
         config = self.service_config()
         bundle = self.bundle('release')
