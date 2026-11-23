@@ -8,6 +8,7 @@ import rtsp.bridge
 import rtsp.reconnect
 import rtsp.diagnostics
 import rtsp.monitor
+import rtsp.keyframe
 import vg.connection
 import vg.socket
 import vg.control
@@ -87,6 +88,8 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     var reactor=move initial_reactor;var socket=vg.socket.create(move crypto,id,move network,request,proof,clock()+5000,3000)
     var camera=rtsp.tcp.create(camera_id,move camera_buffer);var document=move initial_document;var scratch=move initial_scratch;var output=move initial_output;var udp=move initial_udp
     var state=initial();state.base=config.url;start=clock();var closed=false;var camera_dead=false;var socket_dead=false;var requested=false
+    var seed:u32=1;match net.random_u32() {Err(e)=>{state.error=3;log=console.err_bytes(b"Cannot obtain an RTCP sender SSRC from OS entropy\n")} Ok(n)=>{seed=n}}
+    var feedback=rtsp.keyframe.create(seed)
     var health_due=start;var seen_rtp=false;var previous_sent:u64=0;var last_sent:u64=0;var monitor=rtsp.monitor.create()
     while true {
         now=clock();if now==0 {state.error=30;break}
@@ -97,12 +100,14 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
             if seen_rtp {input_age=now-state.last_rtp};if last_sent!=0 {output_age=now-last_sent};if state.binding.ready&&!state.stopping {ready=1}
             health=rtsp.diagnostics.health(ready,state.bridge.received,state.bridge.succeeded,input_age,output_age)
             quality=rtsp.monitor.summary(monitor,state.bridge,now)
+            feedback_quality=rtsp.keyframe.summary(feedback)
             health_due=now+5000
         }
         if until!=0&&now>=until {state.stopping=true}
         match net.reactor_shutdown_requested(supervisor) {Err(e)=>{state.error=30;break} Ok(n)=>{if n!=0 {state.stopping=true}}}
         if state.stopping&&state.error==0 {requested=true}
         if state.error!=0 {state.stopping=true}
+        if state.stopping {feedback_cancelled=rtsp.keyframe.cancel(borrow mut feedback)} else {feedback_observed=rtsp.keyframe.tick(borrow mut feedback,now)}
         if !state.stopping&&now>=start+20000&&state.vg_phase<6 {state.error=31;state.stopping=true}
         if state.waiting&&now>=state.camera_due {
             log=rtsp.diagnostics.rtsp_timeout(state.camera_phase,state.cseq)
@@ -125,6 +130,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                     match rtsp.request.make(method,target,state.cseq,state.session) {Err(e)=>{state.error=10;camera_dead=true} Ok(wire)=>{camera=rtsp.tcp.send(move camera,wire);state.waiting=true;state.camera_due=now+5000}}
                 }
             }
+            if !state.stopping&&state.camera_phase==5&&!state.waiting&&rtsp.tcp.can_send(camera)&&rtsp.keyframe.due(feedback,now) {wire=rtsp.keyframe.request(borrow mut feedback,now);camera=rtsp.tcp.send(move camera,wire)}
             if state.camera_phase!=8&&!camera_dead {
                 (next_camera,next_reactor,event)=rtsp.tcp.step(move camera,move reactor);camera=move next_camera;reactor=move next_reactor
                 match event {
@@ -138,7 +144,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                             rejected_before=state.bridge.rejected
                             data=frame.data;action=rtsp.bridge.inspect(state.bridge,view data[0..frame.length]);state.bridge=action.state
                             if action.send {
-                                if action.parameters {
+                                if action.parameters||(feedback.waiting&&action.idr) {
                                     sps=state.video.sps.bytes
                                     (tx_buffer,tx_state,tx_reactor)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view sps[0..state.video.sps.length],action.timestamp,false);udp=move tx_buffer;state.bridge=tx_state;reactor=move tx_reactor
                                     pps=state.video.pps.bytes
@@ -146,6 +152,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                                 }
                                 if state.bridge.open {(next_buffer3,next_state3,next_reactor3)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view data[action.offset..action.offset+action.length],action.timestamp,action.marker);udp=move next_buffer3;state.bridge=next_state3;reactor=move next_reactor3}
                             }
+                            keyframe_observed=rtsp.keyframe.observe(borrow mut feedback,view data[0..frame.length],state.bridge.rejected==rejected_before,action.idr,now)
                             packet_observed=rtsp.monitor.packet(borrow mut monitor,now,view data[0..frame.length],state.bridge.rejected==rejected_before,action.idr,state.bridge)
                         }
                     }
@@ -161,7 +168,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
             match result {Err(e)=>{} Ok(meta)=>{
                 if net.udp_source_ip(meta)==net.ipv4_bits(state.route)&&net.udp_source_port(meta)==state.route.port {
                     var changed=false
-                    {data=memory.view(udp);received=vg.binding.receive(state.binding,view data[0..net.udp_length(meta)],now);changed=!state.binding.ready&&received.state.ready;state.binding=received.state;if !received.valid {state.error=40;state.stopping=true}
+                    {data=memory.view(udp);if !state.stopping&&state.binding.ready&&rtsp.keyframe.vg_request(view data[0..net.udp_length(meta)]) {offered=rtsp.keyframe.offer(borrow mut feedback,now)};received=vg.binding.receive(state.binding,view data[0..net.udp_length(meta)],now);changed=!state.binding.ready&&received.state.ready;state.binding=received.state;if !received.valid {state.error=40;state.stopping=true}
                     match received.packet {None=>{} Some(p)=>{bytes=p.bytes;sent=net.reactor_udp_send(reactor,view bytes[0..80],0,80,state.route)}}}
                     if changed {log=console.println("VG RTP binding ready; waiting for camera IDR")}
                 }
@@ -211,6 +218,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     a=memory.release(move document);b=memory.release(move scratch);c=memory.release(move output);d=memory.release(move udp)
     log=console.write("RTP received=");n1=console.print_u64(state.bridge.received);l1=console.write(" attempted=");n2=console.print_u64(state.bridge.attempted);l2=console.write(" succeeded=");n3=console.print_u64(state.bridge.succeeded);l3=console.write(" gated=");n4=console.print_u64(state.bridge.gated);l4=console.write(" discontinuities=");n5=console.print_u64(state.bridge.discontinuities);line=console.println("")
     quality=rtsp.monitor.summary(monitor,state.bridge,clock())
+    feedback_quality=rtsp.keyframe.summary(feedback)
     if state.error!=0 {error_detail=rtsp.diagnostics.session_error(state.error)}
     healthy=clock()>=start+30000&&state.bridge.succeeded!=0
     return Attempt(move supervisor,state.error,healthy,requested)
