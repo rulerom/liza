@@ -1,0 +1,54 @@
+import can.text
+pub struct Cursor {document:JsonDocument;scratch:memory.Buffer<u8>;failed:bool}
+pub struct TextRead {pub cursor:Cursor;pub value:can.text.Value}
+pub struct NumberRead {pub cursor:Cursor;pub value:u64}
+pub struct Finished {pub buffer:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub valid:bool}
+pub fn open(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Cursor {
+    (doc,result)=json.parse(move buffer,length,JsonLimits(65536,16,1024));var failed=false
+    match result {Err(e)=>{failed=true} Ok(n)=>{}};return Cursor(move doc,move scratch,failed)
+}
+fn choose(doc:JsonDocument,scope:u32,key:View<u8>)->JsonRead {
+    var current=json.root(move doc);var first=b"";var second=b""
+    if scope==1 {first=b"contracts"}
+    if scope>=2&&scope<=6 {first=b"payload"}
+    if scope==3 {second=b"source"};if scope==4 {second=b"auth"}
+    if scope==5||scope==6 {second=b"media_permissions"}
+    if scope==7||scope==8 {first=b"device_connect"}
+    if scope==9 {first=b"device_params"}
+    if scope==10 {first=b"payload";second=b"media_permissions"}
+    if scope==8 {second=b"rtp_profile"}
+    if first.len!=0 {(next,result)=json.field(move current,first);current=move next;match result {Err(e)=>{return JsonRead(move current,Err(e))} Ok(n)=>{}}}
+    if second.len!=0 {(next,result)=json.field(move current,second);current=move next;match result {Err(e)=>{return JsonRead(move current,Err(e))} Ok(n)=>{}}}
+    if scope==5||scope==6 {
+        (next,result)=json.field(move current,b"publish");current=move next;match result {Err(e)=>{return JsonRead(move current,Err(e))} Ok(n)=>{}}
+        match json.array_length(current) {Err(e)=>{return JsonRead(move current,Err(e))} Ok(n)=>{if n!=1 {return JsonRead(move current,Err(JsonAccessError.WrongType))}}}
+        (item,index_result)=json.index(move current,0);current=move item;match index_result {Err(e)=>{return JsonRead(move current,Err(e))} Ok(n)=>{}}
+        if scope==6 {(profile_doc,profile_result)=json.field(move current,b"rtp_profile");current=move profile_doc;match profile_result {Err(e)=>{return JsonRead(move current,Err(e))} Ok(n)=>{}}}
+    }
+    return json.field(move current,key)
+}
+pub fn text(owned:Cursor,scope:u32,key:View<u8>,required:bool,limit:u32)->TextRead {
+    (document,initial,failed)=move owned;var doc=move document;var scratch=move initial;var bad=failed;var value=can.text.empty()
+    if !bad {(next,result)=choose(move doc,scope,key);doc=move next;match result {
+        Err(e)=>{match e {JsonAccessError.Missing=>{bad=required} JsonAccessError.WrongType=>{bad=true} JsonAccessError.InvalidUnicode=>{bad=true} JsonAccessError.TooLarge=>{bad=true} JsonAccessError.Syntax=>{bad=true} JsonAccessError.DuplicateKey=>{bad=true} JsonAccessError.NumberOutOfRange=>{bad=true} JsonAccessError.InvalidDocument=>{bad=true} JsonAccessError.IndexOutOfRange=>{bad=true}}}
+        Ok(n)=>{(next2,decoded,status)=json.decode_string(move doc,move scratch);doc=move next2;scratch=move decoded
+            match status {Err(e)=>{bad=true} Ok(length)=>{if length>limit||(required&&length==0) {bad=true} else {bytes=memory.view(scratch);match can.text.from_view(view bytes[0..length],limit) {Err(e)=>{bad=true} Ok(v)=>{value=v}}}}}
+        }
+    }}
+    return TextRead(Cursor(move doc,move scratch,bad),value)
+}
+pub fn number(owned:Cursor,scope:u32,key:View<u8>,required:bool,fallback:u64)->NumberRead {
+    (document,scratch,failed)=move owned;var doc=move document;var bad=failed;var value=fallback
+    if !bad {(next,result)=choose(move doc,scope,key);doc=move next;match result {Err(e)=>{match e {JsonAccessError.Missing=>{bad=required} JsonAccessError.WrongType=>{bad=true} JsonAccessError.InvalidUnicode=>{bad=true} JsonAccessError.TooLarge=>{bad=true} JsonAccessError.Syntax=>{bad=true} JsonAccessError.DuplicateKey=>{bad=true} JsonAccessError.NumberOutOfRange=>{bad=true} JsonAccessError.InvalidDocument=>{bad=true} JsonAccessError.IndexOutOfRange=>{bad=true}}} Ok(found)=>{match json.read_u64(doc) {Err(read_error)=>{bad=true} Ok(read_number)=>{value=read_number}}}}}
+    return NumberRead(Cursor(move doc,move scratch,bad),value)
+}
+pub fn finish(owned:Cursor)->Finished {(doc,scratch,bad)=move owned;buffer=json.into_buffer(move doc);return Finished(move buffer,move scratch,!bad)}
+pub fn equal(value:can.text.Value,bytes:View<u8>)->bool {if value.length!=bytes.len {return false};var i:u32=0;while i<bytes.len {if value.bytes[i]!=bytes[i] {return false};i=i+1};return true}
+pub fn array_length(owned:Cursor,scope:u32,key:View<u8>,required:bool)->NumberRead {
+    (document,scratch,failed)=move owned;var doc=move document;var bad=failed;var value:u64=0
+    if !bad {(next,result)=choose(move doc,scope,key);doc=move next;match result {
+        Err(e)=>{match e {JsonAccessError.Missing=>{bad=required} JsonAccessError.WrongType=>{bad=true} JsonAccessError.InvalidUnicode=>{bad=true} JsonAccessError.TooLarge=>{bad=true} JsonAccessError.Syntax=>{bad=true} JsonAccessError.DuplicateKey=>{bad=true} JsonAccessError.NumberOutOfRange=>{bad=true} JsonAccessError.InvalidDocument=>{bad=true} JsonAccessError.IndexOutOfRange=>{bad=true}}}
+        Ok(found)=>{match json.array_length(doc) {Err(read_error)=>{bad=true} Ok(count)=>{value=u64(count)}}}
+    }}
+    return NumberRead(Cursor(move doc,move scratch,bad),value)
+}

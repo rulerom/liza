@@ -26,6 +26,10 @@ pub fn create(crypto:tls.Session,id:net.Connection,buffer:memory.Buffer<u8>,requ
     state=State(vg.websocket.create(request),proof,false,0,false,0,0,0,0,0,0,false,false,false,0,connect_due,connect_due,0,close_ms,false,None)
     return Session(Some(move crypto),Some(id),move buffer,state)
 }
+pub fn empty(buffer:memory.Buffer<u8>)->Session {
+    state=State(vg.websocket.create(httpws.bytes.empty()),[0;28],false,0,false,0,0,0,0,0,0,false,false,false,0,0,0,0,3000,false,None)
+    return Session(None,None,move buffer,state)
+}
 pub fn start(owned:Session,crypto:tls.Session,id:net.Connection,request:httpws.bytes.Wire,proof:[u8;28],until:u64)->Session:io,alloc {
     (old,old_id,buffer,state)=move owned
     match move old {None=>{} Some(previous)=>{destroyed=tls.destroy(move previous)}}

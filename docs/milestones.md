@@ -11,6 +11,9 @@ subviews, владеющий UTF-8 String, StringBuilder и потоковые J
 HTTP/WS на Liza и HTTPS/WSS с обязательной проверкой сервера.
 [CAN Echo Worker](can-worker.md) реализован с локальной WSS-приёмкой;
 live-задание `example.echo` завершено с подтверждением результата в админке.
+[CAN RTSP Publisher](rtp-service-client.md) прошёл первую live-проверку
+23 ноября 2026 года: CAN-задание, scoped control, VGB1 и H.264 через RTC
+до браузера. Это экспериментальный CLI, эксплуатационная упаковка ещё впереди.
 Следующий основной рубеж — воспроизводимый [Verified Network Gateway](network-gateway.md).
 
 Номера 0.0.x ниже обозначают исторические этапы, а не единую версию всех

@@ -43,9 +43,13 @@ TCP endpoint пока числовой IPv4. Проверяемое DNS-имя �
 
 ## Практический маршрут
 
-[RTSP Camera Client](rtsp-client.md) публикует H.264 из камеры в VideoGrace
-как обычный WSS-клиент: один Reactor, два исходящих TCP-соединения и собственный
-UDP endpoint, без CAN и внешнего медиапроцесса.
+[CAN RTSP Publisher](rtp-service-client.md) публикует H.264 с RTSP-камеры:
+CAN назначает работу, scoped `/control` выдаёт RTC-маршрут, а connected UDP
+выполняет VGB1 и отправляет RTP. Один сетевой Reactor обслуживает CAN WSS,
+control WSS, RTSP TCP и UDP; отдельный supervisor Reactor следит за остановкой.
+Нативные вычислительные workers и внешний медиапроцесс не нужны.
+[Прежний RTSP-клиент](rtsp-client.md) описывает пользовательскую RTP-публикацию,
+которая не соответствует новому серверному контракту.
 
 Для первого сетевого приложения изучите [Region/Buffer](regions.md), затем
 [UDP](udp.md) или [TCP](tcp.md). Для работы с несколькими соединениями нужен

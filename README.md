@@ -73,9 +73,12 @@ heartbeat, одно назначение `example.echo`, отмену и пер�
 завершение `example.echo` на настоящем CAN-сервере. Адрес TCP и имя TLS peer задаются
 раздельно; DNS в язык не добавлен.
 
-[RTSP Camera Client](docs/rtsp-client.md) передаёт H.264 с камеры в VideoGrace
-как обычный WSS-клиент, без CAN, декодирования и внешнего медиапроцесса.
-Движущееся видео подтверждено при live-приёмке; ограничения и запуск описаны отдельно.
+[CAN RTSP Publisher](docs/rtp-service-client.md) публикует H.264 из камеры через
+CAN-задание `media.publish.start`, scoped WSS `/control` и connected UDP/VGB1
+в RTC ingress. Видео подтверждено в браузере на настоящем сервере, без
+декодирования и внешнего медиапроцесса. Для нового контракта VideoGrace RTP
+разрешён CAN-сервисам; обычные клиенты используют WebRTC.
+[Прежний пользовательский RTSP-профиль](docs/rtsp-client.md) сохранён отдельно.
 
 ## Редактор
 

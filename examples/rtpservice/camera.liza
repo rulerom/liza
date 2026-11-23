@@ -1,0 +1,51 @@
+import can.text
+import rtsp.sdp
+import rtsp.tcp
+import rtsp.bytes
+import rtsp.request
+import rtsp.diagnostics
+import httpws.bytes
+pub struct State {pub camera_phase:u32;pub cseq:u32;pub waiting:bool;pub camera_due:u64;pub keepalive:u64;pub session:can.text.Value;pub base:can.text.Value;pub track:can.text.Value;pub video:rtsp.sdp.Video;pub last_rtp:u64;pub failed:bool}
+pub fn create(url:can.text.Value)->State {
+    empty=can.text.empty();video=rtsp.sdp.Video(0,empty,empty,rtsp.sdp.Nal([0;256],0),rtsp.sdp.Nal([0;256],0),0,0)
+    return State(0,0,false,0,0,empty,url,empty,video,0,false)
+}
+pub fn response(borrow mut state:State,response:rtsp.tcp.Response,now:u64)->u32:io {
+    head=response.head
+    if !state.waiting||head.cseq!=state.cseq||head.status!=200 {log=rtsp.diagnostics.rtsp_response(head.status,head.cseq,state.cseq);return 10}
+    state.waiting=false
+    if state.camera_phase==1 {state.camera_phase=2}
+    else if state.camera_phase==2 {
+        kind=head.content_type.bytes;if !rtsp.bytes.equal(view kind[0..head.content_type.length],b"application/sdp") {return 11}
+        body=response.body.data
+        match rtsp.sdp.parse(view body[0..response.body.len]) {Err(e)=>{return 11} Ok(video)=>{state.video=video}}
+        if head.base.length!=0 {state.base=head.base}
+        match rtsp.sdp.resolve(state.base,state.video.control) {Err(e)=>{return 11} Ok(track)=>{state.track=track}}
+        state.camera_phase=3
+    } else if state.camera_phase==3 {
+        transport=head.transport.bytes
+        if !rtsp.bytes.parameter(view transport[0..head.transport.length],b"RTP/AVP/TCP")||!rtsp.bytes.parameter(view transport[0..head.transport.length],b"interleaved=0-1") {return 12}
+        bytes=head.session.bytes;var length:u32=0;while length<head.session.length&&bytes[length]!=59 {length=length+1}
+        if length==0||length>128 {return 12}
+        match can.text.from_view(view bytes[0..length],128) {Err(e)=>{return 12} Ok(v)=>{state.session=v}}
+        state.camera_phase=4
+    } else if state.camera_phase==4||state.camera_phase==6 {if state.camera_phase==4 {state.last_rtp=now};state.camera_phase=5;state.keepalive=now+15000}
+    else if state.camera_phase==7 {state.camera_phase=8}
+    else {return 10}
+    return 0
+}
+
+pub fn request(borrow mut state:State,now:u64,ready:bool,closing:bool)->Option<httpws.bytes.Wire> {
+    if state.waiting {return None}
+    var method=b"";var target=state.base
+    if closing {
+        if state.session.length!=0&&state.camera_phase!=8 {method=b"TEARDOWN";state.camera_phase=7} else {state.camera_phase=8}
+    } else if state.camera_phase==0 {method=b"OPTIONS";state.camera_phase=1}
+    else if state.camera_phase==2 {method=b"DESCRIBE"}
+    else if state.camera_phase==3 {method=b"SETUP";target=state.track}
+    else if state.camera_phase==4&&ready {method=b"PLAY"}
+    else if state.camera_phase==5&&now>=state.keepalive {method=b"GET_PARAMETER";state.camera_phase=6}
+    if method.len==0 {return None}
+    state.cseq=state.cseq+1
+    match rtsp.request.make(method,target,state.cseq,state.session) {Err(e)=>{state.failed=true;return None} Ok(wire)=>{state.waiting=true;state.camera_due=now+5000;return Some(wire)}}
+}

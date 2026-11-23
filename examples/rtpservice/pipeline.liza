@@ -1,0 +1,227 @@
+import rtsp.reconnect
+import rtpservice.config
+import rtpservice.protocol
+import rtpservice.control
+import rtpservice.encode
+import rtpservice.connection
+import rtpservice.camera
+import rtpservice.fields
+import vg.socket
+import vg.binding
+import vg.control
+import can.text
+import rtsp.tcp
+import rtsp.bridge
+import rtsp.keyframe
+import rtsp.monitor
+import rtsp.config
+pub struct Control {pub live:bool;pub phase:u32;pub command:u32;pub retry:u64;pub delay:u32;pub started:u64;pub ping:u64;pub client:u64;pub device:u32;pub ssrc:u32;pub instance:can.text.Value;pub rtc:can.text.Value;pub assignment:can.text.Value;pub retired:[can.text.Value;8];pub retired_count:u32;pub generation:u64;pub closing:bool}
+pub struct Media {pub route:net.Address;pub binding:vg.binding.State;pub due:u64;pub rotate:bool;pub bridge:rtsp.bridge.State;pub last_sent:u64;pub quiet_until:u64}
+pub struct State {pub control:Control;pub media:Media;pub camera:rtpservice.camera.State;pub camera_live:bool;pub camera_retry:u64;pub camera_delay:u32;pub ctrl_fault:bool;pub cam_fault:bool;pub failed:bool;pub closing:bool;pub close_due:u64;pub disconnect_sent:bool;pub stopped:bool;pub feedback:rtsp.keyframe.State;pub monitor:rtsp.monitor.State}
+pub struct Pipeline {pub socket:vg.socket.Session;pub camera:rtsp.tcp.Client;pub document:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub output:memory.Buffer<u8>;pub udp:memory.Buffer<u8>;pub state:State}
+pub struct Step {pub pipeline:Pipeline;pub reactor:net.Reactor;pub supervisor:net.Reactor}
+fn initial(url:can.text.Value)->State {
+    empty=can.text.empty();control=Control(false,0,0,0,1000,0,0,0,0,0,empty,empty,empty,[empty;8],0,0,false)
+    media=Media(net.ipv4(127,0,0,1,1),vg.binding.create(empty,0),0,false,rtsp.bridge.create(0,0,0),0,0)
+    return State(control,media,rtpservice.camera.create(url),false,0,1000,false,false,false,false,0,false,false,rtsp.keyframe.create(1),rtsp.monitor.create())
+}
+pub fn create(network:memory.Buffer<u8>,camera:memory.Buffer<u8>,document:memory.Buffer<u8>,scratch:memory.Buffer<u8>,output:memory.Buffer<u8>,udp:memory.Buffer<u8>,url:can.text.Value)->Pipeline {
+    return Pipeline(vg.socket.empty(move network),rtsp.tcp.empty(move camera),move document,move scratch,move output,move udp,initial(url))
+}
+fn route(borrow mut state:State,message:rtpservice.control.Message,job:rtpservice.protocol.Job,now:u64)->u32 {
+    base=message.base
+    if !message.valid||!can.text.equal(message.track,job.track)||base.device!=state.control.device||base.ssrc!=state.control.ssrc {return 3}
+    var address=state.media.route
+    match rtsp.config.address(base.address,base.port) {Err(e)=>{return 3} Ok(a)=>{address=a}}
+    if can.text.equal(message.assignment,state.control.assignment) {
+        if net.ipv4_bits(address)!=net.ipv4_bits(state.media.route)||address.port!=state.media.route.port||!can.text.equal(base.key,state.media.binding.key)||!can.text.equal(message.rtc,state.control.rtc) {return 3}
+        return 0
+    }
+    var i:u32=0;while i<state.control.retired_count {if can.text.equal(state.control.retired[i],message.assignment) {return 0};i=i+1}
+    if state.control.retired_count==8 {return 2}
+    if state.control.assignment.length!=0 {var old=state.control.retired;old[state.control.retired_count]=state.control.assignment;state.control.retired=old;state.control.retired_count=state.control.retired_count+1}
+    state.control.assignment=message.assignment;state.control.rtc=message.rtc;state.control.phase=6
+    state.media.route=address;state.media.binding=vg.binding.create(base.key,base.ssrc);state.media.due=now+5000;state.media.rotate=true
+    state.media.bridge=rtsp.bridge.create(state.camera.video.pt,base.ssrc,0);state.media.last_sent=0
+    return 1
+}
+fn control_response(borrow mut state:State,message:rtpservice.control.Message,job:rtpservice.protocol.Job,now:u64)->u32 {
+    base=message.base
+    if !message.valid {return 3}
+    if base.kind==0||base.kind==8&&base.action!=9 {return 0}
+    if vg.control.terminal(base,state.control.device) {return 3}
+    if base.kind==1 {if state.control.phase!=1||base.result!=1||base.client==0 {return 3};state.control.client=base.client;state.control.phase=2;state.control.command=2}
+    else if base.kind==2 {if state.control.phase!=2||base.result!=1 {return 3};state.control.phase=3}
+    else if base.kind==3 {if state.control.phase!=4||base.device==0||base.ssrc==0||!can.text.equal(message.track,job.track) {return 3};state.control.device=base.device;state.control.ssrc=base.ssrc;state.control.phase=5;state.control.command=4}
+    else if base.kind==4&&base.result==1 {if state.control.phase!=5&&state.control.phase!=6 {return 3};return route(borrow mut state,message,job,now)}
+    return 0
+}
+pub fn control_io(owned:Pipeline,r:net.Reactor,supervisor:net.Reactor,job:rtpservice.protocol.Job,now:u64)->Step:io,alloc {
+    (initial_socket,camera,initial_doc,initial_scratch,output,udp,initial_state)=move owned
+    var socket=move initial_socket;var reactor=move r;var document=move initial_doc;var scratch=move initial_scratch;var state=initial_state
+    if state.control.live {
+        (next_socket,next_r,event)=vg.socket.step(move socket,move reactor,now,now);socket=move next_socket;reactor=move next_r
+        match event {
+            vg.socket.Event.Idle=>{} vg.socket.Event.Upgraded=>{state.control.phase=1;state.control.command=1}
+            vg.socket.Event.Message(frame)=>{
+                if !state.closing {
+                    var i:u32=0;bytes=frame.bytes;while i<frame.length {document=memory.set(move document,i,bytes[i]);i=i+1}
+                    (next_doc,next_scratch,message)=rtpservice.control.parse(move document,frame.length,move scratch);document=move next_doc;scratch=move next_scratch
+                    code=control_response(borrow mut state,message,job,now)
+                    if code==3 {state.failed=true};if code==2 {state.ctrl_fault=true}
+                }
+            }
+            vg.socket.Event.PeerClosed(code)=>{
+                if !state.closing {
+                    if code==1000||code==1001||code==1005||(code>=1011&&code<=1014) {
+                        state.control.closing=true;state.control.phase=0;state.control.command=0;state.media.binding.ready=false
+                        closed_udp=net.reactor_udp_close_endpoint(reactor)
+                    } else {state.failed=true}
+                }
+            }
+            vg.socket.Event.Closed=>{state.ctrl_fault=true}
+            vg.socket.Event.Failed(error)=>{
+                match error {vg.socket.Error.Disconnected=>{state.ctrl_fault=true} vg.socket.Error.Deadline=>{state.ctrl_fault=true} vg.socket.Error.Protocol=>{state.failed=true} vg.socket.Error.Tls(e)=>{if rtsp.reconnect.transient_tls(e) {state.ctrl_fault=true} else {state.failed=true}}}
+            }
+        }
+    }
+    return Step(Pipeline(move socket,move camera,move document,move scratch,move output,move udp,state),move reactor,move supervisor)
+}
+pub fn camera_tick(owned:Pipeline,r:net.Reactor,supervisor:net.Reactor,config:rtpservice.config.Config,now:u64)->Step:io,alloc {
+    (socket,initial_camera,document,scratch,output,initial_udp,initial_state)=move owned
+    var camera=move initial_camera;var udp=move initial_udp;var state=initial_state;var reactor=move r;var control_owner=move supervisor
+    if !state.closing&&state.control.phase>=3&&!state.camera_live&&now>=state.camera_retry {
+        match net.reactor_connect_at(reactor,config.network.camera) {Err(e)=>{state.camera_retry=now+u64(state.camera_delay);state.camera_delay=rtsp.reconnect.next_delay(state.camera_delay)} Ok(id)=>{camera=rtsp.tcp.start(move camera,id);state.camera_live=true;state.camera=rtpservice.camera.create(config.network.url)}}
+    }
+    if state.camera_live {
+        if (state.camera.waiting&&now>=state.camera.camera_due)||(state.camera.camera_phase==5&&now>=state.camera.last_rtp+10000)||state.camera.failed {state.cam_fault=true}
+        if !state.cam_fault&&rtsp.tcp.can_send(camera) {
+            ready=state.media.binding.ready;closing=state.closing
+            match rtpservice.camera.request(borrow mut state.camera,now,ready,closing) {None=>{} Some(wire)=>{camera=rtsp.tcp.send(move camera,wire)}}
+        }
+        if !state.closing&&state.media.quiet_until==0&&!state.camera.waiting&&rtsp.tcp.can_send(camera)&&rtsp.keyframe.due(state.feedback,now) {wire=rtsp.keyframe.request(borrow mut state.feedback,now);camera=rtsp.tcp.send(move camera,wire)}
+        if !state.cam_fault {
+            (next_camera,next_r,event)=rtsp.tcp.step(move camera,move reactor);camera=move next_camera;reactor=move next_r
+            match event {
+                rtsp.tcp.Event.Idle=>{} rtsp.tcp.Event.Rtcp=>{}
+                rtsp.tcp.Event.Failed=>{state.cam_fault=true} rtsp.tcp.Event.Invalid=>{state.failed=true;state.cam_fault=true}
+                rtsp.tcp.Event.Response(response)=>{code=rtpservice.camera.response(borrow mut state.camera,response,now);if code!=0 {state.failed=true}}
+                rtsp.tcp.Event.Packet(frame)=>{
+                    state.camera.last_rtp=now;data=frame.data
+                    if !state.closing&&!state.failed&&!state.ctrl_fault&&state.media.binding.ready&&state.media.quiet_until==0 {
+                        action=rtsp.bridge.inspect(state.media.bridge,view data[0..frame.length]);valid=action.state.rejected==state.media.bridge.rejected;state.media.bridge=action.state
+                        if action.send {
+                            if action.parameters||(state.feedback.waiting&&action.idr) {
+                                sps=state.camera.video.sps.bytes
+                                if config.network.rtp_pace_ms!=0 {paced=net.reactor_poll(control_owner,config.network.rtp_pace_ms)}
+                                (sent_buffer,sent_state,sent_r)=rtsp.bridge.send(move udp,state.media.bridge,move reactor,state.media.route,view sps[0..state.camera.video.sps.length],action.timestamp,false);udp=move sent_buffer;state.media.bridge=sent_state;reactor=move sent_r
+                                pps=state.camera.video.pps.bytes
+                                if config.network.rtp_pace_ms!=0 {paced=net.reactor_poll(control_owner,config.network.rtp_pace_ms)}
+                                (sent_buffer2,sent_state2,sent_r2)=rtsp.bridge.send(move udp,state.media.bridge,move reactor,state.media.route,view pps[0..state.camera.video.pps.length],action.timestamp,false);udp=move sent_buffer2;state.media.bridge=sent_state2;reactor=move sent_r2
+                            }
+                            if state.media.bridge.open {
+                                if config.network.rtp_pace_ms!=0 {paced=net.reactor_poll(control_owner,config.network.rtp_pace_ms)}
+                                before=state.media.bridge.succeeded
+                                (sent_buffer3,sent_state3,sent_r3)=rtsp.bridge.send(move udp,state.media.bridge,move reactor,state.media.route,view data[action.offset..action.offset+action.length],action.timestamp,action.marker);udp=move sent_buffer3;state.media.bridge=sent_state3;reactor=move sent_r3
+                                if state.media.bridge.succeeded!=before {state.media.last_sent=now}
+                            }
+                        }
+                        observed=rtsp.keyframe.observe(borrow mut state.feedback,view data[0..frame.length],valid,action.idr,now)
+                        bridge_snapshot=state.media.bridge
+                        monitored=rtsp.monitor.packet(borrow mut state.monitor,now,view data[0..frame.length],valid,action.idr,bridge_snapshot)
+                    } else {
+                        observed_action=rtsp.bridge.inspect(state.media.bridge,view data[0..frame.length])
+                        valid=observed_action.state.rejected==state.media.bridge.rejected;bridge_snapshot=state.media.bridge
+                        observed=rtsp.keyframe.observe(borrow mut state.feedback,view data[0..frame.length],valid,observed_action.idr,now)
+                        monitored=rtsp.monitor.packet(borrow mut state.monitor,now,view data[0..frame.length],valid,observed_action.idr,bridge_snapshot)
+                    }
+                }
+            }
+        }
+    }
+    return Step(Pipeline(move socket,move camera,move document,move scratch,move output,move udp,state),move reactor,move control_owner)
+}
+pub fn control_tick(owned:Pipeline,r:net.Reactor,supervisor:net.Reactor,config:rtpservice.config.Config,job:rtpservice.protocol.Job,now:u64,ending:bool)->Step:io,alloc {
+    (initial_socket,initial_camera,initial_doc,initial_scratch,initial_output,initial_udp,initial_state)=move owned
+    var socket=move initial_socket;var camera=move initial_camera;var document=move initial_doc;var scratch=move initial_scratch;var output=move initial_output;var udp=move initial_udp;var state=initial_state;var reactor=move r;var control_owner=move supervisor
+    observed_tick=rtsp.monitor.tick(borrow mut state.monitor,now)
+    if ending&&!state.closing {state.closing=true;state.close_due=now+5000;state.media.binding.ready=false;closed_udp=net.reactor_udp_close_endpoint(reactor);cancelled=rtsp.keyframe.cancel(borrow mut state.feedback)}
+    if !state.closing&&!state.failed&&!state.control.live&&now>=state.control.retry {
+        (opened,next_r,instance,code)=rtpservice.connection.open(move socket,move reactor,config,b"/control",now);socket=move opened;reactor=move next_r
+        if code==0 {state.control.live=true;state.control.closing=false;state.control.phase=0;state.control.started=now;state.control.instance=instance;state.control.generation=state.control.generation+1;state.control.retired_count=0}
+        else if code==1 {state.control.retry=now+u64(state.control.delay);state.control.delay=rtsp.reconnect.next_delay(state.control.delay)} else {state.failed=true}
+    }
+    if state.control.phase==3&&state.camera.video.width!=0&&!state.closing {state.control.phase=4;state.control.command=3}
+    if state.control.live {
+        if !state.closing&&!state.control.closing&&now>=state.control.started+20000&&state.control.phase<6 {state.ctrl_fault=true}
+        if vg.socket.can_send(socket) {
+            if state.closing&&!state.disconnect_sent {if state.control.device!=0 {state.control.command=5};state.disconnect_sent=true}
+            if state.control.command!=0 {
+                command=state.control.command;state.control.command=0
+                (encoded,length,result)=rtpservice.encode.control(move output,command,job,state.control.instance,config.network.version,state.control.client,state.control.device,state.control.ssrc,state.camera.video.width,state.camera.video.height);output=move encoded
+                match result {Err(e)=>{state.failed=true} Ok(n)=>{bytes=memory.view(output);(next_socket,accepted)=vg.socket.send(move socket,1,view bytes[0..length],now+5000);socket=move next_socket;match accepted {Err(e)=>{state.ctrl_fault=true} Ok(sent)=>{if !sent {state.ctrl_fault=true}}}}}
+            } else if state.closing&&(state.camera.camera_phase==8||!state.camera_live) {socket=vg.socket.stop(move socket,now+2000)}
+            else if !state.closing&&state.control.phase==6&&now>=state.control.ping {empty:[u8;1]=[0];(next_socket,accepted)=vg.socket.send(move socket,9,view empty[0..0],now+5000);socket=move next_socket;state.control.ping=now+10000}
+        }
+    }
+    return Step(Pipeline(move socket,move camera,move document,move scratch,move output,move udp,state),move reactor,move control_owner)
+}
+pub fn finish_tick(owned:Pipeline,r:net.Reactor,supervisor:net.Reactor,config:rtpservice.config.Config,now:u64)->Step:io,alloc {
+    (initial_socket,initial_camera,initial_doc,initial_scratch,initial_output,initial_udp,initial_state)=move owned
+    var socket=move initial_socket;var camera=move initial_camera;var document=move initial_doc;var scratch=move initial_scratch;var output=move initial_output;var udp=move initial_udp;var state=initial_state;var reactor=move r;var control_owner=move supervisor
+    if state.media.rotate&&!state.closing&&!state.failed {
+        state.media.rotate=false;closed_udp=net.reactor_udp_close_endpoint(reactor)
+        match net.reactor_udp_replace_connected(reactor,state.media.route) {Err(e)=>{state.ctrl_fault=true} Ok(n)=>{label=console.println("RTP service: new RTC assignment connected; waiting for VGB1 ACK")}}
+    }
+    if !state.closing&&!state.failed&&state.control.phase==6&&!state.ctrl_fault {
+        if !state.media.binding.ready&&now>=state.media.due {state.ctrl_fault=true}
+        polled=vg.binding.poll(state.media.binding,now);state.media.binding=polled.state;if !polled.valid {state.failed=true}
+        match polled.packet {None=>{} Some(packet)=>{bytes=packet.bytes;sent=net.reactor_udp_send(reactor,view bytes[0..80],0,80,state.media.route)}}
+        (next_udp,received)=net.reactor_udp_receive(reactor,move udp);udp=move next_udp
+        match received {Err(e)=>{} Ok(meta)=>{
+            if net.udp_source_ip(meta)==net.ipv4_bits(state.media.route)&&net.udp_source_port(meta)==state.media.route.port {
+                var became_ready=false
+                {bytes=memory.view(udp)
+                    if state.media.binding.ready&&state.media.quiet_until==0&&rtsp.keyframe.vg_request(view bytes[0..net.udp_length(meta)]) {offered=rtsp.keyframe.offer(borrow mut state.feedback,now)}
+                    result=vg.binding.receive(state.media.binding,view bytes[0..net.udp_length(meta)],now);became_ready=!state.media.binding.ready&&result.state.ready;state.media.binding=result.state
+                    if !result.valid {state.failed=true}
+                    match result.packet {None=>{} Some(reply)=>{wire=reply.bytes;sent=net.reactor_udp_send(reactor,view wire[0..80],0,80,state.media.route)}}
+                }
+                if became_ready {
+                    state.control.delay=1000;state.camera_delay=1000;log=console.println("RTP service: VGB1 ACK verified; publication authorized")
+                    if state.control.generation>1&&config.network.vg_resume_quiet_ms!=0 {state.media.quiet_until=now+u64(config.network.vg_resume_quiet_ms)}
+                }
+            }
+        }}
+    }
+    if state.media.quiet_until!=0&&now>=state.media.quiet_until {state.media.quiet_until=0;offered=rtsp.keyframe.offer(borrow mut state.feedback,now)}
+    if !state.closing {tick=rtsp.keyframe.tick(borrow mut state.feedback,now)}
+    if state.cam_fault {
+        (reset,next_r)=rtsp.tcp.reset(move camera,move reactor);camera=move reset;reactor=move next_r
+        state.camera_live=false;state.cam_fault=false;state.camera_retry=now+u64(state.camera_delay);state.camera_delay=rtsp.reconnect.next_delay(state.camera_delay)
+        state.camera=rtpservice.camera.create(config.network.url);state.media.bridge.open=false
+        cancelled=rtsp.keyframe.cancel(borrow mut state.feedback);log=console.err_bytes(b"RTP service: camera unavailable; assignment retained, retrying camera\n")
+    }
+    if state.ctrl_fault {
+        (reset,next_r)=vg.socket.reset(move socket,move reactor);socket=move reset;reactor=move next_r;closed_udp=net.reactor_udp_close_endpoint(reactor)
+        state.control.live=false;state.control.closing=false;state.control.phase=0;state.control.command=0;state.control.device=0;state.control.ssrc=0;state.control.assignment=can.text.empty();state.control.rtc=can.text.empty();state.control.retired_count=0
+        state.control.retry=now+u64(state.control.delay);state.control.delay=rtsp.reconnect.next_delay(state.control.delay)
+        state.media.binding=vg.binding.create(can.text.empty(),0);state.media.bridge=rtsp.bridge.create(state.camera.video.pt,0,0);state.media.rotate=false;state.media.last_sent=0;state.media.quiet_until=0;state.ctrl_fault=false
+        cancelled=rtsp.keyframe.cancel(borrow mut state.feedback)
+    }
+    if state.closing&&((!state.control.live&&(!state.camera_live||state.camera.camera_phase==8))||now>=state.close_due) {state.stopped=true}
+    return Step(Pipeline(move socket,move camera,move document,move scratch,move output,move udp,state),move reactor,move control_owner)
+}
+pub struct Reset {pub pipeline:Pipeline;pub reactor:net.Reactor}
+pub fn reset(owned:Pipeline,r:net.Reactor,url:can.text.Value)->Reset:io,alloc {
+    (socket,camera,document,scratch,output,udp,state)=move owned
+    (next_socket,r1)=vg.socket.reset(move socket,move r);(next_camera,r2)=rtsp.tcp.reset(move camera,move r1);closed_udp=net.reactor_udp_close_endpoint(r2)
+    return Reset(Pipeline(move next_socket,move next_camera,move document,move scratch,move output,move udp,initial(url)),move r2)
+}
+pub fn close(owned:Pipeline,r:net.Reactor)->net.Reactor:io,alloc {
+    (socket,camera,document,scratch,output,udp,state)=move owned
+    a=memory.release(move document);b=memory.release(move scratch);c=memory.release(move output);d=memory.release(move udp)
+    r1=rtsp.tcp.close(move camera,move r);(r2,result)=vg.socket.close(move socket,move r1);closed_udp=net.reactor_udp_close_endpoint(r2);return move r2
+}
+pub fn info(borrow owned:Pipeline)->State {return owned.state}
+pub fn buffered(borrow owned:Pipeline)->bool {return vg.socket.buffered(owned.socket)||rtsp.tcp.buffered(owned.camera)}
