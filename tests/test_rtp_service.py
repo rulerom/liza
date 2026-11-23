@@ -10,6 +10,7 @@ import threading
 import time
 import struct
 import hmac
+from copy import deepcopy
 import unittest
 
 from test_httpws import build, client_frame
@@ -109,7 +110,7 @@ class RtpService(unittest.TestCase):
             with self.subTest(exe=exe.name):
                 self.registration(exe, downgrade=True)
 
-    def publication(self, exe, can_loss=False):
+    def publication(self, exe, can_loss=False, rotate=False):
         examples = {e['name']: e['value'] for e in json.loads((ROOT / 'tests/fixtures/rtp_service_examples.json').read_text())['examples']}
         ready = examples['hello_ok']
         ready.update(node_id='liza-rtsp', service_id='liza-rtsp', heartbeat_ms=100)
@@ -118,6 +119,9 @@ class RtpService(unittest.TestCase):
         job['payload']['auth']['access_token'] = 'fixture-job-token'
         errors, packets, events, methods = [], [], [], []
         stop, bound, complete = threading.Event(), threading.Event(), threading.Event()
+        rotation_done = threading.Event()
+        binding_peers, authorized_peers = [], set()
+        second_key = b'abcdef0123456789' * 4
         reconnected = threading.Event()
         media_at_reconnect = []
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -167,7 +171,7 @@ class RtpService(unittest.TestCase):
                     if len(packets) >= 8 and not wrong_cancel:
                         conn.sendall(message(dict(type='job_cancel', job_id=job['job_id'], assignment_id='stale-assignment')))
                         wrong_cancel = True
-                    if len(packets) >= 25 and not cancelling:
+                    if len(packets) >= (70 if rotate else 25) and not cancelling and (not rotate or rotation_done.is_set()):
                         if can_loss:
                             # Lose the CAN transport while media is active. The
                             # next CAN session must not reuse this job/token.
@@ -208,9 +212,33 @@ class RtpService(unittest.TestCase):
                     self.assertEqual(value['device_params']['track_id'], 'lobby-video')
                     conn.sendall(message({'device_params': {'id': 700, 'ssrc': 70001, 'track_id': 'lobby-video'}}))
                 elif 'device_connect' in value:
-                    route = examples['rtc_assignment']
+                    route = deepcopy(examples['rtc_assignment'])
                     route['device_connect'].update(address='127.0.0.1', port=udp.getsockname()[1], rtp_binding_key=KEY.decode())
                     conn.sendall(message(route))
+                    if rotate:
+                        due = time.monotonic() + 4
+                        while len(packets) < 8 and time.monotonic() < due:
+                            time.sleep(.01)
+                        self.assertGreaterEqual(len(packets), 8)
+                        conn.sendall(message(route))  # Duplicate grant is idempotent.
+                        before = len(packets)
+                        while len(packets) < before + 8 and time.monotonic() < due:
+                            time.sleep(.01)
+                        self.assertEqual(len(binding_peers), 1)
+                        newer = deepcopy(route)
+                        newer['device_connect'].update(rtp_assignment_id='rtp-generation-02', rtp_binding_key=second_key.decode())
+                        conn.sendall(message(newer))
+                        due = time.monotonic() + 4
+                        while len(authorized_peers) < 2 and time.monotonic() < due:
+                            time.sleep(.01)
+                        self.assertEqual(len(authorized_peers), 2)
+                        conn.sendall(message(route))  # Retired assignment must not rotate back.
+                        before = len(packets)
+                        while len(packets) < before + 8 and time.monotonic() < due:
+                            time.sleep(.01)
+                        self.assertGreaterEqual(len(packets), before + 8)
+                        self.assertEqual(len(binding_peers), 2)
+                        rotation_done.set()
 
         def tls_peer():
             children = []
@@ -291,6 +319,7 @@ class RtpService(unittest.TestCase):
 
         def udp_peer():
             endpoint = None
+            peer_keys = {}
             while not stop.is_set():
                 try:
                     data, peer = udp.recvfrom(8192)
@@ -298,16 +327,24 @@ class RtpService(unittest.TestCase):
                     continue
                 if endpoint is None:
                     endpoint = peer
-                self.assertEqual(peer, endpoint, 'binding and media must share a connected socket')
+                if not rotate:
+                    self.assertEqual(peer, endpoint, 'binding and media must share a connected socket')
                 if data[1] == 204:
-                    self.assertEqual(data[48:], hmac.digest(KEY, data[:48], 'sha256'))
+                    if peer not in peer_keys:
+                        self.assertEqual(data[12], 1)
+                        peer_keys[peer] = KEY if not binding_peers else second_key
+                        binding_peers.append(peer)
+                    key = peer_keys[peer]
+                    self.assertEqual(data[48:], hmac.digest(key, data[:48], 'sha256'))
                     if data[12] == 1:
                         challenge = bytearray(data); challenge[32:48] = b'server-nonce-1234'
-                        udp.sendto(signed(challenge, 2), peer)
+                        udp.sendto(signed(challenge, 2, key), peer)
                     elif data[12] == 3:
-                        bound.set(); udp.sendto(signed(data, 4), peer)
+                        authorized_peers.add(peer)
+                        bound.set(); udp.sendto(signed(data, 4, key), peer)
                 else:
                     self.assertTrue(bound.is_set())
+                    self.assertIn(peer, authorized_peers, 'RTP before ACK for its own assignment')
                     self.assertEqual(data[1] & 127, 102)
                     self.assertEqual(struct.unpack('!I', data[8:12])[0], 70001)
                     packets.append(data)
@@ -334,6 +371,7 @@ class RtpService(unittest.TestCase):
             self.assertEqual(packets[0][12:], SPS); self.assertEqual(packets[1][12:], PPS)
             self.assertEqual(packets[2][12:], b'\x65camera-payload')
             self.assertNotIn(b'fixture-job-token', stdout + stderr)
+            self.assertEqual(len(binding_peers), 2 if rotate else 1)
         finally:
             stop.set()
             if process.poll() is None:
@@ -351,3 +389,8 @@ class RtpService(unittest.TestCase):
         for exe in self.clients:
             with self.subTest(exe=exe.name):
                 self.publication(exe, can_loss=True)
+
+    def test_rtc_assignment_rotation_duplicate_and_retired_grants(self):
+        for exe in self.clients:
+            with self.subTest(exe=exe.name):
+                self.publication(exe, rotate=True)

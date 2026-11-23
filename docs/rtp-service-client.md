@@ -103,7 +103,8 @@ UDP-медиа не шифруется этим протоколом: требо
 старого пользовательского RTSP-клиента.
 
 Локальные проверки: `test_rtp_service.py` (WSS, scoped control, VGB1, RTP,
-heartbeat, отмена и graceful close на O0/O2) и `test_reactor_connected_udp.py`
+heartbeat, отмена, потеря CAN, смена RTC assignment, duplicate/retired grants
+и graceful close на O0/O2) и `test_reactor_connected_udp.py`
 (смена endpoint, фильтрация peer, сохранение TCP). Для WSS-проверки нужен
 `LIZA_TEST_TLS=1` и OpenSSL 3.
 

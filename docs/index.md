@@ -22,6 +22,11 @@ hide:
 
 ## Документация
 
+Реальные приложения: [CAN Echo Worker](can-worker.md),
+[Recorder Agent](recorder-agent.md) и [CAN RTSP Publisher](rtp-service-client.md).
+Последний передаёт H.264 камеры через scoped RTC ingress до браузера,
+без внешнего медиапроцесса и транскодирования.
+
 - [Начало работы](getting-started.md) — сборка и запуск первой программы.
 - [Язык](basics.md) — синтаксис, значения, владение и заимствования;
   [модель вычислений и памяти](design.md) объясняет общие принципы.
