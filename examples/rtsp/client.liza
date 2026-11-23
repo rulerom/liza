@@ -7,6 +7,7 @@ import rtsp.tcp
 import rtsp.bridge
 import rtsp.reconnect
 import rtsp.diagnostics
+import rtsp.monitor
 import vg.connection
 import vg.socket
 import vg.control
@@ -86,14 +87,16 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     var reactor=move initial_reactor;var socket=vg.socket.create(move crypto,id,move network,request,proof,clock()+5000,3000)
     var camera=rtsp.tcp.create(camera_id,move camera_buffer);var document=move initial_document;var scratch=move initial_scratch;var output=move initial_output;var udp=move initial_udp
     var state=initial();state.base=config.url;start=clock();var closed=false;var camera_dead=false;var socket_dead=false;var requested=false
-    var health_due=start;var seen_rtp=false;var previous_sent:u64=0;var last_sent:u64=0
+    var health_due=start;var seen_rtp=false;var previous_sent:u64=0;var last_sent:u64=0;var monitor=rtsp.monitor.create()
     while true {
         now=clock();if now==0 {state.error=30;break}
+        loop_observed=rtsp.monitor.tick(borrow mut monitor,now)
         if state.bridge.succeeded!=previous_sent {previous_sent=state.bridge.succeeded;last_sent=now}
         if now>=health_due {
             var input_age:u64=18446744073709551615;var output_age:u64=18446744073709551615;var ready:u64=0
             if seen_rtp {input_age=now-state.last_rtp};if last_sent!=0 {output_age=now-last_sent};if state.binding.ready&&!state.stopping {ready=1}
             health=rtsp.diagnostics.health(ready,state.bridge.received,state.bridge.succeeded,input_age,output_age)
+            quality=rtsp.monitor.summary(monitor,state.bridge,now)
             health_due=now+5000
         }
         if until!=0&&now>=until {state.stopping=true}
@@ -132,6 +135,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                     rtsp.tcp.Event.Packet(frame)=>{
                         state.last_rtp=now;seen_rtp=true
                         if !state.stopping&&state.vg_phase==6&&state.binding.ready {
+                            rejected_before=state.bridge.rejected
                             data=frame.data;action=rtsp.bridge.inspect(state.bridge,view data[0..frame.length]);state.bridge=action.state
                             if action.send {
                                 if action.parameters {
@@ -142,6 +146,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                                 }
                                 if state.bridge.open {(next_buffer3,next_state3,next_reactor3)=rtsp.bridge.send(move udp,state.bridge,move reactor,state.route,view data[action.offset..action.offset+action.length],action.timestamp,action.marker);udp=move next_buffer3;state.bridge=next_state3;reactor=move next_reactor3}
                             }
+                            packet_observed=rtsp.monitor.packet(borrow mut monitor,now,view data[0..frame.length],state.bridge.rejected==rejected_before,action.idr,state.bridge)
                         }
                     }
                 }
@@ -205,6 +210,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     reactor=rtsp.tcp.close(move camera,move reactor);(last,closed_socket)=vg.socket.close(move socket,move reactor);closed_reactor=net.reactor_close(move last)
     a=memory.release(move document);b=memory.release(move scratch);c=memory.release(move output);d=memory.release(move udp)
     log=console.write("RTP received=");n1=console.print_u64(state.bridge.received);l1=console.write(" attempted=");n2=console.print_u64(state.bridge.attempted);l2=console.write(" succeeded=");n3=console.print_u64(state.bridge.succeeded);l3=console.write(" gated=");n4=console.print_u64(state.bridge.gated);l4=console.write(" discontinuities=");n5=console.print_u64(state.bridge.discontinuities);line=console.println("")
+    quality=rtsp.monitor.summary(monitor,state.bridge,clock())
     if state.error!=0 {error_detail=rtsp.diagnostics.session_error(state.error)}
     healthy=clock()>=start+30000&&state.bridge.succeeded!=0
     return Attempt(move supervisor,state.error,healthy,requested)

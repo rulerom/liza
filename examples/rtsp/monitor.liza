@@ -1,0 +1,99 @@
+import rtsp.bridge
+// Diagnostic state only. No packet/header rewriting, allocation or wall-clock reads.
+pub struct State {pub seen:bool;pub packet_at:u64;pub frame_at:u64;pub timestamp:u32;pub sequence:u16;pub ssrc:u32;pub loop_at:u64;pub idr_at:u64;pub rejected:u64;pub send_errors:u64;pub clock_jumps:u64;pub source_changes:u64;pub sequence_events:u64;pub packet_pauses:u64;pub frame_pauses:u64;pub loop_stalls:u64;pub suppressed:u64;pub report_due:u64;pub clock_report_due:u64;pub max_packet_gap:u64;pub max_frame_gap:u64;pub max_loop_gap:u64}
+pub fn create()->State {return State(false,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)}
+pub fn tick(borrow mut state:State,now:u64)->u32:io {
+    if state.loop_at!=0&&now>=state.loop_at {
+        gap=now-state.loop_at;if gap>state.max_loop_gap {state.max_loop_gap=gap}
+        if gap>250 {
+            state.loop_stalls=state.loop_stalls+1
+            if now>=state.report_due {
+                a=console.err_bytes(b"RTSP anomaly: loop_pause now_ms=");b=console.err_u64(now)
+                c=console.err_bytes(b" gap_ms=");d=console.err_u64(gap);e=console.err_bytes(b"\n");state.report_due=now+1000
+            } else {state.suppressed=state.suppressed+1}
+        }
+    }
+    state.loop_at=now;return 0
+}
+pub fn packet(borrow mut state:State,now:u64,data:View<u8>,valid:bool,idr:bool,borrow bridge:rtsp.bridge.State)->u32:io {
+    var flags:u32=0;var packet_gap:u64=0;var frame_gap:u64=0;var delta:u64=0;var backwards=false
+    previous_ts=state.timestamp;previous_seq=state.sequence;previous_ssrc=state.ssrc
+    if bridge.rejected!=state.rejected {flags=flags|32};state.rejected=bridge.rejected
+    if bridge.send_errors!=state.send_errors {flags=flags|64};state.send_errors=bridge.send_errors
+    if valid&&data.len>=12 {
+        sequence=(u16(data[2])<<8)|u16(data[3]);timestamp=(u32(data[4])<<24)|(u32(data[5])<<16)|(u32(data[6])<<8)|u32(data[7])
+        ssrc=(u32(data[8])<<24)|(u32(data[9])<<16)|(u32(data[10])<<8)|u32(data[11])
+        if state.seen {
+            if now>=state.packet_at {packet_gap=now-state.packet_at}
+            if packet_gap>state.max_packet_gap {state.max_packet_gap=packet_gap}
+            if packet_gap>250 {flags=flags|8;state.packet_pauses=state.packet_pauses+1}
+            if ssrc!=state.ssrc {flags=flags|2;state.source_changes=state.source_changes+1;state.frame_at=now;state.idr_at=0}
+            else {
+                if sequence!=u16.wrap(u32(state.sequence)+1) {flags=flags|4;state.sequence_events=state.sequence_events+1}
+                if timestamp!=state.timestamp {
+                    if now>=state.frame_at {frame_gap=now-state.frame_at}
+                    if frame_gap>state.max_frame_gap {state.max_frame_gap=frame_gap}
+                    if frame_gap>250 {flags=flags|16;state.frame_pauses=state.frame_pauses+1}
+                    // Nearest signed modular step: natural u32 wrap and small
+                    // backwards presentation steps are not clock discontinuities.
+                    delta=u64(u32.wrap(u64(timestamp)+4294967296-u64(state.timestamp)))
+                    if delta>2147483648 {backwards=true;delta=4294967296-delta}
+                    if delta>90000 {
+                        var skew=delta
+                        if !backwards {elapsed_ticks=frame_gap*90;if delta>=elapsed_ticks {skew=delta-elapsed_ticks} else {skew=elapsed_ticks-delta}}
+                        if skew>90000 {flags=flags|1;state.clock_jumps=state.clock_jumps+1}
+                    }
+                }
+            }
+        }
+        if !state.seen||timestamp!=state.timestamp {state.frame_at=now}
+        state.seen=true;state.packet_at=now;state.sequence=sequence;state.timestamp=timestamp;state.ssrc=ssrc
+        if idr {state.idr_at=now}
+    }
+    if flags!=0 {
+        var report=false
+        if (flags&3)!=0 {if now>=state.clock_report_due {report=true;state.clock_report_due=now+1000}}
+        else if now>=state.report_due {report=true;state.report_due=now+1000}
+        if report {
+            prefix=console.err_bytes(b"RTP anomaly:")
+            if (flags&1)!=0 {name=console.err_bytes(b" clock_jump")}
+            if (flags&2)!=0 {name=console.err_bytes(b" source_changed")}
+            if (flags&4)!=0 {name=console.err_bytes(b" sequence_discontinuity")}
+            if (flags&8)!=0 {name=console.err_bytes(b" packet_pause")}
+            if (flags&16)!=0 {name=console.err_bytes(b" frame_pause")}
+            if (flags&32)!=0 {name=console.err_bytes(b" rejected_packet")}
+            if (flags&64)!=0 {name=console.err_bytes(b" send_error")}
+            a=console.err_bytes(b" now_ms=");b=console.err_u64(now)
+            c=console.err_bytes(b" header_valid=");var valid_number:u64=0;if valid {valid_number=1};d=console.err_u64(valid_number)
+            e=console.err_bytes(b" ssrc=");f=console.err_u64(u64(state.ssrc))
+            old_source=console.err_bytes(b" prev_ssrc=");old_source_value=console.err_u64(u64(previous_ssrc))
+            g=console.err_bytes(b" seq=");h=console.err_u64(u64(state.sequence))
+            i=console.err_bytes(b" prev_seq=");j=console.err_u64(u64(previous_seq))
+            k=console.err_bytes(b" rtp_ts=");l=console.err_u64(u64(state.timestamp))
+            m=console.err_bytes(b" prev_ts=");n=console.err_u64(u64(previous_ts))
+            o=console.err_bytes(b" delta_ticks=");if backwards {sign=console.err_bytes(b"-")};p=console.err_u64(delta)
+            q=console.err_bytes(b" packet_gap_ms=");r=console.err_u64(packet_gap)
+            s=console.err_bytes(b" frame_gap_ms=");t=console.err_u64(frame_gap)
+            u=console.err_bytes(b" gate_open=");var open_number:u64=0;if bridge.open {open_number=1};v=console.err_u64(open_number)
+            line=console.err_bytes(b"\n")
+        } else {state.suppressed=state.suppressed+1}
+    }
+    return 0
+}
+pub fn summary(borrow state:State,borrow bridge:rtsp.bridge.State,now:u64)->u32:io {
+    a=console.err_bytes(b"RTP quality received=");b=console.err_u64(bridge.received)
+    c=console.err_bytes(b" rejected=");d=console.err_u64(bridge.rejected)
+    e=console.err_bytes(b" gated=");f=console.err_u64(bridge.gated)
+    g=console.err_bytes(b" sequence_events=");h=console.err_u64(state.sequence_events)
+    i=console.err_bytes(b" send_errors=");j=console.err_u64(bridge.send_errors)
+    k=console.err_bytes(b" clock_jumps=");l=console.err_u64(state.clock_jumps)
+    m=console.err_bytes(b" source_changes=");n=console.err_u64(state.source_changes)
+    o=console.err_bytes(b" packet_pauses=");p=console.err_u64(state.packet_pauses)
+    q=console.err_bytes(b" frame_pauses=");r=console.err_u64(state.frame_pauses)
+    s=console.err_bytes(b" loop_stalls=");t=console.err_u64(state.loop_stalls)
+    u=console.err_bytes(b" max_packet_gap_ms=");v=console.err_u64(state.max_packet_gap)
+    w=console.err_bytes(b" max_frame_gap_ms=");x=console.err_u64(state.max_frame_gap)
+    y=console.err_bytes(b" max_loop_gap_ms=");z=console.err_u64(state.max_loop_gap)
+    aa=console.err_bytes(b" idr_start_age_ms=");if state.idr_at==0||now<state.idr_at {ab=console.err_bytes(b"unknown")} else {ab=console.err_u64(now-state.idr_at)}
+    ac=console.err_bytes(b" suppressed=");ad=console.err_u64(state.suppressed);line=console.err_bytes(b"\n");return 0
+}
