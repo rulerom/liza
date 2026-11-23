@@ -389,6 +389,7 @@ class RtspClient(unittest.TestCase):
             except subprocess.TimeoutExpired as error:
                 self.fail(('client timeout',error.stdout,error.stderr,errors,camera_runs,commands,[len(p) for p in epoch_packets]))
         finally:
+            self.process_finished_at = time.monotonic()
             stopped.set()
             for listener in listeners:
                 listener.close()
@@ -712,8 +713,13 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
     def test_deadline_ends_media_quiet_period_without_publication(self):
         for exe in self.clients:
             run,packets,methods,commands=self.scenario(
-                exe,drop_wss='reset',cycles=2,run_ms=2500,vg_resume_quiet_ms=10000)
+                # The budget includes two TLS/VGB1 handshakes and reconnect
+                # backoff. Leave startup margin on shared runners while the
+                # 10 s quiet period still outlasts the entire 7 s run budget.
+                exe,drop_wss='reset',cycles=2,run_ms=7000,vg_resume_quiet_ms=10000)
             self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
+            self.assertIsNotNone(self.binding_confirmed_at[1],run.stderr)
+            self.assertLess(self.process_finished_at-self.binding_confirmed_at[1],10)
             self.assertFalse(self.attempts[2][1])
             self.assertIn(b'Experimental RTP quiet period after VG binding',run.stderr)
             self.assertNotIn(b'quiet period ended',run.stderr)
