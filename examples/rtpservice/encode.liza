@@ -1,0 +1,73 @@
+import can.text
+import rtpservice.protocol
+pub struct Builder {writer:JsonWriter;status:Result<JsonDone,JsonAccessError>}
+fn key(owned:Builder,name:View<u8>)->Builder {(writer,status)=move owned;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}};(next,result)=json.key(move writer,name);return Builder(move next,result)}
+fn literal(owned:Builder,value:View<u8>)->Builder {(writer,status)=move owned;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}};(next,result)=json.write_string(move writer,value);return Builder(move next,result)}
+fn text(owned:Builder,value:can.text.Value)->Builder {bytes=value.bytes;return literal(move owned,view bytes[0..value.length])}
+fn number(owned:Builder,value:u64)->Builder {(writer,status)=move owned;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}};(next,result)=json.write_u64(move writer,value);return Builder(move next,result)}
+fn container(owned:Builder,kind:u32)->Builder {
+    (writer,status)=move owned;match status {Err(e)=>{return Builder(move writer,Err(e))} Ok(n)=>{}}
+    if kind==0 {(next,result)=json.begin_object(move writer);return Builder(move next,result)}
+    if kind==1 {(next,result)=json.end_object(move writer);return Builder(move next,result)}
+    if kind==2 {(next,result)=json.begin_array(move writer);return Builder(move next,result)}
+    (next,result)=json.end_array(move writer);return Builder(move next,result)
+}
+fn begin(buffer:memory.Buffer<u8>)->Builder {(writer,result)=json.writer(move buffer,4096,12);return container(Builder(move writer,result),0)}
+fn finish(owned:Builder)->JsonOutput {(writer,status)=move owned;(buffer,length,result)=json.finish_writer(move writer);match status {Err(e)=>{return JsonOutput(move buffer,length,Err(e))} Ok(n)=>{return JsonOutput(move buffer,length,result)}}}
+pub fn hello(buffer:memory.Buffer<u8>,node:can.text.Value,token:can.text.Value,advertise:bool)->JsonOutput {
+    var b=begin(move buffer);b=literal(key(move b,b"type"),b"hello")
+    b=text(key(move b,b"node_id"),node);b=text(key(move b,b"token"),token)
+    b=literal(key(move b,b"role"),b"worker");b=literal(key(move b,b"version"),b"liza-rtp-service/0.1")
+    b=number(key(move b,b"max_concurrent_jobs"),1);b=number(key(move b,b"assignment_protocol"),1)
+    b=container(key(move b,b"capabilities"),2)
+    if advertise {b=literal(move b,b"rtsp.ingest");b=literal(move b,b"rtp.publish");b=literal(move b,b"video.h264")}
+    b=container(move b,3);b=container(key(move b,b"contracts"),0)
+    b=number(key(move b,b"service_auth"),1);b=number(key(move b,b"rtp_service"),1)
+    b=container(move b,1);return finish(container(move b,1))
+}
+pub fn heartbeat(buffer:memory.Buffer<u8>,active:bool,job:rtpservice.protocol.Job,media:bool,rtc:can.text.Value,assignment:can.text.Value,device:u32,ssrc:u32,sent:u64,age:u64)->JsonOutput {
+    var b=begin(move buffer);b=literal(key(move b,b"type"),b"heartbeat");b=container(key(move b,b"load"),0)
+    var jobs:u64=0;if active {jobs=1};b=number(key(move b,b"jobs"),jobs)
+    b=container(key(move b,b"rtp_publications"),2)
+    if active&&media {
+        b=container(move b,0);b=text(key(move b,b"job_id"),job.id.job);b=text(key(move b,b"track_id"),job.track)
+        b=text(key(move b,b"rtc_node_id"),rtc);b=text(key(move b,b"rtp_assignment_id"),assignment)
+        b=number(key(move b,b"device_id"),u64(device));b=number(key(move b,b"author_ssrc"),u64(ssrc))
+        b=literal(key(move b,b"kind"),b"video");b=literal(key(move b,b"direction"),b"publish")
+        b=number(key(move b,b"sent_packets"),sent);b=number(key(move b,b"last_sent_age_ms"),age);b=container(move b,1)
+    }
+    b=container(move b,3);b=container(move b,1);return finish(container(move b,1))
+}
+pub fn event(buffer:memory.Buffer<u8>,id:rtpservice.protocol.Identity,kind:u32)->JsonOutput {
+    var b=begin(move buffer);var typ=b"job_event";var status=b"failed"
+    if kind==1 {typ=b"job_ack";status=b"accepted"}
+    if kind==2 {status=b"running"};if kind==3 {status=b"cancelled"};if kind==4 {status=b"completed"}
+    b=literal(key(move b,b"type"),typ);b=text(key(move b,b"job_id"),id.job);b=text(key(move b,b"assignment_id"),id.assignment)
+    b=literal(key(move b,b"status"),status);return finish(container(move b,1))
+}
+
+pub fn control(buffer:memory.Buffer<u8>,kind:u32,job:rtpservice.protocol.Job,instance:can.text.Value,version:u32,client:u64,device:u32,ssrc:u32,width:u32,height:u32)->JsonOutput {
+    var b=begin(move buffer);var name=b"connect_request"
+    if kind==2 {name=b"connect_to_conference_request"};if kind==3 {name=b"device_params"};if kind==4 {name=b"device_connect"};if kind==5 {name=b"device_disconnect"};if kind==6 {name=b"disconnect_from_conference"}
+    b=container(key(move b,name),0)
+    if kind==1 {
+        b=text(key(move b,b"access_token"),job.token);b=text(key(move b,b"control_instance_id"),instance)
+        b=number(key(move b,b"client_version"),u64(version));b=number(key(move b,b"client_type"),0);b=number(key(move b,b"channel_type"),0)
+        b=literal(key(move b,b"system"),b"Liza RTP service")
+    } else if kind==2 {
+        b=text(key(move b,b"tag"),job.conference)
+        (w,status)=move b;var writer=move w;var result=status
+        match result {Err(e)=>{} Ok(n)=>{(next,status2)=json.key(move writer,b"connect_members");writer=move next;result=status2}}
+        match result {Err(e)=>{} Ok(n)=>{(next,status2)=json.write_bool(move writer,false);writer=move next;result=status2}}
+        b=Builder(move writer,result)
+    } else if kind==3||kind==4 {
+        b=number(key(move b,b"device_type"),1);b=number(key(move b,b"video_codec"),2)
+        b=text(key(move b,b"track_id"),job.track);b=literal(key(move b,b"name"),b"Liza RTSP Camera")
+        b=number(key(move b,b"resolution"),u64((height<<16)|width));b=number(key(move b,b"color_space"),1)
+        if kind==4 {
+            b=number(key(move b,b"connect_type"),1);b=number(key(move b,b"client_id"),client)
+            b=number(key(move b,b"device_id"),u64(device));b=number(key(move b,b"author_ssrc"),u64(ssrc))
+        }
+    } else if kind==5 {b=number(key(move b,b"device_id"),u64(device));b=number(key(move b,b"device_type"),1)}
+    b=container(move b,1);return finish(container(move b,1))
+}

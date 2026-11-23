@@ -1,5 +1,10 @@
 # RTSP → VideoGrace client
 
+Для нового серверного контракта, где RTP разрешён только CAN-сервисам,
+используйте экспериментальный [CAN RTSP publisher](rtp-service-client.md).
+Ниже описан прежний пользовательский профиль; его live-результаты относятся
+к серверу, который ещё разрешал этот способ публикации.
+
 Отдельно: [длительный прогон и наблюдение до 24 часов](rtsp-endurance.md).
 Установка службы: [macOS LaunchDaemon](rtsp-service-macos.md).
 
@@ -156,7 +161,10 @@ flowchart TD
     Connect -->|"Setup и binding готовы"| Publish
     Publish["Публикация RTP<br/>keepalive камеры и VG binding"]
     Connect -->|"Ошибка подключения / setup"| Cleanup
-    Publish -->|"Отказ, stop или срок работы"| Cleanup
+    Publish -->|"Временный отказ VG / WSS"| RecoverVG["Закрыть только WSS / TLS<br/>читать и отбрасывать RTP, сохранять RTSP keepalive"]
+    RecoverVG -->|"Backoff, новый login / join / binding"| Publish
+    RecoverVG -->|"Отказ камеры, fatal, stop или deadline"| Cleanup
+    Publish -->|"Отказ камеры, fatal, stop или срок работы"| Cleanup
     Cleanup["Завершить текущую попытку<br/>закрыть соединения и освободить ресурсы"]
     Cleanup --> Stop{"Запрошена остановка<br/>или исчерпан общий срок?"}
     Stop -->|"Да"| Exit["Выход с итоговым кодом"]
@@ -167,11 +175,36 @@ flowchart TD
     Backoff -->|"Stop или общий deadline"| Exit
 ```
 
-После временного отказа приложение полностью закрывает текущую пару
-RTSP/WSS, UDP endpoint, TLS session и Region/Buffer, затем заново выполняет
-RTSP setup и VG login/join/device registration/media binding. Динамические
-ID, CSeq, SSRC, nonce, ключ, parser и IDR gate из старой попытки не переносятся.
-В одной попытке нет доступа к ресурсам другой; межгрупповых очередей нет.
+После временного отказа WSS при уже настроенной камере приложение закрывает
+только VG TCP/TLS. TCP камеры, RTSP session ID, CSeq, parser, Region/Buffer
+и UDP endpoint сохраняются. Во время ограниченного backoff продолжаются
+чтение и отбрасывание RTP и RTSP keepalive: очередь камеры не накапливается.
+Повторяются VG login/join/device registration и media binding с новыми ID,
+SSRC, nonce и ключом. Старые пакеты не переотправляются; публикация снова
+ожидает IDR с SPS/PPS. `OPTIONS` при первоначальном запуске ждёт входа в
+конференцию, а `PLAY` — подтверждения media binding.
+
+При отказе самой камеры полностью закрываются RTSP/WSS, UDP endpoint,
+TLS session и Region/Buffer; следующая попытка начинает RTSP setup заново.
+Остановка модератором, fatal-ошибка и общий deadline завершают оба соединения.
+Подтверждение собственного `device_disconnect`, полученное после начала
+локального cleanup и отправки удаления устройства, не считается новой
+командой модератора и не отменяет retry временного отказа камеры. Явные
+`member_action action=9`, `disconnect` и удаление устройства во время
+публикации по-прежнему останавливают коннектор без reconnect.
+У `device_disconnect` нет отдельного идентификатора подтверждения: совпадающее
+уведомление после локальной отправки трактуется как подтверждение. Явная
+команда `member_action action=9` имеет приоритет и во время cleanup.
+Межгрупповых очередей и дополнительных потоков нет.
+
+Для диагностики доступен экспериментальный `vg_resume_quiet_ms`: целое число
+0..30000, по умолчанию 0 (отключён). После восстановления VG binding он
+откладывает только отправку медиапакетов на указанное время. Камера продолжает
+вычитываться без накопления очереди; RTSP keepalive, WSS и UDP binding остаются
+активными. После паузы публикация ждёт следующего IDR. Первоначальный запуск
+не задерживается, stop и общий deadline не откладываются. Логи начала/конца
+паузы и число отброшенных пакетов позволяют проверить эксперимент. Это
+проверка гипотезы о паузе передачи, а не установленное исправление потерь.
 
 Повторяются connection/transport loss, timeout RTSP-ответа (код 32),
 отсутствие RTP (33), startup deadline VG (31) и временные ошибки WSS.
@@ -232,6 +265,10 @@ TCP EOF или WS close 1000 не позволяет определить нам
 команды остановки. Последующий явный запуск оператора — новый жизненный цикл.
 
 Лог `RTSP session generation=N` обозначает новую локальную попытку;
+`VG reconnect generation=N; camera RTSP session preserved` обозначает замену
+только VG-соединения внутри этой RTSP-попытки. `Camera packets drained without
+VG publication=N` считает вычитанные и отброшенные за время восстановления
+пакеты. Это диагностический счётчик, не потеря при активной публикации.
 `uptime_ms` в этой строке и записи retry отсчитывается от начала supervisor.
 Счётчики `RTP received/attempted/succeeded/gated/discontinuities` выводятся
 для каждой завершённой сессии отдельно. `RTSP reconnect after error ...

@@ -92,6 +92,9 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
     var feedback=rtsp.keyframe.create(seed)
     if config.rtp_pace_ms!=0 {label=console.err_bytes(b"RTP media send pacing enabled: wait_ms=");value=console.err_u64(u64(config.rtp_pace_ms));line=console.err_bytes(b" per datagram\n")}
     var health_due=start;var seen_rtp=false;var previous_sent:u64=0;var last_sent:u64=0;var monitor=rtsp.monitor.create()
+    var vg_offline=false;var vg_retry_due:u64=0;var vg_delay:u32=1000;var vg_started=start;var vg_generation:u64=1
+    var discarded_offline:u64=0;var vg_closing=false
+    var resume_media_due:u64=0
     while true {
         now=clock();if now==0 {state.error=30;break}
         loop_observed=rtsp.monitor.tick(borrow mut monitor,now)
@@ -108,30 +111,46 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
         match net.reactor_shutdown_requested(supervisor) {Err(e)=>{state.error=30;break} Ok(n)=>{if n!=0 {state.stopping=true}}}
         if state.stopping&&state.error==0 {requested=true}
         if state.error!=0 {state.stopping=true}
+        if !state.stopping&&resume_media_due!=0&&now>=resume_media_due {
+            resume_media_due=0
+            label=console.err_bytes(b"Experimental RTP quiet period ended; drained camera packets=");value=console.err_u64(discarded_offline);line=console.err_bytes(b"; waiting for next IDR\n");discarded_offline=0
+            offered=rtsp.keyframe.offer(borrow mut feedback,now)
+        }
         if state.stopping {feedback_cancelled=rtsp.keyframe.cancel(borrow mut feedback)} else {feedback_observed=rtsp.keyframe.tick(borrow mut feedback,now)}
-        if !state.stopping&&now>=start+20000&&state.vg_phase<6 {state.error=31;state.stopping=true}
+        if vg_offline&&!state.stopping&&now>=vg_retry_due {
+            (resumed,resumed_reactor,result)=vg.connection.resume(move socket,move reactor,config,now,now+5000);socket=move resumed;reactor=move resumed_reactor
+            match result {
+                Ok(n)=>{vg_offline=false;vg_started=now;vg_generation=vg_generation+1;label=console.err_bytes(b"VG reconnect generation=");value=console.err_u64(vg_generation);line=console.err_bytes(b"; camera RTSP session preserved\n")}
+                Err(e)=>{
+                    var transient=false;match e {vg.connection.Error.Protocol=>{} vg.connection.Error.Tls(t)=>{transient=rtsp.reconnect.transient_tls(t);detail=rtsp.diagnostics.tls_failure(t)}}
+                    if transient {vg_retry_due=now+u64(vg_delay);vg_delay=rtsp.reconnect.next_delay(vg_delay)} else {state.error=3;state.stopping=true}
+                }
+            }
+        }
         if state.waiting&&now>=state.camera_due {
             log=rtsp.diagnostics.rtsp_timeout(state.camera_phase,state.cseq)
             state.error=32;state.stopping=true;camera_dead=true;state.waiting=false
         }
-        if !state.stopping&&state.camera_phase==5&&now>=state.last_rtp+10000 {state.error=33;state.stopping=true}
+        if !state.stopping&&state.camera_phase==5&&now>=state.last_rtp+10000 {log=console.err_bytes(b"Camera RTP idle for 10000 ms; starting cleanup before camera reconnect\n");state.error=33;state.stopping=true}
         if state.stopping&&state.shutdown_due==0 {state.shutdown_due=now+5000;state.shutdown_stage=1}
         if state.stopping&&now>=state.shutdown_due {if state.error==0 {state.error=34};break}
         if !camera_dead {
             if rtsp.tcp.can_send(camera)&&!state.waiting {
                 var method=b"";var target=state.base
                 if state.stopping {if state.session.length!=0&&state.camera_phase!=8 {method=b"TEARDOWN";state.camera_phase=7} else {state.camera_phase=8}}
-                else if state.camera_phase==0 {method=b"OPTIONS";state.camera_phase=1}
+                // Wait for authenticated conference admission before camera setup.
+                else if state.camera_phase==0&&state.vg_phase>=3 {method=b"OPTIONS";state.camera_phase=1}
                 else if state.camera_phase==2 {method=b"DESCRIBE"}
                 else if state.camera_phase==3 {method=b"SETUP";target=state.track}
-                else if state.camera_phase==4 {method=b"PLAY"}
+                // SDP is needed to register the VG device; streaming needs its confirmed route.
+                else if state.camera_phase==4&&state.binding.ready {method=b"PLAY"}
                 else if state.camera_phase==5&&now>=state.keepalive {method=b"GET_PARAMETER";state.camera_phase=6}
                 if method.len!=0 {
                     state.cseq=state.cseq+1
                     match rtsp.request.make(method,target,state.cseq,state.session) {Err(e)=>{state.error=10;camera_dead=true} Ok(wire)=>{camera=rtsp.tcp.send(move camera,wire);state.waiting=true;state.camera_due=now+5000}}
                 }
             }
-            if !state.stopping&&state.camera_phase==5&&!state.waiting&&rtsp.tcp.can_send(camera)&&rtsp.keyframe.due(feedback,now) {wire=rtsp.keyframe.request(borrow mut feedback,now);camera=rtsp.tcp.send(move camera,wire)}
+            if !state.stopping&&resume_media_due==0&&state.camera_phase==5&&!state.waiting&&rtsp.tcp.can_send(camera)&&rtsp.keyframe.due(feedback,now) {wire=rtsp.keyframe.request(borrow mut feedback,now);camera=rtsp.tcp.send(move camera,wire)}
             if state.camera_phase!=8&&!camera_dead {
                 (next_camera,next_reactor,event)=rtsp.tcp.step(move camera,move reactor);camera=move next_camera;reactor=move next_reactor
                 match event {
@@ -141,7 +160,7 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                     rtsp.tcp.Event.Response(response)=>{status=camera_response(borrow mut state,response,now);if status!=0 {state.error=status;state.stopping=true;camera_dead=true}}
                     rtsp.tcp.Event.Packet(frame)=>{
                         state.last_rtp=now;seen_rtp=true
-                        if !state.stopping&&state.vg_phase==6&&state.binding.ready {
+                        if !state.stopping&&state.vg_phase==6&&state.binding.ready&&resume_media_due==0 {
                             rejected_before=state.bridge.rejected
                             data=frame.data;action=rtsp.bridge.inspect(state.bridge,view data[0..frame.length]);state.bridge=action.state
                             if action.send {
@@ -157,11 +176,17 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                             }
                             keyframe_observed=rtsp.keyframe.observe(borrow mut feedback,view data[0..frame.length],state.bridge.rejected==rejected_before,action.idr,now)
                             packet_observed=rtsp.monitor.packet(borrow mut monitor,now,view data[0..frame.length],state.bridge.rejected==rejected_before,action.idr,state.bridge)
+                        } else if !state.stopping {
+                            discarded_offline=discarded_offline+1
+                            // Observe input while media is deliberately muted; do not advance the publication gate.
+                            data=frame.data;observed=rtsp.bridge.inspect(state.bridge,view data[0..frame.length])
+                            packet_observed=rtsp.monitor.packet(borrow mut monitor,now,view data[0..frame.length],observed.state.rejected==state.bridge.rejected,observed.idr,state.bridge)
                         }
                     }
                 }
             }
         }
+        if !state.stopping&&!vg_offline&&!vg_closing&&now>=vg_started+20000&&state.vg_phase<6 {state.error=43;state.stopping=true}
         if !state.stopping&&state.vg_phase==3&&state.video.width!=0 {state.command=3;state.vg_phase=4}
         if !state.stopping&&state.vg_phase==6 {
             if !state.binding.ready&&now>=state.binding_due {state.error=40;state.stopping=true}
@@ -171,11 +196,21 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
             match result {Err(e)=>{} Ok(meta)=>{
                 if net.udp_source_ip(meta)==net.ipv4_bits(state.route)&&net.udp_source_port(meta)==state.route.port {
                     var changed=false
-                    {data=memory.view(udp);if !state.stopping&&state.binding.ready&&rtsp.keyframe.vg_request(view data[0..net.udp_length(meta)]) {offered=rtsp.keyframe.offer(borrow mut feedback,now)};received=vg.binding.receive(state.binding,view data[0..net.udp_length(meta)],now);changed=!state.binding.ready&&received.state.ready;state.binding=received.state;if !received.valid {state.error=40;state.stopping=true}
+                    {data=memory.view(udp);if !state.stopping&&resume_media_due==0&&state.binding.ready&&rtsp.keyframe.vg_request(view data[0..net.udp_length(meta)]) {offered=rtsp.keyframe.offer(borrow mut feedback,now)};received=vg.binding.receive(state.binding,view data[0..net.udp_length(meta)],now);changed=!state.binding.ready&&received.state.ready;state.binding=received.state;if !received.valid {state.error=40;state.stopping=true}
                     match received.packet {None=>{} Some(p)=>{bytes=p.bytes;sent=net.reactor_udp_send(reactor,view bytes[0..80],0,80,state.route)}}}
-                    if changed {log=console.println("VG RTP binding ready; waiting for camera IDR")}
+                    if changed {
+                        log=console.println("VG RTP binding ready; waiting for camera IDR");vg_delay=1000
+                        if discarded_offline!=0 {label=console.err_bytes(b"Camera packets drained without VG publication=");value=console.err_u64(discarded_offline);line=console.err_bytes(b"\n");discarded_offline=0}
+                        if vg_generation>1&&config.vg_resume_quiet_ms!=0 {
+                            resume_media_due=now+u64(config.vg_resume_quiet_ms);cancelled=rtsp.keyframe.cancel(borrow mut feedback)
+                            label=console.err_bytes(b"Experimental RTP quiet period after VG binding: duration_ms=");value=console.err_u64(u64(config.vg_resume_quiet_ms));line=console.err_bytes(b"; camera and control remain active\n")
+                        }
+                    }
                 }
             }}
+        } else if !state.stopping {
+            // The UDP endpoint survives VG reconnect; discard queued feedback/old binding replies.
+            (drained,discarded)=net.reactor_udp_receive(reactor,move udp);udp=move drained
         }
         if !socket_dead {
             if vg.socket.can_send(socket) {
@@ -198,15 +233,25 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                     if !requested {bytes=frame.bytes;var i:u32=0;while i<frame.length {document=memory.set(move document,i,bytes[i]);i=i+1}
                     (next_doc,next_scratch,message,valid)=vg.control.parse(move document,frame.length,move scratch);document=move next_doc;scratch=move next_scratch
                     if message.kind==4&&message.result==1 {route_label=console.write("VG RTP endpoint: ");route_bytes=message.address.bytes;route_name=console.write_bytes(view route_bytes[0..message.address.length]);route_separator=console.write(":");route_port=console.print_u64(u64(message.port));route_line=console.println("")}
-                    if !valid {if !state.stopping {state.error=42;state.stopping=true}} else if !state.stopping||vg.control.terminal(message,state.device) {
+                    if !valid {if !state.stopping {state.error=42;state.stopping=true}}
+                    else if state.stopping&&state.shutdown_stage>=2&&message.kind==5&&message.device==state.device {
+                        log=console.err_bytes(b"Camera removal acknowledged during local cleanup; reconnect policy unchanged\n")
+                    } else if !state.stopping||vg.control.terminal(message,state.device) {
                         if vg.control.terminal(message,state.device) {requested=true}
                         status=control_response(borrow mut state,message,now,config);if status!=0 {state.error=status;state.stopping=true};if state.stopping&&state.error==0 {requested=true}}}
                 }
                 vg.socket.Event.PeerClosed(code)=>{
                     label=console.err("WSS peer close code=");number=console.err_u64(u64(code));line=console.errln("")
-                    if !requested&&!rtsp.reconnect.transient_close(code) {state.error=44}
-                    else if !state.stopping {state.error=43}
-                    state.stopping=true
+                    if !requested&&!state.stopping&&rtsp.reconnect.transient_close(code)&&!camera_dead&&state.camera_phase>=4&&state.camera_phase<=6 {
+                        // Finish WebSocket/TLS close while continuing to drain the camera.
+                        vg_closing=true
+                        state.vg_phase=0;state.command=0;state.binding=vg.binding.create(can.text.empty(),0)
+                        cancelled=rtsp.keyframe.cancel(borrow mut feedback)
+                    } else {
+                        if !requested&&!rtsp.reconnect.transient_close(code) {state.error=44}
+                        else if !state.stopping {state.error=43}
+                        state.stopping=true
+                    }
                 }
                 vg.socket.Event.Closed=>{socket_dead=true;if !closed&&state.error==0 {state.error=43};state.stopping=true}
                 vg.socket.Event.Failed(e)=>{socket_dead=true;state.stopping=true
@@ -215,6 +260,20 @@ fn exchange(supervisor:net.Reactor,link:vg.connection.Connection,bundle:Bundle,c
                 }
             }
         } else {waited=net.reactor_poll(reactor,2)}
+        // A transient VG outage must not send TEARDOWN or stop draining camera TCP.
+        if state.stopping&&state.error==43&&!requested&&!camera_dead&&state.camera_phase>=4&&state.camera_phase<=6 {
+            (reset,reset_reactor)=vg.socket.reset(move socket,move reactor);socket=move reset;reactor=move reset_reactor
+            state.stopping=false;state.error=0;state.shutdown_due=0;state.shutdown_stage=0
+            state.vg_phase=0;state.command=0;state.client=0;state.device=0;state.ssrc=0
+            state.binding=vg.binding.create(can.text.empty(),0);state.bridge=rtsp.bridge.create(state.video.pt,0,0)
+            cancelled=rtsp.keyframe.cancel(borrow mut feedback)
+            previous_sent=0;last_sent=0;closed=false;socket_dead=false;resume_media_due=0
+            vg_offline=true;vg_closing=false;vg_retry_due=now+u64(vg_delay)
+            label=console.err_bytes(b"VG unavailable; preserving camera RTSP session, draining RTP during backoff delay_ms=");value=console.err_u64(u64(vg_delay));line=console.err_bytes(b"\n")
+            vg_delay=rtsp.reconnect.next_delay(vg_delay)
+        }
+        if vg_offline&&!rtsp.tcp.buffered(camera) {waited=net.reactor_poll(reactor,2)}
+        if state.stopping&&vg_offline {socket_dead=true}
         if state.stopping&&socket_dead&&(camera_dead||state.camera_phase==8) {break}
     }
     reactor=rtsp.tcp.close(move camera,move reactor);(last,closed_socket)=vg.socket.close(move socket,move reactor);closed_reactor=net.reactor_close(move last)

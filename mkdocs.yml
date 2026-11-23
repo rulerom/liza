@@ -146,6 +146,7 @@ nav:
       - CAN Echo Worker: can-worker.md
       - Recorder Agent: recorder-agent.md
       - RTSP Camera Client: rtsp-client.md
+      - CAN RTSP Publisher: rtp-service-client.md
       - RTSP macOS Service: rtsp-service-macos.md
       - 'RTSP: длительный прогон': rtsp-endurance.md
       - Scoped-группы: scoped-groups.md

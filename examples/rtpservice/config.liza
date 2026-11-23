@@ -1,0 +1,64 @@
+import can.text
+import rtpservice.fields
+import rtsp.config
+pub struct Config {pub network:rtsp.config.Config;pub node:can.text.Value;pub service:can.text.Value;pub source:can.text.Value;pub token:can.text.Value}
+struct Loaded {buffer:memory.Buffer<u8>;length:u32;valid:bool}
+fn load(path:Path,initial:memory.Buffer<u8>)->Loaded:io {
+    var buffer=move initial;var length:u32=0;var valid=true
+    match file.open_path(path) {Err(e)=>{return Loaded(move buffer,0,false)} Ok(input)=>{
+        while true {match file.read_chunk(input) {Err(e)=>{valid=false;break} Ok(chunk)=>{
+            if chunk.eof {break};if chunk.len>4096-length {valid=false;break}
+            var i:u32=0;while i<chunk.len {buffer=memory.set(move buffer,length+i,chunk.data[i]);i=i+1};length=length+chunk.len
+        }}}
+        closed=file.close(move input);return Loaded(move buffer,length,valid)
+    }}
+}
+fn secret(path:can.text.Value)->Result<can.text.Value,u32>:io {
+    bytes=path.bytes
+    match file.open_utf8(view bytes[0..path.length]) {Err(e)=>{return Err(2)} Ok(input)=>{
+        var value=can.text.empty();var bad=false
+        while true {match file.read_chunk(input) {Err(e)=>{bad=true;break} Ok(chunk)=>{
+            if chunk.eof {break};if chunk.len>514-value.length {bad=true;break}
+            var i:u32=0;while i<chunk.len {value.bytes[value.length]=chunk.data[i];value.length=value.length+1;i=i+1}
+        }}}
+        closed=file.close(move input)
+        while value.length!=0 {b=value.bytes[value.length-1];if b!=10&&b!=13 {break};value.length=value.length-1}
+        if value.length==0||value.length>512 {bad=true};var i:u32=0
+        while i<value.length {if value.bytes[i]<33||value.bytes[i]>126 {bad=true};i=i+1}
+        if bad {return Err(2)};return Ok(value)
+    }}
+}
+pub fn read()->Result<Config,u32>:io,alloc {
+    if cli.count()!=2 {return Err(2)}
+    match cli.path_arg(1) {None=>{return Err(2)} Some(path)=>{
+    match memory.create(8192) {Err(e)=>{return Err(2)} Ok(region)=>{
+    match memory.alloc<u8>(region,4096,0) {Err(e)=>{closed=memory.close(move region);return Err(2)} Ok(initial)=>{
+    match memory.alloc<u8>(region,1024,0) {Err(e)=>{released=memory.release(move initial);closed=memory.close(move region);return Err(2)} Ok(scratch)=>{
+        (buffer,length,loaded)=load(path,move initial);var cursor=rtpservice.fields.open(move buffer,length,move scratch)
+        (next_node,node)=rtpservice.fields.text(move cursor,0,b"node_id",true,128);cursor=move next_node
+        (next_service,service)=rtpservice.fields.text(move cursor,0,b"service_id",true,128);cursor=move next_service
+        (next_source,source)=rtpservice.fields.text(move cursor,0,b"source_ref",false,128);cursor=move next_source
+        (next_camera_ip,camera_ip)=rtpservice.fields.text(move cursor,0,b"camera_ip",true,15);cursor=move next_camera_ip
+        (next_url,url)=rtpservice.fields.text(move cursor,0,b"camera_url",true,1024);cursor=move next_url
+        (next_vg_ip,vg_ip)=rtpservice.fields.text(move cursor,0,b"vg_ip",true,15);cursor=move next_vg_ip
+        (next_peer,peer)=rtpservice.fields.text(move cursor,0,b"vg_peer",true,64);cursor=move next_peer
+        (next_ca,ca)=rtpservice.fields.text(move cursor,0,b"ca_file",false,1024);cursor=move next_ca
+        (next_token_file,token_file)=rtpservice.fields.text(move cursor,0,b"service_token_file",true,1024);cursor=move next_token_file
+        (next_camera_port,camera_port)=rtpservice.fields.number(move cursor,0,b"camera_port",false,554);cursor=move next_camera_port
+        (next_vg_port,vg_port)=rtpservice.fields.number(move cursor,0,b"vg_port",false,443);cursor=move next_vg_port
+        (next_version,version)=rtpservice.fields.number(move cursor,0,b"client_version",false,619);cursor=move next_version
+        (next_run_ms,run_ms)=rtpservice.fields.number(move cursor,0,b"run_ms",false,0);cursor=move next_run_ms
+        (next_pace,pace)=rtpservice.fields.number(move cursor,0,b"rtp_pace_ms",false,0);cursor=move next_pace
+        (next_quiet,quiet)=rtpservice.fields.number(move cursor,0,b"vg_resume_quiet_ms",false,0);cursor=move next_quiet
+        (last,temp,valid)=rtpservice.fields.finish(move cursor);a=memory.release(move last);b=memory.release(move temp);closed=memory.close(move region)
+        if !loaded||!valid||camera_port==0||camera_port>65535||vg_port==0||vg_port>65535||version==0||version>4294967295||run_ms>3600000||(run_ms!=0&&run_ms<100)||pace>5||quiet>30000 {return Err(2)}
+        var camera=net.ipv4(127,0,0,1,554);var vg=net.ipv4(127,0,0,1,443)
+        match rtsp.config.address(camera_ip,u16(camera_port)) {Err(e)=>{return Err(2)} Ok(v)=>{camera=v}}
+        match rtsp.config.address(vg_ip,u16(vg_port)) {Err(e)=>{return Err(2)} Ok(v)=>{vg=v}}
+        var token=can.text.empty();match secret(token_file) {Err(e)=>{return Err(2)} Ok(v)=>{token=v}}
+        var host=peer
+        if vg_port!=443 {host.bytes[host.length]=58;host.length=host.length+1;var digits:[u8;5]=[0;5];var at:u32=5;var n=vg_port;while true {at=at-1;digits[at]=u8(n%10)+48;n=n/10;if n==0 {break}};while at<5 {host.bytes[host.length]=digits[at];host.length=host.length+1;at=at+1}}
+        empty=can.text.empty();network=rtsp.config.Config(camera,url,vg,peer,host,empty,empty,empty,u32(version),u32(run_ms),ca,u32(pace),u32(quiet))
+        return Ok(Config(network,node,service,source,token))
+    }}}}}}}}
+}

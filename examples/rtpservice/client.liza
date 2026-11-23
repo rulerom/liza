@@ -1,0 +1,180 @@
+import rtsp.tcp
+import rtsp.reconnect
+import rtpservice.config
+import rtpservice.connection
+import rtpservice.protocol
+import rtpservice.encode
+import rtpservice.model
+import rtpservice.pipeline
+import vg.socket
+import can.text
+import rtsp.diagnostics
+pub struct Bundle {can_network:memory.Buffer<u8>;can_document:memory.Buffer<u8>;can_scratch:memory.Buffer<u8>;can_output:memory.Buffer<u8>;control_network:memory.Buffer<u8>;camera:memory.Buffer<u8>;control_document:memory.Buffer<u8>;control_scratch:memory.Buffer<u8>;control_output:memory.Buffer<u8>;udp:memory.Buffer<u8>}
+pub struct Outcome {pub supervisor:net.Reactor;pub code:u32}
+fn clock()->u64:io {match net.monotonic_ms() {Err(e)=>{return 0} Ok(now)=>{return now}}}
+pub struct CanStep {socket:vg.socket.Session;reactor:net.Reactor;document:memory.Buffer<u8>;scratch:memory.Buffer<u8>;model:rtpservice.model.State;code:u32;upgraded:bool;closed:bool}
+fn receive(initial_socket:vg.socket.Session,initial_r:net.Reactor,initial_doc:memory.Buffer<u8>,initial_scratch:memory.Buffer<u8>,initial_model:rtpservice.model.State,config:rtpservice.config.Config,now:u64,closing:bool)->CanStep:io,alloc {
+    var can_socket=move initial_socket;var reactor=move initial_r;var document=move initial_doc;var scratch=move initial_scratch;var model=initial_model;var code:u32=0;var upgraded=false;var closed=false
+    (next_socket,next_r,event)=vg.socket.step(move can_socket,move reactor,now,now);can_socket=move next_socket;reactor=move next_r
+        match event {
+            vg.socket.Event.Idle=>{}
+            vg.socket.Event.Upgraded=>{upgraded=true}
+            vg.socket.Event.Message(frame)=>{
+                if !closing {
+                    if frame.length>8192 {code=3} else {
+                        var i:u32=0;bytes=frame.bytes;while i<frame.length {document=memory.set(move document,i,bytes[i]);i=i+1}
+                        (next_doc,next_scratch,message,valid)=rtpservice.protocol.parse(move document,frame.length,move scratch);document=move next_doc;scratch=move next_scratch
+                        if !valid {log=console.err_bytes(b"RTP service: invalid CAN schema or unsupported required contract/profile\n");code=3}
+                        else {
+                            was_ready=model.registered;was_active=model.active
+                            status=rtpservice.model.receive(borrow mut model,message,config,now)
+                            if status!=0 {log=console.err_bytes(b"RTP service: CAN identity/policy rejected; no fallback\n");code=3}
+                            if !was_ready&&model.registered {
+                                log=console.println("CAN RTP service registered; service_auth=1 rtp_service=1")
+                                if config.source.length==0 {warning=console.err_bytes(b"RTP service: source_ref not configured; registration only, no publication capability advertised\n")}
+                            }
+                            if !was_active&&model.active {log=console.println("CAN media.publish.start accepted; opening scoped control")}
+                        }
+                    }
+                }
+            }
+            vg.socket.Event.PeerClosed(close_code)=>{if !closing {code=4;if close_code==1008||close_code==1002 {code=3}}}
+            vg.socket.Event.Closed=>{if !closing {code=4};closed=true}
+            vg.socket.Event.Failed(error)=>{
+                code=4;match error {vg.socket.Error.Tls(t)=>{match t {TlsError.Verification(n)=>{code=3} TlsError.Configuration=>{code=3} TlsError.ManagedBudget=>{code=3} TlsError.OutOfMemory=>{code=3} TlsError.WrongThread=>{code=3} TlsError.Invalid=>{code=3} TlsError.Protocol(n)=>{code=3} TlsError.Output=>{code=3} TlsError.Transport(n)=>{} TlsError.Deadline=>{}}} vg.socket.Error.Protocol=>{code=3} vg.socket.Error.Deadline=>{} vg.socket.Error.Disconnected=>{}}
+            }
+        }
+    return CanStep(move can_socket,move reactor,move document,move scratch,model,code,upgraded,closed)
+}
+fn exchange(owner:net.Reactor,r:net.Reactor,bundle:Bundle,config:rtpservice.config.Config,until:u64)->Outcome:io,alloc {
+    (can_network,initial_doc,initial_scratch,initial_out,control_network,camera,control_doc,control_scratch,control_out,udp)=move bundle
+    var supervisor=move owner;var reactor=move r
+    var can_socket=vg.socket.empty(move can_network);var document=move initial_doc;var scratch=move initial_scratch;var output=move initial_out
+    var pipeline=rtpservice.pipeline.create(move control_network,move camera,move control_doc,move control_scratch,move control_out,move udp,config.network.url)
+    var pipeline_state=rtpservice.pipeline.info(pipeline)
+    var model=rtpservice.model.create();var code:u32=0;var stopping=false;var closing=false;var close_due:u64=0;var hello_pending=false;var hello_due:u64=0;var health_due:u64=0
+    now0=clock();(opened,opened_r,instance,opened_code)=rtpservice.connection.open(move can_socket,move reactor,config,b"/can",now0);can_socket=move opened;reactor=move opened_r
+    if opened_code!=0 {code=3;if opened_code==1 {code=4}}
+    while code==0 {
+        now=clock();if now==0 {code=3;break}
+        if until!=0&&now>=until {stopping=true}
+        match net.reactor_shutdown_requested(supervisor) {Err(e)=>{code=3;break} Ok(n)=>{if n!=0 {stopping=true}}}
+        if stopping&&model.active {model.active=false;model.ending=true;model.finish_kind=3;model.job.token=can.text.empty()}
+        if model.failed {code=3;break}
+        if hello_due!=0&&!model.registered&&now>=hello_due {code=3;break}
+        if model.waiting_ack&&now>=model.ack_due {code=4;break}
+        if closing&&now>=close_due {break}
+        if vg.socket.can_send(can_socket)&&!closing {
+            var kind:u32=0;var id=model.job.id
+            if hello_pending {kind=1;hello_pending=false}
+            else {match rtpservice.model.take(borrow mut model) {None=>{} Some(event)=>{kind=10+event.kind;id=event.id}}}
+            if kind==0&&model.registered&&now>=model.heartbeat_due {
+                kind=3;model.heartbeat_due=now+model.heartbeat_ms;model.waiting_ack=true;model.ack_due=now+5000
+            }
+            if kind!=0 {
+                var length:u32=0;var encoded_ok=false
+                if kind==1 {(next,n,result)=rtpservice.encode.hello(move output,config.node,config.token,config.source.length!=0);output=move next;length=n;match result {Err(e)=>{} Ok(done)=>{encoded_ok=true}}}
+                else if kind==3 {
+                    var age:u64=18446744073709551615;if pipeline_state.media.last_sent!=0 {age=now-pipeline_state.media.last_sent}
+                    (next,n,result)=rtpservice.encode.heartbeat(move output,model.active,model.job,pipeline_state.media.binding.ready,pipeline_state.control.rtc,pipeline_state.control.assignment,pipeline_state.control.device,pipeline_state.control.ssrc,pipeline_state.media.bridge.succeeded,age);output=move next;length=n;match result {Err(e)=>{} Ok(done)=>{encoded_ok=true}}
+                } else {(next,n,result)=rtpservice.encode.event(move output,id,kind-10);output=move next;length=n;match result {Err(e)=>{} Ok(done)=>{encoded_ok=true}}}
+                if !encoded_ok {code=3;break}
+                {bytes=memory.view(output);(next_socket,accepted)=vg.socket.send(move can_socket,1,view bytes[0..length],now+5000);can_socket=move next_socket;match accepted {Err(e)=>{code=4} Ok(sent)=>{if !sent {code=4} else if kind==11 {model.acknowledged=true}}}}
+                if code!=0 {break}
+            }
+        }
+        (read_socket,read_r,read_doc,read_scratch,read_model,read_code,upgraded,closed)=receive(move can_socket,move reactor,move document,move scratch,model,config,now,closing)
+        can_socket=move read_socket;reactor=move read_r;document=move read_doc;scratch=move read_scratch;model=read_model;code=read_code
+        if upgraded {hello_pending=true;hello_due=now+5000}
+        if closed {break}
+        if code!=0 {model.active=false;model.job.token=can.text.empty();break}
+        if (model.active&&model.acknowledged)||model.ending {
+            ending=model.ending
+            (control_pipeline,control_r,control_supervisor)=rtpservice.pipeline.control_tick(move pipeline,move reactor,move supervisor,config,model.job,now,ending)
+            pipeline=move control_pipeline;reactor=move control_r;supervisor=move control_supervisor
+            (io_pipeline,io_r,io_supervisor)=rtpservice.pipeline.control_io(move pipeline,move reactor,move supervisor,model.job,now)
+            pipeline=move io_pipeline;reactor=move io_r;supervisor=move io_supervisor
+            (camera_pipeline,camera_r,camera_supervisor)=rtpservice.pipeline.camera_tick(move pipeline,move reactor,move supervisor,config,now)
+            pipeline=move camera_pipeline;reactor=move camera_r;supervisor=move camera_supervisor
+            (next_pipeline,pipeline_r,next_supervisor)=rtpservice.pipeline.finish_tick(move pipeline,move reactor,move supervisor,config,now)
+            pipeline=move next_pipeline;reactor=move pipeline_r;supervisor=move next_supervisor;pipeline_state=rtpservice.pipeline.info(pipeline)
+            if pipeline_state.failed&&model.active {failed=rtpservice.model.failed_job(borrow mut model)}
+            if model.active&&!model.running_reported&&pipeline_state.media.binding.ready {
+                id=model.job.id;queued=rtpservice.model.enqueue(borrow mut model,id,2);model.running_reported=true
+            }
+            if model.ending&&pipeline_state.stopped {
+                (reset_pipeline,reset_r)=rtpservice.pipeline.reset(move pipeline,move reactor,config.network.url);pipeline=move reset_pipeline;reactor=move reset_r;pipeline_state=rtpservice.pipeline.info(pipeline)
+                finished=rtpservice.model.finished(borrow mut model)
+            }
+        }
+        if now>=health_due {
+            var ready:u64=0;var input_age:u64=18446744073709551615;var output_age:u64=18446744073709551615
+            if model.active&&pipeline_state.media.binding.ready&&pipeline_state.media.quiet_until==0 {ready=1}
+            if pipeline_state.camera.last_rtp!=0 {input_age=now-pipeline_state.camera.last_rtp};if pipeline_state.media.last_sent!=0 {output_age=now-pipeline_state.media.last_sent}
+            health=rtsp.diagnostics.health(ready,pipeline_state.media.bridge.received,pipeline_state.media.bridge.succeeded,input_age,output_age);health_due=now+5000
+        }
+        if stopping&&!model.active&&!model.ending&&model.count==0&&!closing&&vg.socket.can_send(can_socket) {can_socket=vg.socket.stop(move can_socket,now+3000);closing=true;close_due=now+3000}
+        var wait:u32=20;if (model.active&&model.acknowledged)||model.ending {wait=2}
+        if vg.socket.buffered(can_socket)||rtpservice.pipeline.buffered(pipeline) {wait=0}
+        polled=net.reactor_poll(reactor,wait)
+    }
+    // CAN connection loss invalidates the assignment before any further media step.
+    model.active=false;model.job.token=can.text.empty()
+    reactor=rtpservice.pipeline.close(move pipeline,move reactor)
+    a=memory.release(move document);b=memory.release(move scratch);c=memory.release(move output)
+    (last,closed)=vg.socket.close(move can_socket,move reactor);closed_r=net.reactor_close(move last)
+    return Outcome(move supervisor,code)
+}
+fn allocate(supervisor:net.Reactor,r:net.Reactor,config:rtpservice.config.Config,until:u64)->Outcome:io,alloc {
+    match memory.create(131072) {Err(e)=>{closed=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(region)=>{
+    match memory.alloc<u8>(region,12288,0) {Err(e)=>{closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(can_network)=>{
+    match memory.alloc<u8>(region,8192,0) {Err(e)=>{released_0=memory.release(move can_network);closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(can_document)=>{
+    match memory.alloc<u8>(region,1024,0) {Err(e)=>{released_0=memory.release(move can_network);released_1=memory.release(move can_document);closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(can_scratch)=>{
+    match memory.alloc<u8>(region,4096,0) {Err(e)=>{released_0=memory.release(move can_network);released_1=memory.release(move can_document);released_2=memory.release(move can_scratch);closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(can_output)=>{
+    match memory.alloc<u8>(region,12288,0) {Err(e)=>{released_0=memory.release(move can_network);released_1=memory.release(move can_document);released_2=memory.release(move can_scratch);released_3=memory.release(move can_output);closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(control_network)=>{
+    match memory.alloc<u8>(region,4096,0) {Err(e)=>{released_0=memory.release(move can_network);released_1=memory.release(move can_document);released_2=memory.release(move can_scratch);released_3=memory.release(move can_output);released_4=memory.release(move control_network);closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(camera)=>{
+    match memory.alloc<u8>(region,65536,0) {Err(e)=>{released_0=memory.release(move can_network);released_1=memory.release(move can_document);released_2=memory.release(move can_scratch);released_3=memory.release(move can_output);released_4=memory.release(move control_network);released_5=memory.release(move camera);closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(control_document)=>{
+    match memory.alloc<u8>(region,1024,0) {Err(e)=>{released_0=memory.release(move can_network);released_1=memory.release(move can_document);released_2=memory.release(move can_scratch);released_3=memory.release(move can_output);released_4=memory.release(move control_network);released_5=memory.release(move camera);released_6=memory.release(move control_document);closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(control_scratch)=>{
+    match memory.alloc<u8>(region,4096,0) {Err(e)=>{released_0=memory.release(move can_network);released_1=memory.release(move can_document);released_2=memory.release(move can_scratch);released_3=memory.release(move can_output);released_4=memory.release(move control_network);released_5=memory.release(move camera);released_6=memory.release(move control_document);released_7=memory.release(move control_scratch);closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(control_output)=>{
+    match memory.alloc<u8>(region,4096,0) {Err(e)=>{released_0=memory.release(move can_network);released_1=memory.release(move can_document);released_2=memory.release(move can_scratch);released_3=memory.release(move can_output);released_4=memory.release(move control_network);released_5=memory.release(move camera);released_6=memory.release(move control_document);released_7=memory.release(move control_scratch);released_8=memory.release(move control_output);closed_region=memory.close(move region);closed_r=net.reactor_close(move r);return Outcome(move supervisor,3)} Ok(udp)=>{
+    bundle=Bundle(move can_network,move can_document,move can_scratch,move can_output,move control_network,move camera,move control_document,move control_scratch,move control_output,move udp)
+    result=exchange(move supervisor,move r,move bundle,config,until);closed_region=memory.close(move region);return move result
+    }}
+    }}
+    }}
+    }}
+    }}
+    }}
+    }}
+    }}
+    }}
+    }}
+    }}
+}
+pub fn run(config:rtpservice.config.Config)->u32:io,alloc {
+    match net.reactor_create(0,1) {Err(e)=>{return 3} Ok(owner)=>{
+        var supervisor=move owner;stopped_accepting=net.reactor_stop_accepting(supervisor)
+        match net.reactor_watch_shutdown(supervisor) {Err(e)=>{closed=net.reactor_close(move supervisor);return 3} Ok(n)=>{}}
+        start=clock();var until:u64=0;if config.network.run_ms!=0 {until=start+u64(config.network.run_ms)}
+        var code:u32=0;var generation:u64=0;var delay:u32=1000
+        while true {
+            now=clock();if now==0 {code=3;break}
+            if until!=0&&now>=until {break}
+            match net.reactor_shutdown_requested(supervisor) {Err(e)=>{code=3;break} Ok(n)=>{if n!=0 {code=0;break}}}
+            generation=generation+1;label=console.write("CAN session generation=");value=console.print_u64(generation);line=console.println("")
+            match net.reactor_udp_create(net.ipv4(0,0,0,0,0),3) {Err(e)=>{code=3;break} Ok(r)=>{
+                closed_udp=net.reactor_udp_close_endpoint(r)
+                (next,result)=allocate(move supervisor,move r,config,until);supervisor=move next;code=result
+            }}
+            if code!=4 {break}
+            retry_due=clock()+u64(delay);delay=rtsp.reconnect.next_delay(delay)
+            while clock()<retry_due {
+                var stop=false;match net.reactor_shutdown_requested(supervisor) {Err(e)=>{stop=true} Ok(n)=>{stop=n!=0}}
+                if stop||(until!=0&&clock()>=until) {code=0;break}
+                waited=net.reactor_poll(supervisor,50)
+            }
+            if code==0 {break}
+        }
+        closed=net.reactor_close(move supervisor);return code
+    }}
+}

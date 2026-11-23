@@ -1,0 +1,30 @@
+import rtpservice.config
+import vg.socket
+import httpws.http
+import httpws.bytes
+import httpws.crypto
+import can.text
+import rtsp.diagnostics
+pub struct Opened {pub socket:vg.socket.Session;pub reactor:net.Reactor;pub instance:can.text.Value;pub code:u32}
+fn attach(socket:vg.socket.Session,r:net.Reactor,crypto:tls.Session,config:rtpservice.config.Config,request:httpws.bytes.Wire,proof:[u8;28],instance:can.text.Value,until:u64)->Opened:io,alloc {
+    match net.reactor_connect_at(r,config.network.vg) {
+        Err(e)=>{destroyed=tls.destroy(move crypto);return Opened(move socket,move r,instance,1)}
+        Ok(id)=>{next=vg.socket.start(move socket,move crypto,id,request,proof,until);return Opened(move next,move r,instance,0)}
+    }
+}
+pub fn open(socket:vg.socket.Session,r:net.Reactor,config:rtpservice.config.Config,target:View<u8>,now:u64)->Opened:io,alloc {
+    var nonce:[u8;16]=[0;16];var i:u32=0
+    while i<4 {match net.random_u32() {Err(e)=>{return Opened(move socket,move r,can.text.empty(),2)} Ok(n)=>{nonce[i*4]=u8.wrap(n>>24);nonce[i*4+1]=u8.wrap(n>>16);nonce[i*4+2]=u8.wrap(n>>8);nonce[i*4+3]=u8.wrap(n)}};i=i+1}
+    key=httpws.crypto.key(nonce);proof=httpws.crypto.accept(key);var instance=can.text.empty()
+    match can.text.from_view(view key[0..24],128) {Err(e)=>{return Opened(move socket,move r,instance,2)} Ok(v)=>{instance=v}}
+    host=config.network.host.bytes;peer=config.network.peer.bytes;ca=config.network.ca.bytes;var request=httpws.bytes.empty()
+    match httpws.http.request(view host[0..config.network.host.length],target,key) {Err(e)=>{return Opened(move socket,move r,instance,2)} Ok(w)=>{request=w}}
+    if config.network.ca.length!=0 {match tls.create_with_ca(view peer[0..config.network.peer.length],view ca[0..config.network.ca.length],tls.managed_bytes(),now,18446744073709551615) {
+        Err(e)=>{detail=rtsp.diagnostics.tls_failure(e);return Opened(move socket,move r,instance,2)}
+        Ok(crypto)=>{return attach(move socket,move r,move crypto,config,request,proof,instance,now+5000)}
+    }}
+    match tls.create(view peer[0..config.network.peer.length],tls.managed_bytes(),now,18446744073709551615) {
+        Err(e)=>{detail=rtsp.diagnostics.tls_failure(e);return Opened(move socket,move r,instance,2)}
+        Ok(crypto)=>{return attach(move socket,move r,move crypto,config,request,proof,instance,now+5000)}
+    }
+}

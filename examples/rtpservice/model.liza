@@ -1,0 +1,45 @@
+import rtpservice.protocol
+import rtpservice.config
+import can.text
+pub struct Event {pub id:rtpservice.protocol.Identity;pub kind:u32}
+pub struct State {pub registered:bool;pub active:bool;pub ending:bool;pub failed:bool;pub job:rtpservice.protocol.Job;pub running_reported:bool;pub heartbeat_due:u64;pub heartbeat_ms:u64;pub ack_due:u64;pub waiting_ack:bool;pub finish_kind:u32;pub queue:[Event;4];pub head:u32;pub count:u32;pub acknowledged:bool}
+pub fn create()->State {
+    job=rtpservice.protocol.empty_job();event=Event(job.id,0)
+    return State(false,false,false,false,job,false,0,0,0,false,0,[event;4],0,0,false)
+}
+pub fn enqueue(borrow mut state:State,id:rtpservice.protocol.Identity,kind:u32)->u32 {
+    if state.count==4 {state.failed=true;return 1}
+    var queue=state.queue;queue[(state.head+state.count)%4]=Event(id,kind);state.queue=queue;state.count=state.count+1;return 0
+}
+pub fn take(borrow mut state:State)->Option<Event> {
+    if state.count==0 {return None};event=state.queue[state.head];state.head=(state.head+1)%4;state.count=state.count-1;return Some(event)
+}
+pub fn matches(borrow state:State,id:rtpservice.protocol.Identity)->bool {return can.text.equal(state.job.id.job,id.job)&&can.text.equal(state.job.id.assignment,id.assignment)}
+pub fn receive(borrow mut state:State,message:rtpservice.protocol.Message,config:rtpservice.config.Config,now:u64)->u32 {
+    match message {
+        rtpservice.protocol.Message.Unknown=>{}
+        rtpservice.protocol.Message.Ready(ready)=>{
+            if state.registered||!can.text.equal(ready.node,config.node)||!can.text.equal(ready.service,config.service) {state.failed=true;return 1}
+            state.registered=true;state.heartbeat_ms=ready.heartbeat;state.heartbeat_due=now+ready.heartbeat
+        }
+        rtpservice.protocol.Message.HeartbeatOk=>{if !state.registered {state.failed=true;return 1};state.waiting_ack=false}
+        rtpservice.protocol.Message.Failure(code)=>{state.failed=true;return 1}
+        rtpservice.protocol.Message.Job(job)=>{
+            if !state.registered {state.failed=true;return 1}
+            if state.active||state.ending {
+                if state.active&&matches(state,job.id)&&can.text.equal(state.job.token,job.token)&&can.text.equal(state.job.track,job.track)&&can.text.equal(state.job.conference,job.conference)&&can.text.equal(state.job.source,job.source) {return enqueue(borrow mut state,job.id,1)}
+                return enqueue(borrow mut state,job.id,5)
+            }
+            if config.source.length==0||!can.text.equal(job.source,config.source) {return enqueue(borrow mut state,job.id,5)}
+            state.job=job;state.active=true;state.running_reported=false;state.finish_kind=0;state.acknowledged=false
+            return enqueue(borrow mut state,job.id,1)
+        }
+        rtpservice.protocol.Message.Cancel(id)=>{if (state.active||state.ending)&&matches(state,id) {state.active=false;state.ending=true;state.finish_kind=3;state.job.token=can.text.empty()}}
+    }
+    return 0
+}
+pub fn failed_job(borrow mut state:State)->u32 {if state.active {state.active=false;state.ending=true;state.finish_kind=5;state.job.token=can.text.empty()};return 0}
+pub fn finished(borrow mut state:State)->u32 {
+    if !state.ending {return 0};id=state.job.id;kind=state.finish_kind;queued=enqueue(borrow mut state,id,kind)
+    state.job=rtpservice.protocol.empty_job();state.ending=false;state.active=false;state.running_reported=false;state.acknowledged=false;return queued
+}

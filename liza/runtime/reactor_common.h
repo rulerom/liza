@@ -21,7 +21,7 @@ uint32_t liza_rt_net_udp_bind(uint32_t,uint16_t,uint64_t*);
 uint32_t liza_rt_net_udp_receive(uint64_t,uint8_t*,uint32_t,uint64_t*);
 uint64_t liza_rt_net_udp_send(uint64_t,const uint8_t*,uint32_t,uint32_t,uint32_t,uint32_t,uint16_t);
 typedef struct { uint64_t socket,generation; uint32_t live,interest,ready,phase,error,write_closed; } reactor_slot;
-typedef struct reactor { uint64_t owner,listener,udp; uint32_t capacity,listener_open,udp_open; reactor_slot slots[REACTOR_MAX]; } reactor;
+typedef struct reactor { uint64_t owner,listener,udp; uint32_t capacity,listener_open,udp_open,udp_connected,udp_peer_ip; uint16_t udp_peer_port; reactor_slot slots[REACTOR_MAX]; } reactor;
 uint64_t liza_rt_reactor_allocation_bytes(void) { return sizeof(reactor); }
 /* Owner identities are process-wide, unique and never wrap. */
 static _Atomic uint64_t reactor_next_owner;
@@ -131,10 +131,43 @@ uint32_t liza_rt_reactor_udp_create(uint32_t ip,uint16_t port,uint32_t capacity,
     return reactor_create_endpoint(ip,port,capacity,1,out);
 }
 uint64_t liza_rt_reactor_udp_port(reactor *r) {return r->udp_open ? liza_rt_net_port(r->udp) : net_failure(6);}
+/* Fresh connected UDP identity for a new application assignment. TCP slots and
+ * owner identity are preserved. Failure before replacement leaves the old
+ * endpoint intact; callers must keep their publication gate closed on error. */
+uint64_t liza_rt_reactor_udp_replace_connected(reactor *r,uint32_t ip,uint16_t port) {
+    if (!ip || !port || ip==UINT32_MAX || (ip>>24)>=224) return net_failure(6);
+    uint64_t fresh=0;uint32_t error=liza_rt_net_udp_bind(0,0,&fresh);
+    if (error) return net_failure(error);
+    error=reactor_nonblocking(fresh);
+    struct sockaddr_in peer;memset(&peer,0,sizeof(peer));peer.sin_family=AF_INET;
+    peer.sin_addr.s_addr=htonl(ip);peer.sin_port=htons(port);
+    if (!error && connect((net_socket)fresh,(struct sockaddr*)&peer,sizeof(peer))!=0) error=net_error();
+    if (error) {liza_rt_net_close(fresh);return net_failure(error);}
+    uint64_t old=r->udp;uint32_t had_old=r->udp_open;
+    r->udp=fresh;r->udp_connected=1;r->udp_peer_ip=ip;r->udp_peer_port=port;
+    r->udp_open=1;return had_old ? net_failure(liza_rt_net_close(old)) : 0;
+}
+uint64_t liza_rt_reactor_udp_close_endpoint(reactor *r) {
+    if (!r->udp_open) return 0;
+    r->udp_open=0;r->udp_connected=0;r->udp_peer_ip=0;r->udp_peer_port=0;
+    return net_failure(liza_rt_net_close(r->udp));
+}
 uint32_t liza_rt_reactor_udp_receive(reactor *r,uint8_t *data,uint32_t capacity,uint64_t *out) {
     *out=0;return r->udp_open ? liza_rt_net_udp_receive(r->udp,data,capacity,out) : 6;
 }
 uint64_t liza_rt_reactor_udp_send(reactor *r,const uint8_t *data,uint32_t length,uint32_t start,uint32_t count,uint32_t ip,uint16_t port) {
+    if (r->udp_connected && (ip!=r->udp_peer_ip || port!=r->udp_peer_port)) return net_failure(6);
+    if (r->udp_open && r->udp_connected) {
+        if (start>length || count>length-start || count>65535) return net_failure(6);
+        const uint8_t dummy=0;const uint8_t *p=count?data+start:&dummy;
+#ifdef _WIN32
+        int sent=send((net_socket)r->udp,(const char*)p,(int)count,0);
+#else
+        ssize_t sent=send((net_socket)r->udp,p,count,0);
+#endif
+        if (sent<0) return net_failure(net_error());
+        return (uint32_t)sent==count ? (uint32_t)sent : net_failure(7);
+    }
     return r->udp_open ? liza_rt_net_udp_send(r->udp,data,length,start,count,ip,port) : net_failure(6);
 }
 uint32_t liza_rt_reactor_create(uint16_t port,uint32_t capacity,reactor **out) {

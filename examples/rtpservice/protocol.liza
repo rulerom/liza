@@ -1,0 +1,58 @@
+import can.text
+import rtpservice.fields
+pub struct Ready {pub node:can.text.Value;pub service:can.text.Value;pub credential:can.text.Value;pub heartbeat:u64;pub lease:u64}
+pub struct Identity {pub job:can.text.Value;pub assignment:can.text.Value}
+pub struct Job {pub id:Identity;pub source:can.text.Value;pub conference:can.text.Value;pub token:can.text.Value;pub track:can.text.Value;pub conference_id:u64;pub conference_session:u64;pub max_bitrate:u64}
+pub enum Message {Unknown;Ready(Ready);HeartbeatOk;Job(Job);Cancel(Identity);Failure(can.text.Value)}
+pub struct Parsed {pub buffer:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub message:Message;pub valid:bool}
+pub fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Parsed {
+    var cursor=rtpservice.fields.open(move buffer,length,move scratch)
+    (next,kind)=rtpservice.fields.text(move cursor,0,b"type",true,64);cursor=move next
+    var message=Message.Unknown;var semantic=true
+    if rtpservice.fields.equal(kind,b"hello_ok") {
+        (next_node,node)=rtpservice.fields.text(move cursor,0,b"node_id",true,128);cursor=move next_node
+        (next_service,service)=rtpservice.fields.text(move cursor,0,b"service_id",true,128);cursor=move next_service
+        (next_credential,credential)=rtpservice.fields.text(move cursor,0,b"credential_id",true,128);cursor=move next_credential
+        (next_role,role)=rtpservice.fields.text(move cursor,0,b"role",true,128);cursor=move next_role
+        (next_service_auth,service_auth)=rtpservice.fields.number(move cursor,1,b"service_auth",true,0);cursor=move next_service_auth
+        (next_rtp_service,rtp_service)=rtpservice.fields.number(move cursor,1,b"rtp_service",true,0);cursor=move next_rtp_service
+        (next_protocol,protocol)=rtpservice.fields.number(move cursor,0,b"assignment_protocol",true,0);cursor=move next_protocol
+        (next_capacity,capacity)=rtpservice.fields.number(move cursor,0,b"max_concurrent_jobs",true,0);cursor=move next_capacity
+        (next_heartbeat,heartbeat)=rtpservice.fields.number(move cursor,0,b"heartbeat_ms",true,0);cursor=move next_heartbeat
+        (next_lease,lease)=rtpservice.fields.number(move cursor,0,b"lease_timeout_ms",true,0);cursor=move next_lease
+        semantic=rtpservice.fields.equal(role,b"worker")&&service_auth==1&&rtp_service==1&&protocol==1&&capacity==1&&heartbeat>0&&heartbeat<=60000&&lease>heartbeat&&lease<=3600000
+        message=Message.Ready(Ready(node,service,credential,heartbeat,lease))
+    } else if rtpservice.fields.equal(kind,b"heartbeat_ok") {message=Message.HeartbeatOk
+    } else if rtpservice.fields.equal(kind,b"job") {
+        (next_job,job)=rtpservice.fields.text(move cursor,0,b"job_id",true,128);cursor=move next_job
+        (next_assignment,assignment)=rtpservice.fields.text(move cursor,0,b"assignment_id",true,128);cursor=move next_assignment
+        (next_operation,operation)=rtpservice.fields.text(move cursor,0,b"job_type",true,128);cursor=move next_operation
+        (next_source_kind,source_kind)=rtpservice.fields.text(move cursor,3,b"kind",true,128);cursor=move next_source_kind
+        (next_source_ref,source_ref)=rtpservice.fields.text(move cursor,3,b"source_ref",true,128);cursor=move next_source_ref
+        (next_conference,conference)=rtpservice.fields.text(move cursor,2,b"conference_tag",true,128);cursor=move next_conference
+        (next_auth_type,auth_type)=rtpservice.fields.text(move cursor,4,b"type",true,128);cursor=move next_auth_type
+        (next_token,token)=rtpservice.fields.text(move cursor,4,b"access_token",true,512);cursor=move next_token
+        (next_track,track)=rtpservice.fields.text(move cursor,5,b"track_id",true,128);cursor=move next_track
+        (next_conference_id,conference_id)=rtpservice.fields.number(move cursor,2,b"conference_id",true,0);cursor=move next_conference_id
+        (next_conference_session,conference_session)=rtpservice.fields.number(move cursor,2,b"conference_session_id",true,0);cursor=move next_conference_session
+        (next_device_type,device_type)=rtpservice.fields.number(move cursor,5,b"device_type",true,0);cursor=move next_device_type
+        (next_video_codec,video_codec)=rtpservice.fields.number(move cursor,5,b"video_codec",true,0);cursor=move next_video_codec
+        (next_clock_rate,clock_rate)=rtpservice.fields.number(move cursor,6,b"clock_rate",true,0);cursor=move next_clock_rate
+        (next_pt,pt)=rtpservice.fields.number(move cursor,6,b"payload_type",true,0);cursor=move next_pt
+        (next_mode,mode)=rtpservice.fields.number(move cursor,6,b"packetization_mode",true,0);cursor=move next_mode
+        (next_max_bitrate,max_bitrate)=rtpservice.fields.number(move cursor,5,b"max_bitrate_bps",false,0);cursor=move next_max_bitrate
+        (next_subscribe,subscribe_count)=rtpservice.fields.array_length(move cursor,10,b"subscribe",false);cursor=move next_subscribe
+        semantic=subscribe_count==0&&rtpservice.fields.equal(operation,b"media.publish.start")&&rtpservice.fields.equal(source_kind,b"rtsp")&&rtpservice.fields.equal(auth_type,b"bearer")&&conference_id!=0&&conference_session!=0&&device_type==1&&video_codec==2&&clock_rate==90000&&pt==102&&mode==1
+        message=Message.Job(Job(Identity(job,assignment),source_ref,conference,token,track,conference_id,conference_session,max_bitrate))
+    } else if rtpservice.fields.equal(kind,b"job_cancel") {
+        (next_cancel_job,cancel_job)=rtpservice.fields.text(move cursor,0,b"job_id",true,128);cursor=move next_cancel_job
+        (next_cancel_assignment,cancel_assignment)=rtpservice.fields.text(move cursor,0,b"assignment_id",true,128);cursor=move next_cancel_assignment
+        message=Message.Cancel(Identity(cancel_job,cancel_assignment))
+    } else if rtpservice.fields.equal(kind,b"error") {
+        (next_code,code)=rtpservice.fields.text(move cursor,0,b"code",true,128);cursor=move next_code
+        message=Message.Failure(code)
+    }
+    (buffer_out,scratch_out,valid)=rtpservice.fields.finish(move cursor)
+    return Parsed(move buffer_out,move scratch_out,message,valid&&semantic)
+}
+pub fn empty_job()->Job {empty=can.text.empty();return Job(Identity(empty,empty),empty,empty,empty,empty,0,0,0)}

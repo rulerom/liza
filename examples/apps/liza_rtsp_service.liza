@@ -1,0 +1,5 @@
+import rtpservice.config
+import rtpservice.client
+fn main()->u32:io,alloc {
+    match rtpservice.config.read() {Err(e)=>{log=console.errln("Usage: liza-rtsp-service private-config.json");return 2} Ok(config)=>{return rtpservice.client.run(config)}}
+}

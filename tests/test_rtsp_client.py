@@ -63,13 +63,15 @@ class RtspClient(unittest.TestCase):
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
                  stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None,
-                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03):
+                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False, clock_jump=False, keyframe_feedback=None, rtp_pace_ms=0, camera_interval=.03, binding_delay=0, control_reconnect_delay=0, vg_resume_quiet_ms=0, echo_cleanup=False):
         errors, packets, methods, commands = [], [], [], []
         packet_times = []
         stopped = threading.Event()
         moderation_observed = threading.Event()
         live_stderr = self.root / 'live-stderr.log'
         media_seen = [threading.Event() for _ in range(cycles)]
+        binding_confirmed = [threading.Event() for _ in range(cycles)]
+        binding_confirmed_at = [None for _ in range(cycles)]
         camera_runs, control_runs = [], []
         epoch_packets = [[] for _ in range(cycles)]
         def epoch_key(epoch):
@@ -150,6 +152,8 @@ class RtspClient(unittest.TestCase):
                             break
                         request, pending = pending.split(b'\r\n\r\n', 1)
                         method = request.split(b' ', 1)[0]
+                        if method == b'PLAY':
+                            self.assertTrue(binding_confirmed[epoch].is_set(), 'camera PLAY before VG binding confirmation')
                         methods.append(method)
                         history['methods'].append(method)
                         cseq = next(line.split(b':', 1)[1].strip() for line in request.split(b'\r\n') if line.lower().startswith(b'cseq:'))
@@ -157,6 +161,8 @@ class RtspClient(unittest.TestCase):
                         if stall_keepalive and epoch==0 and method==b'GET_PARAMETER':
                             continue  # RTP continues, but the control reply never arrives.
                         if stall_teardown and method==b'TEARDOWN':
+                            continue
+                        if echo_cleanup and epoch==0 and method==b'TEARDOWN':
                             continue
                         if stop_during_camera_timeout and method==b'TEARDOWN':
                             self.assertTrue(moderation_observed.wait(3), 'stop command ignored during camera cleanup')
@@ -181,7 +187,7 @@ class RtspClient(unittest.TestCase):
                             playing = True
                         if method == b'TEARDOWN':
                             return
-                    if playing and not (stop_during_camera_timeout and sequence>=35):
+                    if playing and not ((stop_during_camera_timeout or (echo_cleanup and epoch==0)) and sequence>=35):
                         sequence += 1
                         # Every fifth packet is an IDR; payload must survive unchanged.
                         is_idr = force_idr or (sequence % 5 == 0 and (not keyframe_feedback or not epoch_packets[epoch]))
@@ -196,11 +202,11 @@ class RtspClient(unittest.TestCase):
                             return
 
         def camera_peer():
-            for _ in range(cycles):
+            for _ in range(1 if drop_wss else cycles):
                 try:
                     camera_session()
                 except (ConnectionResetError,BrokenPipeError,ConnectionAbortedError):
-                    if not (stall_keepalive or stall_teardown or drop_wss):
+                    if not (stall_keepalive or stall_teardown or drop_wss or echo_cleanup):
                         raise
                     # Expected end of this faulted session, not end of the
                     # camera listener. The next connection must be accepted.
@@ -223,7 +229,7 @@ class RtspClient(unittest.TestCase):
                     try:
                         opcode, data = client_frame(conn)
                     except AssertionError as error:
-                        if stall_teardown and str(error)=='premature EOF':
+                        if (stall_teardown or echo_cleanup) and str(error)=='premature EOF':
                             return  # The bounded shutdown deadline closed TCP.
                         raise
                     if opcode == 8:
@@ -274,11 +280,13 @@ class RtspClient(unittest.TestCase):
                                 conn.setsockopt(socket.SOL_SOCKET,socket.SO_LINGER,struct.pack('hh' if os.name=='nt' else 'ii',1,0))
                             return
                         if stop_on_media and epoch==cycles-1:
-                            self.assertTrue(media_seen[epoch].wait(5), 'no authorized media')
+                            self.assertTrue(media_seen[epoch].wait(5+(vg_resume_quiet_ms/1000 if epoch else 0)), 'no authorized media')
                             # Exercise TLS beyond the old zero-duration + 5 s
                             # lifetime, then stop through the existing control API.
                             time.sleep(stop_delay)
                             conn.sendall(ws(stop_payload) if stop_payload is not None else message({'device_disconnect': {'device_id': 7}}))
+                    elif 'device_disconnect' in value and echo_cleanup:
+                        conn.sendall(message({'device_disconnect': {'device_id': 7}}))
                     elif 'device_disconnect' in value and stop_during_camera_timeout:
                         conn.sendall(message({'member_action': {'id': [], 'action': 9}}))
                         until = time.monotonic() + 3
@@ -290,7 +298,9 @@ class RtspClient(unittest.TestCase):
                         self.assertTrue(moderation_observed.is_set(), 'moderator stop was ignored after camera timeout')
 
         def control_peer():
-            for _ in range(cycles):
+            for epoch in range(cycles):
+                if epoch:
+                    time.sleep(control_reconnect_delay)
                 control_session()
 
         def udp_peer():
@@ -310,6 +320,10 @@ class RtspClient(unittest.TestCase):
                         udp.sendto(signed(challenge, 2, epoch_key(epoch)), source)
                     elif data[12] == 3:
                         self.assertEqual(data[32:48], epoch_nonce(epoch))
+                        if not binding_confirmed[epoch].is_set():
+                            time.sleep(binding_delay)
+                            binding_confirmed_at[epoch]=time.monotonic()
+                        binding_confirmed[epoch].set()
                         udp.sendto(signed(data, 4, epoch_key(epoch)), source)
                 else:
                     packets.append(data)
@@ -343,6 +357,7 @@ class RtspClient(unittest.TestCase):
         config = dict(camera_ip='127.0.0.1', camera_port=camera.getsockname()[1], camera_url='rtsp://127.0.0.1/stream1', vg_ip='127.0.0.1', vg_port=control.getsockname()[1], vg_peer='localhost', login='fixture-login', password='fixture-password', conference='radio', ca_file=str(self.root / 'ca.pem'), run_ms=run_ms)
         config['client_version']=client_version
         config['rtp_pace_ms']=rtp_pace_ms
+        config['vg_resume_quiet_ms']=vg_resume_quiet_ms
         if wrong_peer:
             config['vg_peer']='wrong.example'
         path = self.root / 'rtsp-config.json'
@@ -374,6 +389,7 @@ class RtspClient(unittest.TestCase):
             except subprocess.TimeoutExpired as error:
                 self.fail(('client timeout',error.stdout,error.stderr,errors,camera_runs,commands,[len(p) for p in epoch_packets]))
         finally:
+            self.process_finished_at = time.monotonic()
             stopped.set()
             for listener in listeners:
                 listener.close()
@@ -385,6 +401,7 @@ class RtspClient(unittest.TestCase):
         self.assertNotIn(b'fixture-password', run.stdout + run.stderr)
         self.attempts=(camera_runs,control_runs,epoch_packets)
         self.packet_times = packet_times
+        self.binding_confirmed_at = binding_confirmed_at
         return run, packets, methods, commands
 
     @unittest.skipUnless(os.environ.get('LIZA_RTSP_SERVICE_BINARY'), 'bundled operational launcher acceptance')
@@ -586,18 +603,26 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
         run,packets,methods,commands=self.scenario(exe,cycles=2,run_ms=0,stop_on_media=True,stop_delay=.2,**fault)
         self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
         camera,control,epochs=self.attempts
-        self.assertEqual(len(camera),2)
+        preserved=bool(fault.get('drop_wss'))
+        self.assertEqual(len(camera),1 if preserved else 2)
         self.assertEqual(len(control),2)
         self.assertEqual(commands.count('connect_request'),2)
         self.assertEqual(commands.count('device_connect'),2)
-        self.assertIn(b'RTSP session generation=2',run.stdout)
+        if preserved:
+            self.assertIn(b'camera RTSP session preserved',run.stderr)
+            self.assertEqual(methods.count(b'PLAY'),1)
+            self.assertEqual(methods.count(b'TEARDOWN'),1)
+        else:
+            self.assertIn(b'RTSP session generation=2',run.stdout)
         self.assertNotIn(b'RTSP session generation=3',run.stdout)
         self.assertIn(b'delay_ms=1000',run.stderr)
-        self.assertGreaterEqual(camera[1]['started']-camera[0]['started'],1)
+        if not preserved:
+            self.assertGreaterEqual(camera[1]['started']-camera[0]['started'],1)
         for epoch in range(2):
-            self.assertEqual(camera[epoch]['cseqs'][0],1)
+            if not preserved:
+                self.assertEqual(camera[epoch]['cseqs'][0],1)
             self.assertGreaterEqual(len(epochs[epoch]),10)
-            self.assertEqual([p[12:] for p in epochs[epoch][:3]],[SPS,PPS,b'\x65camera-payload'])
+            self.assertEqual([p[12:] for p in epochs[epoch][:3]],[SPS,PPS,b'\x65'+fault.get('payload_bytes',b'camera-payload')])
             self.assertEqual(struct.unpack('!H',epochs[epoch][0][2:4])[0],1)
         return run
 
@@ -610,6 +635,15 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
         for exe in self.clients:
             run=self.recovered(exe,drop_after=35)
             self.assertIn(b'after error 35',run.stderr)
+
+    def test_own_device_removal_echo_does_not_cancel_camera_recovery(self):
+        for exe in self.clients:
+            run=self.recovered(exe,echo_cleanup=True)
+            self.assertIn(b'Camera removal acknowledged during local cleanup',run.stderr)
+            # Only the final explicit stop of the recovered publication is terminal.
+            self.assertEqual(run.stderr.count(b'VideoGrace requested removal of this camera'),1)
+            self.assertLess(run.stderr.index(b'Camera removal acknowledged during local cleanup'),
+                            run.stderr.index(b'RTSP reconnect after error'))
 
     def test_repeated_camera_failures_create_three_independent_sessions(self):
         for exe in self.clients:
@@ -637,6 +671,60 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
             for fault in ('reset','eof','close'):
                 self.recovered(exe,drop_wss=fault)
 
+    def test_camera_is_drained_during_vg_backoff_without_rtsp_restart(self):
+        for exe in self.clients:
+            run=self.recovered(exe,drop_wss='reset',control_reconnect_delay=2,
+                               payload_bytes=b'x'*1300,camera_interval=.004)
+            counts=[int(n) for n in re.findall(rb'Camera packets drained without VG publication=(\d+)',run.stderr)]
+            self.assertTrue(counts,run.stderr)
+            self.assertGreater(max(counts),30,run.stderr)
+
+    def test_global_deadline_stops_preserved_camera_during_vg_outage(self):
+        for exe in self.clients:
+            run, packets, methods, commands=self.scenario(
+                exe,drop_wss='reset',run_ms=1600)
+            # The global budget may report the last transport failure during an outage.
+            self.assertIn(run.returncode,(0,43),(run.stdout,run.stderr))
+            self.assertEqual(methods.count(b'PLAY'),1)
+            self.assertEqual(methods.count(b'TEARDOWN'),1)
+
+    def test_experimental_ten_second_media_quiet_period_preserves_camera(self):
+        for exe in self.clients:
+            run,packets,methods,commands=self.scenario(
+                exe,drop_wss='reset',cycles=2,run_ms=0,stop_on_media=True,
+                stop_delay=.2,vg_resume_quiet_ms=10000,camera_interval=.01)
+            self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
+            first={}
+            for packet,stamp in zip(packets,self.packet_times):
+                first.setdefault(struct.unpack('!I',packet[8:12])[0],stamp)
+            self.assertLess(first[456]-self.binding_confirmed_at[0],2)
+            self.assertGreaterEqual(first[457]-self.binding_confirmed_at[1],9.99)
+            self.assertLess(first[457]-self.binding_confirmed_at[1],13)
+            self.assertEqual(methods.count(b'PLAY'),1)
+            self.assertEqual(methods.count(b'TEARDOWN'),1)
+            self.assertEqual(len(self.attempts[0]),1)
+            counts=[int(n) for n in re.findall(rb'quiet period ended; drained camera packets=(\d+)',run.stderr)]
+            self.assertTrue(counts,run.stderr)
+            self.assertGreater(counts[0],100)
+            self.assertEqual([p[12:] for p in self.attempts[2][1][:3]],[SPS,PPS,b'\x65camera-payload'])
+            self.assertNotRegex(run.stderr,rb'RTP anomaly:[^\n]*\bpacket_pause\b')
+            self.assertNotRegex(run.stderr,rb'RTP anomaly:[^\n]*\bsequence_discontinuity\b')
+
+    def test_deadline_ends_media_quiet_period_without_publication(self):
+        for exe in self.clients:
+            run,packets,methods,commands=self.scenario(
+                # The budget includes two TLS/VGB1 handshakes and reconnect
+                # backoff. Leave startup margin on shared runners while the
+                # 10 s quiet period still outlasts the entire 7 s run budget.
+                exe,drop_wss='reset',cycles=2,run_ms=7000,vg_resume_quiet_ms=10000)
+            self.assertEqual(run.returncode,0,(run.stdout,run.stderr))
+            self.assertIsNotNone(self.binding_confirmed_at[1],run.stderr)
+            self.assertLess(self.process_finished_at-self.binding_confirmed_at[1],10)
+            self.assertFalse(self.attempts[2][1])
+            self.assertIn(b'Experimental RTP quiet period after VG binding',run.stderr)
+            self.assertNotIn(b'quiet period ended',run.stderr)
+            self.assertEqual(methods.count(b'TEARDOWN'),1)
+
     def test_wss_policy_close_is_fatal_without_retry(self):
         for exe in self.clients:
             run,packets,methods,commands=self.scenario(exe,drop_wss='policy',run_ms=0)
@@ -649,6 +737,7 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
             run,packets,methods,commands=self.scenario(exe,wrong_peer=True,run_ms=0)
             self.assertNotEqual(run.returncode,0)
             self.assertFalse(packets)
+            self.assertFalse(methods, 'RTSP commands sent before authenticated VG session')
             self.assertIn(b'TLS verification',run.stderr)
             self.assertNotIn(b'RTSP reconnect',run.stderr)
 
@@ -658,8 +747,19 @@ uint64_t liza_rt_reactor_write(reactor *r,uint64_t owner,uint64_t generation,uin
             self.assertNotEqual(run.returncode,0)
             self.assertIn(b'invalid login or password',run.stderr)
             self.assertFalse(packets)
+            self.assertFalse(methods, 'RTSP commands sent before accepted VG login')
             self.assertEqual(commands.count('connect_request'),1)
             self.assertNotIn(b'RTSP reconnect',run.stderr)
+
+    def test_camera_play_waits_for_binding_after_wss_reset(self):
+        for exe in self.clients:
+            run, packets, methods, commands = self.scenario(
+                exe, cycles=2, drop_wss='reset', run_ms=0,
+                stop_on_media=True, stop_delay=.2, binding_delay=.3)
+            self.assertEqual(run.returncode, 0, (run.stdout, run.stderr))
+            self.assertEqual(methods.count(b'PLAY'), 1)
+            self.assertEqual(methods.count(b'TEARDOWN'), 1)
+            self.assertTrue(all(len(epoch) >= 10 for epoch in self.attempts[2]))
 
     def test_server_version_upgrade_needs_updated_client_configuration(self):
         for exe in self.clients:

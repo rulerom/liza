@@ -1,4 +1,5 @@
 import rtsp.config
+import vg.socket
 import httpws.bytes
 import httpws.crypto
 import httpws.http
@@ -28,4 +29,23 @@ pub fn open(config:rtsp.config.Config,until:u64)->Result<Connection,Error>:io,al
 pub fn close(connection:Connection)->u32:io,alloc {
     (crypto,r,id,request,proof,camera)=move connection
     destroyed=tls.destroy(move crypto);closed=net.reactor_close(move r);return 0
+}
+
+// Reopen only VG transport in the existing Reactor. Camera identity and buffers stay owned by the caller.
+pub struct Resumed {pub socket:vg.socket.Session;pub reactor:net.Reactor;pub result:Result<u32,Error>}
+fn resume_transport(crypto:tls.Session,socket:vg.socket.Session,r:net.Reactor,config:rtsp.config.Config,request:httpws.bytes.Wire,proof:[u8;28],until:u64)->Resumed:io,alloc {
+    match net.reactor_connect_at(r,config.vg) {
+        Err(e)=>{destroyed=tls.destroy(move crypto);return Resumed(move socket,move r,Err(Error.Tls(TlsError.Transport(e))))}
+        Ok(id)=>{next=vg.socket.start(move socket,move crypto,id,request,proof,until);return Resumed(move next,move r,Ok(0))}
+    }
+}
+pub fn resume(socket:vg.socket.Session,r:net.Reactor,config:rtsp.config.Config,now:u64,until:u64)->Resumed:io,alloc {
+    var nonce:[u8;16]=[0;16];var i:u32=0
+    while i<4 {match net.random_u32() {Err(e)=>{return Resumed(move socket,move r,Err(Error.Protocol))} Ok(n)=>{nonce[i*4]=u8.wrap(n>>24);nonce[i*4+1]=u8.wrap(n>>16);nonce[i*4+2]=u8.wrap(n>>8);nonce[i*4+3]=u8.wrap(n)}};i=i+1}
+    key=httpws.crypto.key(nonce);proof=httpws.crypto.accept(key)
+    host=config.host.bytes;peer=config.peer.bytes;ca=config.ca.bytes;target:[u8;1]=[47]
+    var request=httpws.bytes.empty()
+    match httpws.http.request(view host[0..config.host.length],view target[0..1],key) {Err(e)=>{return Resumed(move socket,move r,Err(Error.Protocol))} Ok(w)=>{request=w}}
+    if config.ca.length!=0 {match tls.create_with_ca(view peer[0..config.peer.length],view ca[0..config.ca.length],tls.managed_bytes(),now,18446744073709551615) {Err(e)=>{return Resumed(move socket,move r,Err(Error.Tls(e)))} Ok(crypto)=>{return resume_transport(move crypto,move socket,move r,config,request,proof,until)}}}
+    match tls.create(view peer[0..config.peer.length],tls.managed_bytes(),now,18446744073709551615) {Err(e)=>{return Resumed(move socket,move r,Err(Error.Tls(e)))} Ok(crypto)=>{return resume_transport(move crypto,move socket,move r,config,request,proof,until)}}
 }

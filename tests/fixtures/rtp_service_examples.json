@@ -1,0 +1,254 @@
+{
+  "contract": "vg.rtp-service",
+  "revision": "0.2",
+  "status": "implemented-in-T-177",
+  "runtime_implemented": true,
+  "note": "Requires a server build containing the CAN registry and RTP publisher changes; not a claim about the currently deployed demo or released installers.",
+  "examples": [
+    {
+      "name": "capabilities",
+      "value": {
+        "capabilities": [
+          "rtsp.ingest",
+          "rtp.publish",
+          "video.h264"
+        ]
+      }
+    },
+    {
+      "name": "administrative_policy",
+      "value": {
+        "action": "save_service",
+        "service_id": "office-camera-bridge",
+        "enabled": true,
+        "policy": {
+          "allowed_node_ids": [
+            "office-bridge-01"
+          ],
+          "allowed_roles": [
+            "worker"
+          ],
+          "capabilities": [
+            "rtsp.ingest",
+            "rtp.publish",
+            "video.h264"
+          ],
+          "job_types": [
+            "media.publish.start"
+          ],
+          "conference_ids": [
+            1001
+          ],
+          "max_nodes": 1,
+          "max_concurrent_jobs": 1,
+          "publish": [
+            {
+              "source_ref": "camera-lobby",
+              "device_type": 1,
+              "video_codec": 2,
+              "max_bitrate_bps": 4000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "hello",
+      "value": {
+        "type": "hello",
+        "token": "<INDIVIDUAL_SERVICE_SECRET>",
+        "node_id": "office-bridge-01",
+        "role": "worker",
+        "version": "rtsp-bridge/1.0",
+        "capabilities": [
+          "rtsp.ingest",
+          "rtp.publish",
+          "video.h264"
+        ],
+        "max_concurrent_jobs": 1,
+        "assignment_protocol": 1,
+        "contracts": {
+          "service_auth": 1,
+          "rtp_service": 1
+        }
+      }
+    },
+    {
+      "name": "hello_ok",
+      "value": {
+        "type": "hello_ok",
+        "node_id": "office-bridge-01",
+        "service_id": "office-camera-bridge",
+        "credential_id": "office-bridge-key-01",
+        "role": "worker",
+        "heartbeat_ms": 10000,
+        "lease_timeout_ms": 90000,
+        "max_concurrent_jobs": 1,
+        "assignment_protocol": 1,
+        "contracts": {
+          "service_auth": 1,
+          "rtp_service": 1
+        }
+      }
+    },
+    {
+      "name": "publication_job",
+      "value": {
+        "type": "job",
+        "job_id": "publish-job-01",
+        "assignment_id": "can-assignment-01",
+        "job_type": "media.publish.start",
+        "payload": {
+          "conference_id": 1001,
+          "conference_tag": "example-room",
+          "conference_session_id": 42,
+          "source": {
+            "kind": "rtsp",
+            "source_ref": "camera-lobby"
+          },
+          "auth": {
+            "type": "bearer",
+            "access_token": "<SCOPED_JOB_TOKEN>"
+          },
+          "media_permissions": {
+            "publish": [
+              {
+                "track_id": "lobby-video",
+                "device_type": 1,
+                "video_codec": 2,
+                "max_bitrate_bps": 4000000,
+                "rtp_profile": {
+                  "clock_rate": 90000,
+                  "payload_type": 102,
+                  "packetization_mode": 1
+                }
+              }
+            ],
+            "subscribe": []
+          }
+        }
+      }
+    },
+    {
+      "name": "rtc_assignment",
+      "value": {
+        "device_connect": {
+          "connect_type": 1,
+          "device_type": 1,
+          "device_id": 700,
+          "client_id": 9001,
+          "author_ssrc": 70001,
+          "receiver_ssrc": 0,
+          "address": "203.0.113.10",
+          "port": 45010,
+          "video_codec": 2,
+          "media_path": "rtc-rtp",
+          "rtc_node_id": "rtc-a",
+          "rtp_assignment_id": "rtp-generation-01",
+          "rtp_binding_key": "<64_LOWERCASE_HEX_FROM_SERVER>",
+          "track_id": "lobby-video",
+          "rtp_profile": {
+            "clock_rate": 90000,
+            "payload_type": 102,
+            "packetization_mode": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "heartbeat",
+      "value": {
+        "type": "heartbeat",
+        "load": {
+          "jobs": 1,
+          "rtp_publications": [
+            {
+              "job_id": "publish-job-01",
+              "track_id": "lobby-video",
+              "rtc_node_id": "rtc-a",
+              "rtp_assignment_id": "rtp-generation-01",
+              "device_id": 700,
+              "author_ssrc": 70001,
+              "kind": "video",
+              "direction": "publish",
+              "sent_packets": 12345,
+              "last_sent_age_ms": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "issue_credential",
+      "value": {
+        "action": "issue",
+        "service_id": "office-camera-bridge",
+        "label": "Office bridge",
+        "expires_at": 0
+      }
+    },
+    {
+      "name": "revoke_credential",
+      "value": {
+        "action": "revoke",
+        "credential_id": "<CREDENTIAL_ID>"
+      }
+    },
+    {
+      "name": "device_params_request",
+      "value": {
+        "device_params": {
+          "device_type": 1,
+          "track_id": "lobby-video",
+          "name": "Lobby"
+        }
+      }
+    },
+    {
+      "name": "device_connect_request",
+      "value": {
+        "device_connect": {
+          "connect_type": 1,
+          "client_id": 9001,
+          "device_id": 700,
+          "author_ssrc": 70001,
+          "device_type": 1,
+          "video_codec": 2,
+          "track_id": "lobby-video",
+          "name": "Lobby"
+        }
+      }
+    },
+    {
+      "name": "submit_publication",
+      "value": {
+        "job_type": "media.publish.start",
+        "target_service_id": "office-camera-bridge",
+        "target_node_id": "office-bridge-01",
+        "payload": {
+          "conference_tag": "example-room",
+          "source": {
+            "kind": "rtsp",
+            "source_ref": "camera-lobby"
+          },
+          "media_permissions": {
+            "publish": [
+              {
+                "track_id": "lobby-video",
+                "device_type": 1,
+                "video_codec": 2,
+                "max_bitrate_bps": 4000000,
+                "rtp_profile": {
+                  "clock_rate": 90000,
+                  "payload_type": 102,
+                  "packetization_mode": 1
+                }
+              }
+            ],
+            "subscribe": []
+          }
+        }
+      }
+    }
+  ]
+}

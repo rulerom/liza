@@ -1,0 +1,28 @@
+import can.text
+import vg.control
+import rtpservice.fields
+pub struct Message {pub base:vg.control.Message;pub track:can.text.Value;pub rtc:can.text.Value;pub assignment:can.text.Value;pub valid:bool}
+pub struct Parsed {pub buffer:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub message:Message}
+pub fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Parsed {
+    (next_buffer,next_scratch,base,base_valid)=vg.control.parse(move buffer,length,move scratch)
+    var cursor=rtpservice.fields.open(move next_buffer,length,move next_scratch)
+    var track=can.text.empty();var rtc=can.text.empty();var assignment=can.text.empty();var valid=base_valid
+    if base.kind==3 {
+        (next,value)=rtpservice.fields.text(move cursor,9,b"track_id",true,128);cursor=move next;track=value
+    }
+    if base.kind==4&&base.result==1 {
+        (next_track_value,track_value)=rtpservice.fields.text(move cursor,7,b"track_id",true,128);cursor=move next_track_value
+        (next_rtc_value,rtc_value)=rtpservice.fields.text(move cursor,7,b"rtc_node_id",true,128);cursor=move next_rtc_value
+        (next_assignment_value,assignment_value)=rtpservice.fields.text(move cursor,7,b"rtp_assignment_id",true,128);cursor=move next_assignment_value
+        (next_path,path)=rtpservice.fields.text(move cursor,7,b"media_path",true,128);cursor=move next_path
+        (next_clock_rate,clock_rate)=rtpservice.fields.number(move cursor,8,b"clock_rate",true,0);cursor=move next_clock_rate
+        (next_pt,pt)=rtpservice.fields.number(move cursor,8,b"payload_type",true,0);cursor=move next_pt
+        (next_mode,mode)=rtpservice.fields.number(move cursor,8,b"packetization_mode",true,0);cursor=move next_mode
+        (next_device_type,device_type)=rtpservice.fields.number(move cursor,7,b"device_type",true,0);cursor=move next_device_type
+        (next_codec,codec)=rtpservice.fields.number(move cursor,7,b"video_codec",true,0);cursor=move next_codec
+        track=track_value;rtc=rtc_value;assignment=assignment_value
+        valid=valid&&rtpservice.fields.equal(path,b"rtc-rtp")&&clock_rate==90000&&pt==102&&mode==1&&device_type==1&&codec==2
+    }
+    (last,temp,fields_valid)=rtpservice.fields.finish(move cursor)
+    return Parsed(move last,move temp,Message(base,track,rtc,assignment,valid&&fields_valid))
+}

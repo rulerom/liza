@@ -196,6 +196,15 @@ fn net.reactor_udp_create(address:net.Address,capacity:u32)->Result<net.Reactor,
     raw=__liza_reactor_udp_create(net.ipv4_bits(address),address.port,capacity)
     if raw.error==0 {return Ok(raw.handle)};return Err(__liza_reactor_error(raw.error))
 }
+// Rotate and connect the owner's UDP endpoint; TCP connections are unaffected.
+fn net.reactor_udp_replace_connected(reactor:net.Reactor,address:net.Address)->Result<u32,ReactorError>:io {
+    raw=__liza_reactor_udp_replace_connected(reactor,net.ipv4_bits(address),address.port)
+    code=u32(raw>>32);if code!=0 {return Err(__liza_reactor_error(code))};return Ok(0)
+}
+fn net.reactor_udp_close_endpoint(reactor:net.Reactor)->Result<u32,ReactorError>:io {
+    raw=__liza_reactor_udp_close_endpoint(reactor)
+    code=u32(raw>>32);if code!=0 {return Err(__liza_reactor_error(code))};return Ok(0)
+}
 fn net.reactor_udp_port(reactor:net.Reactor)->Result<u16,UdpError>:io {
     raw=__liza_reactor_udp_port(reactor)
     if raw>>32==0 {return Ok(u16(raw))};return Err(__liza_udp_error(u32(raw>>32)))

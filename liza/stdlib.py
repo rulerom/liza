@@ -125,6 +125,8 @@ def attach(program):
     reactor_externals = [
         ('__liza_reactor_udp_create',['u32','u16','u32'],'__liza_Reactor',[], 'io,alloc'),
         ('__liza_reactor_udp_port',['net.Reactor'],'u64',[0], 'io'),
+        ('__liza_reactor_udp_replace_connected',['net.Reactor','u32','u16'],'u64',[0], 'io'),
+        ('__liza_reactor_udp_close_endpoint',['net.Reactor'],'u64',[0], 'io'),
         ('__liza_reactor_udp_send',['net.Reactor','View<u8>','u32','u32','u32','u16'],'u64',[0], 'io'),
         ('net.reactor_udp_receive',['net.Reactor','memory.Buffer<u8>'],product_type('memory.Buffer<u8>','Result<u64,UdpError>'),[0], 'io'),
         ('__liza_reactor_clock',[],'__liza_Clock',[], 'io'),
