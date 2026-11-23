@@ -2,13 +2,41 @@ import vg.words
 import vg.fields
 import can.text
 import can.encode
-pub struct Message {pub kind:u32;pub result:u32;pub client:u64;pub device:u32;pub ssrc:u32;pub address:can.text.Value;pub port:u16;pub key:can.text.Value}
+import httpws.bytes
+pub struct Message {pub kind:u32;pub result:u32;pub client:u64;pub device:u32;pub ssrc:u32;pub address:can.text.Value;pub port:u16;pub key:can.text.Value;pub action:u32}
 pub struct Parsed {pub document:memory.Buffer<u8>;pub scratch:memory.Buffer<u8>;pub message:Message;pub valid:bool}
+fn whitespace(data:View<u8>,start:u32)->u32 {
+    var at=start
+    while at<data.len {b=data[at];if b!=32&&b!=9&&b!=13&&b!=10 {break};at=at+1}
+    return at
+}
+// CmdDisconnect{FromConference}::Serialize emits a legacy key-only object.
+// Accept only these two exact commands, never relax the general JSON reader.
+fn bare_command(data:View<u8>,name:View<u8>)->bool {
+    var at=whitespace(data,0)
+    if at==data.len||data[at]!=123 {return false};at=whitespace(data,at+1)
+    if at==data.len||data[at]!=34 {return false};at=at+1
+    if name.len>data.len-at {return false}
+    if !httpws.bytes.equal(data,at,at+name.len,name,false) {return false};at=at+name.len
+    if at==data.len||data[at]!=34 {return false};at=whitespace(data,at+1)
+    if at==data.len||data[at]!=125 {return false}
+    return whitespace(data,at+1)==data.len
+}
+pub fn terminal(borrow message:Message,device:u32)->bool {
+    return message.kind==6||message.kind==7||(message.kind==8&&message.action==9&&message.result==0)||(message.kind==5&&device!=0&&message.device==device)
+}
 pub fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Parsed {
+    var legacy:u32=0
+    if length<=65536&&length<=memory.len(buffer) {
+        data=memory.view(buffer)
+        if bare_command(view data[0..length],b"disconnect_from_conference") {legacy=6}
+        else if bare_command(view data[0..length],b"disconnect") {legacy=7}
+    }
+    if legacy!=0 {empty=can.text.empty();return Parsed(move buffer,move scratch,Message(legacy,0,0,0,0,empty,0,empty,0),true)}
     var cursor=vg.fields.open(move buffer,length,move scratch);var kind:u32=0;var scope=can.text.empty();empty=can.text.empty()
-    names:[can.text.Value;6]=[vg.words.connect_response(),vg.words.joined(),vg.words.device_params(),vg.words.device_connect(),vg.words.device_disconnect(),vg.words.leave()];var i:u32=0
-    while i<6 {(next,present)=vg.fields.present(move cursor,names[i]);cursor=move next;if present {if kind!=0 {kind=99;break};kind=i+1;scope=names[i]};i=i+1}
-    var result:u64=0;var client:u64=0;var device:u64=0;var ssrc:u64=0;var port:u64=0;var address=can.text.empty();var key=can.text.empty()
+    names:[can.text.Value;8]=[vg.words.connect_response(),vg.words.joined(),vg.words.device_params(),vg.words.device_connect(),vg.words.device_disconnect(),vg.words.leave(),vg.words.disconnect(),vg.words.member_action()];var i:u32=0
+    while i<8 {(next,present)=vg.fields.present(move cursor,names[i]);cursor=move next;if present {if kind!=0 {kind=99;break};kind=i+1;scope=names[i]};i=i+1}
+    var result:u64=0;var client:u64=0;var device:u64=0;var ssrc:u64=0;var port:u64=0;var action:u64=0;var address=can.text.empty();var key=can.text.empty()
     if kind==1||kind==2 {(next,n)=vg.fields.number(move cursor,scope,empty,vg.words.result(),true,0);cursor=move next;result=n}
     if kind==1&&result==1 {(next,n)=vg.fields.number(move cursor,scope,empty,vg.words.id(),true,0);cursor=move next;client=n}
     if kind==3 {
@@ -26,9 +54,13 @@ pub fn parse(buffer:memory.Buffer<u8>,length:u32,scratch:memory.Buffer<u8>)->Par
         }
     }
     if kind==5 {(next,n)=vg.fields.number(move cursor,scope,empty,vg.words.device_id(),true,0);cursor=move next;device=n}
+    if kind==8 {
+        (next,n)=vg.fields.number(move cursor,scope,empty,vg.words.action(),false,0);cursor=move next;action=n
+        (next_result,n_result)=vg.fields.number(move cursor,scope,empty,vg.words.result(),false,0);cursor=move next_result;result=n_result
+    }
     (document,last_scratch,valid)=vg.fields.finish(move cursor)
-    valid_numbers=kind!=99&&result<=4294967295&&device<=4294967295&&ssrc<=4294967295&&port<=65535
-    return Parsed(move document,move last_scratch,Message(kind,u32.wrap(result),client,u32.wrap(device),u32.wrap(ssrc),address,u16.wrap(port),key),valid&&valid_numbers)
+    valid_numbers=kind!=99&&result<=4294967295&&device<=4294967295&&ssrc<=4294967295&&port<=65535&&action<=4294967295
+    return Parsed(move document,move last_scratch,Message(kind,u32.wrap(result),client,u32.wrap(device),u32.wrap(ssrc),address,u16.wrap(port),key,u32.wrap(action)),valid&&valid_numbers)
 }
 pub fn encode(buffer:memory.Buffer<u8>,kind:u32,login:can.text.Value,password:can.text.Value,tag:can.text.Value,version:u32,client:u64,device:u32,ssrc:u32,width:u32,height:u32)->JsonOutput {
     var writer=can.encode.begin(move buffer);writer=can.encode.container(move writer,0)

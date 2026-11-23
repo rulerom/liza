@@ -62,9 +62,12 @@ class RtspClient(unittest.TestCase):
 
     def scenario(self, exe, bad_cseq=False, drop_after=None, payload_bytes=b'camera-payload', run_ms=4000, stop_on_media=False,
                  cycles=1, stall_keepalive=False, stop_delay=6, drop_wss=False, wrong_peer=False,
-                 stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None):
+                 stall_teardown=False, reject_login=False, client_version=617, required_version=None, service=None,
+                 stop_payload=None, ignored_control=(), stop_during_camera_timeout=False):
         errors, packets, methods, commands = [], [], [], []
         stopped = threading.Event()
+        moderation_observed = threading.Event()
+        live_stderr = self.root / 'live-stderr.log'
         media_seen = [threading.Event() for _ in range(cycles)]
         camera_runs, control_runs = [], []
         epoch_packets = [[] for _ in range(cycles)]
@@ -118,6 +121,8 @@ class RtspClient(unittest.TestCase):
                             continue  # RTP continues, but the control reply never arrives.
                         if stall_teardown and method==b'TEARDOWN':
                             continue
+                        if stop_during_camera_timeout and method==b'TEARDOWN':
+                            self.assertTrue(moderation_observed.wait(3), 'stop command ignored during camera cleanup')
                         if bad_cseq:
                             cseq = str(int(cseq) + 1).encode()
                         body = b''
@@ -139,7 +144,7 @@ class RtspClient(unittest.TestCase):
                             playing = True
                         if method == b'TEARDOWN':
                             return
-                    if playing:
+                    if playing and not (stop_during_camera_timeout and sequence>=35):
                         sequence += 1
                         # Every fifth packet is an IDR; payload must survive unchanged.
                         payload = (b'\x65' if sequence % 5 == 0 else b'\x61') + payload_bytes
@@ -207,6 +212,16 @@ class RtspClient(unittest.TestCase):
                     elif 'device_connect' in value:
                         self.assertEqual(value['device_connect']['video_codec'], 2)
                         conn.sendall(message({'device_connect': {'connect_type': 1, 'device_id': 7, 'author_ssrc': ssrc, 'address': '0.0.0.0', 'port': udp.getsockname()[1], 'rtp_binding_key': epoch_key(epoch).decode()}}))
+                        if ignored_control:
+                            self.assertTrue(media_seen[epoch].wait(5), 'no media before unrelated control')
+                            before = len(epoch_packets[epoch])
+                            for payload in ignored_control:
+                                conn.sendall(ws(payload))
+                            until = time.monotonic() + 3
+                            while len(epoch_packets[epoch]) < before + 30 and time.monotonic() < until:
+                                time.sleep(.01)
+                            self.assertGreaterEqual(len(epoch_packets[epoch]), before + 30,
+                                                    'unrelated control stopped publication')
                         if drop_wss and epoch==0:
                             self.assertTrue(media_seen[epoch].wait(5), 'no first-generation media')
                             if drop_wss in ('close','policy'):
@@ -223,7 +238,16 @@ class RtspClient(unittest.TestCase):
                             # Exercise TLS beyond the old zero-duration + 5 s
                             # lifetime, then stop through the existing control API.
                             time.sleep(stop_delay)
-                            conn.sendall(message({'device_disconnect': {'device_id': 7}}))
+                            conn.sendall(ws(stop_payload) if stop_payload is not None else message({'device_disconnect': {'device_id': 7}}))
+                    elif 'device_disconnect' in value and stop_during_camera_timeout:
+                        conn.sendall(message({'member_action': {'id': [], 'action': 9}}))
+                        until = time.monotonic() + 3
+                        while time.monotonic() < until:
+                            if b'moderator requested disconnect' in live_stderr.read_bytes():
+                                moderation_observed.set()
+                                break
+                            time.sleep(.01)
+                        self.assertTrue(moderation_observed.is_set(), 'moderator stop was ignored after camera timeout')
 
         def control_peer():
             for _ in range(cycles):
@@ -288,7 +312,12 @@ class RtspClient(unittest.TestCase):
             thread.start()
         try:
             try:
-                run = subprocess.run(command, capture_output=True, timeout=45 if stall_keepalive else 20)
+                if stop_during_camera_timeout:
+                    with live_stderr.open('wb') as stream:
+                        run = subprocess.run(command, stdout=subprocess.PIPE, stderr=stream, timeout=20)
+                    run.stderr = live_stderr.read_bytes()
+                else:
+                    run = subprocess.run(command, capture_output=True, timeout=45 if stall_keepalive else 20)
             except subprocess.TimeoutExpired as error:
                 self.fail(('client timeout',error.stdout,error.stderr,errors,camera_runs,commands,[len(p) for p in epoch_packets]))
         finally:
@@ -354,6 +383,54 @@ class RtspClient(unittest.TestCase):
             self.assertFalse(packets)
             self.assertEqual(methods, [b'OPTIONS'])
             self.assertNotIn(b'RTSP reconnect',run.stderr)
+
+    def test_moderator_and_server_stop_commands_are_terminal(self):
+        # Engine/Proto/CmdMemberAction.cpp forwards action=9 to the selected
+        # connection with id:[], not the moderator's original target list.
+        cases = [
+            (b'{"member_action":{"id":[],"action":9,"actor_id":456,"actor_name":"moderator"}}', b'moderator requested disconnect'),
+            (b'{"disconnect_from_conference"}', b'requested disconnect from conference'),
+            (b'{"disconnect"}', b'requested session disconnect'),
+            (b'{"disconnect_from_conference":{}}', b'requested disconnect from conference'),
+        ]
+        for exe in self.clients:
+            for payload, reason in cases:
+                with self.subTest(exe=exe.name, payload=payload):
+                    run, packets, methods, commands = self.scenario(exe, run_ms=0, stop_on_media=True,
+                                                                   stop_delay=.1, stop_payload=payload)
+                    self.assertEqual(run.returncode, 0, (run.stdout, run.stderr))
+                    self.assertGreater(len(packets), 10)
+                    self.assertIn(reason, run.stderr)
+                    self.assertIn(b'without reconnect', run.stderr)
+                    self.assertNotIn(b'RTSP reconnect', run.stderr)
+                    self.assertNotIn(b'generation=2', run.stdout)
+                    self.assertEqual(commands.count('connect_request'), 1)
+                    self.assertIn(b'TEARDOWN', methods)
+                    self.assertIn('device_disconnect', commands)
+                    self.assertIn('disconnect_from_conference', commands)
+
+    def test_moderation_ack_and_other_device_do_not_stop_publication(self):
+        for exe in self.clients:
+            run, packets, methods, commands = self.scenario(
+                exe, run_ms=0, stop_on_media=True, stop_delay=.1,
+                stop_payload=b'{"member_action":{"id":[],"action":9}}',
+                ignored_control=(b'{"member_action":{"id":[],"action":9,"result":1}}',
+                                 b'{"member_action":{"id":[],"action":11}}',
+                                 b'{"device_disconnect":{"device_id":999}}'))
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertGreater(len(packets), 40)
+            self.assertIn(b'moderator requested disconnect', run.stderr)
+            self.assertNotIn(b'RTSP reconnect', run.stderr)
+
+    def test_moderator_stop_wins_during_camera_timeout_cleanup(self):
+        for exe in self.clients:
+            run, packets, methods, commands = self.scenario(exe, run_ms=0, stop_during_camera_timeout=True)
+            self.assertEqual(run.returncode, 0, (run.stdout, run.stderr))
+            self.assertGreater(len(packets), 10)
+            self.assertIn(b'TEARDOWN', methods)
+            self.assertIn(b'moderator requested disconnect', run.stderr)
+            self.assertNotIn(b'RTSP reconnect', run.stderr)
+            self.assertNotIn(b'generation=2', run.stdout)
 
     def recovered(self, exe, **fault):
         run,packets,methods,commands=self.scenario(exe,cycles=2,run_ms=0,stop_on_media=True,stop_delay=.2,**fault)

@@ -1,6 +1,7 @@
 """Boundaries and independent oracles for RTSP SDP, RTP gating and VGB1."""
 import hashlib
 import hmac
+import json
 import os
 from pathlib import Path
 import shutil
@@ -22,6 +23,50 @@ SDP = (b'v=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\n'
 
 @unittest.skipUnless(shutil.which('clang'), 'Clang required')
 class RtspProtocol(unittest.TestCase):
+    def test_stop_command_decoding_preserves_strict_json_boundaries(self):
+        cases = [
+            ('{"member_action":{"id":[],"action":9,"actor_id":456}}', 8, True, True),
+            ('{"member_action":{"action":9,"result":0}}', 8, True, True),
+            ('{"member_action":{"action":9,"result":1}}', 8, True, False),
+            ('{"member_action":{"result":2}}', 8, True, False),
+            ('{"member_action":{"action":11}}', 8, True, False),
+            ('{"member_action":{"action":"9"}}', 8, False, False),
+            ('{"member_action":{"action":4294967296}}', 8, False, False),
+            ('{"member_action":{"action":9,"action":9}}', 0, False, False),
+            ('{"member_\\u0061ction":{"action":9}}', 8, True, True),
+            ('{"disconnect_from_conference"}', 6, True, True),
+            (' \n{ \t"disconnect_from_conference" \r}\n', 6, True, True),
+            ('{"disconnect"}', 7, True, True),
+            ('{"disconnect_from_conference":{}}', 6, True, True),
+            ('{"disconnect":{}}', 7, True, True),
+            ('{"device_disconnect":{"device_id":7}}', 5, True, True),
+            ('{"device_disconnect":{"device_id":8}}', 5, True, False),
+            ('{"notice":"disconnect_from_conference"}', 0, True, False),
+            ('{"unknown_bare_command"}', 0, False, False),
+            ('{"disconnect_from_conference"} {}', 0, False, False),
+            ('{"disconnect_from_conference","disconnect"}', 0, False, False),
+            ('{"disconnect_from_conference":{},"member_action":{"action":9}}', 99, False, False),
+        ]
+        source = '''import vg.control
+fn check(data:View<u8>,kind:u32,expected:bool,stop:bool)->u32:io,alloc {
+ match memory.create(8192) {Err(e)=>{return 1} Ok(region)=>{
+ match memory.alloc<u8>(region,4096,0) {Err(e)=>{closed=memory.close(move region);return 2} Ok(storage)=>{
+ match memory.alloc<u8>(region,1024,0) {Err(e)=>{released=memory.release(move storage);closed=memory.close(move region);return 3} Ok(scratch)=>{
+ var buffer=move storage;var at:u32=0
+ while at<data.len {buffer=memory.set(move buffer,at,data[at]);at=at+1}
+ (document,last_scratch,message,valid)=vg.control.parse(move buffer,data.len,move scratch)
+ var code:u32=0
+ if valid!=expected {code=4}
+ if valid&&(message.kind!=kind||vg.control.terminal(message,7)!=stop) {code=5}
+ a=memory.release(move document);b=memory.release(move last_scratch);closed=memory.close(move region);return code
+ }}}}}}
+}
+fn main()->u32:io,alloc {
+'''
+        for i, (payload, kind, valid, stop) in enumerate(cases):
+            source += f' c{i}=check(b{json.dumps(payload)},{kind},{str(valid).lower()},{str(stop).lower()});if c{i}!=0 {{n=console.print_u64({i});return c{i}}}\n'
+        self.run_liza(source + 'return 0\n}')
+
     def test_diagnostics_explain_version_timeout_and_unknown_errors(self):
         self.run_liza('''import rtsp.diagnostics
 fn main()->u32:io {
